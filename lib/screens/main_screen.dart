@@ -1,23 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/tab_item.dart';
+import '../providers/tab_provider.dart';
 import '../widgets/bottom_tab_bar.dart';
 import 'ai_chat_screen.dart';
 import 'exchange_screen.dart';
 import 'map_screen.dart';
 import 'translation_screen.dart';
 
-class MainScreen extends StatefulWidget {
+class MainScreen extends StatelessWidget {
   const MainScreen({super.key});
 
-  @override
-  State<MainScreen> createState() => _MainScreenState();
-}
-
-class _MainScreenState extends State<MainScreen> {
-  int selectedIndex = -1;
-
-  final List<TabItem> tabs = const [
+  static const List<TabItem> tabs = [
     TabItem(
       label: '환율',
       icon: Icons.attach_money,
@@ -31,17 +26,7 @@ class _MainScreenState extends State<MainScreen> {
     ),
   ];
 
-  void handleTabTap(int index) {
-    setState(() {
-      if (selectedIndex == index) {
-        selectedIndex = -1;
-      } else {
-        selectedIndex = index;
-      }
-    });
-  }
-
-  Widget getCurrentScreen() {
+  Widget getCurrentScreen(int selectedIndex) {
     switch (selectedIndex) {
       case 0:
         return const ExchangeScreen();
@@ -56,6 +41,9 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final tabProvider = context.watch<TabProvider>();
+    final selectedIndex = tabProvider.selectedIndex;
+
     return Scaffold(
       backgroundColor: selectedIndex == -1
           ? Colors.white
@@ -63,11 +51,11 @@ class _MainScreenState extends State<MainScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(child: getCurrentScreen()),
+            Expanded(child: getCurrentScreen(selectedIndex)),
             BottomTabBar(
               tabs: tabs,
               selectedIndex: selectedIndex,
-              onTabTap: handleTabTap,
+              onTabTap: tabProvider.selectTab,
             ),
           ],
         ),
