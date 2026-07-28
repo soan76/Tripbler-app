@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/tab_item.dart';
 
+// 하단 탭 바 위젯
 class BottomTabBar extends StatelessWidget {
   final List<TabItem> tabs;
   final int selectedIndex;
@@ -22,7 +23,6 @@ class BottomTabBar extends StatelessWidget {
       child: Row(
         children: List.generate(tabs.length, (index) {
           final bool isSelected = selectedIndex == index;
-
           return Expanded(
             child: Padding(
               padding: EdgeInsets.only(right: index == tabs.length - 1 ? 0 : 8),

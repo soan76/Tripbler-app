@@ -6,6 +6,7 @@ import '../services/exchange_api_service.dart';
 import '../models/exchange_rate_history_model.dart';
 import '../widgets/exchange_rate_line_chart.dart';
 
+// 환율 상세 화면을 구성하는 StatefulWidget
 class ExchangeDetailScreen extends StatefulWidget {
   final CurrencyModel baseCurrency;
   final CurrencyModel targetCurrency;
@@ -22,6 +23,7 @@ class ExchangeDetailScreen extends StatefulWidget {
   State<ExchangeDetailScreen> createState() => _ExchangeDetailScreenState();
 }
 
+// 환율 상세 화면의 상태를 관리하는 State 클래스
 class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
   final ExchangeApiService _apiService = ExchangeApiService();
 
@@ -34,13 +36,13 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
     super.initState();
     _loadHistoricalRates();
   }
-
+  // 기준 통화와 상대 통화 간의 환율을 가져오는 메서드
   Future<void> _loadHistoricalRates() async {
     setState(() {
       isLoading = true;
       errorMessage = null;
     });
-
+    // 최근 14일간의 환율 데이터를 가져오기 위해 API 호출
     try {
       final now = DateTime.now();
       final start = now.subtract(const Duration(days: 14));
@@ -65,11 +67,10 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
       });
     }
   }
-
+  // 그래프 영역을 구성하는 위젯을 반환하는 메서드
   @override
   Widget build(BuildContext context) {
     final numberFormat = NumberFormat('#,##0.####');
-
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -118,6 +119,7 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
     );
   }
 
+  // 그래프 영역을 구성하는 위젯을 반환하는 메서드
   Widget _buildGraphArea() {
     if (isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -142,7 +144,7 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
     if (historicalRates.isEmpty) {
       return const Center(child: Text('표시할 그래프 데이터가 없습니다.'));
     }
-
+    // 최근 환율 변동 데이터를 ExchangeRateHistoryModel 리스트로 변환하고 날짜순으로 정렬
     final List<ExchangeRateHistoryModel> historyList =
         historicalRates.entries.map((entry) {
           return ExchangeRateHistoryModel(

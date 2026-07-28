@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+// 금액 입력 필드 위젯
 class AmountInputField extends StatefulWidget {
   final double amount;
   final ValueChanged<double> onChanged;
@@ -16,6 +17,7 @@ class AmountInputField extends StatefulWidget {
   State<AmountInputField> createState() => _AmountInputFieldState();
 }
 
+// 금액 입력 필드의 상태를 관리하는 State 클래스
 class _AmountInputFieldState extends State<AmountInputField> {
   late final TextEditingController _controller;
   final NumberFormat _formatter = NumberFormat('#,##0.########');
@@ -73,7 +75,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
     super.dispose();
   }
 }
-
+// 입력값에 천 단위 구분자를 적용하는 TextInputFormatter
 class _ThousandsSeparatorInputFormatter extends TextInputFormatter {
   final NumberFormat _formatter = NumberFormat('#,##0.########');
 

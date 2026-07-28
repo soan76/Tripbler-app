@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// AI 채팅 화면을 구성하는 StatelessWidget - 전체 수정 예정
 class AiChatScreen extends StatelessWidget {
   const AiChatScreen({super.key});
 

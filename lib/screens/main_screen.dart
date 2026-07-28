@@ -9,6 +9,7 @@ import 'exchange_screen.dart';
 import 'map_screen.dart';
 import 'translation_screen.dart';
 
+// 메인 화면을 구성하는 StatelessWidget
 class MainScreen extends StatelessWidget {
   const MainScreen({super.key});
 
@@ -26,6 +27,7 @@ class MainScreen extends StatelessWidget {
     ),
   ];
 
+  // 선택된 탭 인덱스에 따라 해당 화면을 반환하는 메서드
   Widget getCurrentScreen(int selectedIndex) {
     switch (selectedIndex) {
       case 0:
@@ -39,6 +41,7 @@ class MainScreen extends StatelessWidget {
     }
   }
 
+  // 메인 화면을 구성하는 위젯 트리를 반환하는 build 메서드
   @override
   Widget build(BuildContext context) {
     final tabProvider = context.watch<TabProvider>();
@@ -51,7 +54,17 @@ class MainScreen extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            Expanded(child: getCurrentScreen(selectedIndex)),
+            Expanded(
+              child: IndexedStack(
+                index: selectedIndex == -1 ? 3 : selectedIndex,
+                children: const [
+                  ExchangeScreen(),
+                  MapScreen(),
+                  TranslationScreen(),
+                  AiChatScreen(),
+                ],
+              ),
+            ),
             BottomTabBar(
               tabs: tabs,
               selectedIndex: selectedIndex,

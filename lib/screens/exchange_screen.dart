@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/currency_model.dart';
 import '../providers/exchange_provider.dart';
 import '../widgets/currency_management_bottom_sheet.dart';
 import '../widgets/currency_row.dart';
 import '../widgets/currency_selection_sheet.dart';
-import 'exchange_detail_screen.dart';
+import '../widgets/exchange_chart_carousel.dart';
 
 class ExchangeScreen extends StatefulWidget {
   const ExchangeScreen({super.key});
@@ -14,7 +13,7 @@ class ExchangeScreen extends StatefulWidget {
   @override
   State<ExchangeScreen> createState() => _ExchangeScreenState();
 }
-
+// 환율 화면을 구성하는 StatefulWidget
 class _ExchangeScreenState extends State<ExchangeScreen> {
   bool hasInitialized = false;
 
@@ -30,116 +29,141 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
       });
     }
   }
-
+  // 환율 화면의 상태를 관리하는 State 클래스
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExchangeProvider>();
 
     return Container(
       color: Colors.white,
-      child: Column(
-        children: [
-          _buildHeader(provider),
-          if (provider.isLoading) const LinearProgressIndicator(),
-          if (provider.errorMessage != null)
-            _buildErrorBox(
-              message: provider.errorMessage!,
-              onRetry: provider.fetchRates,
-            ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: provider.fetchRates,
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  CurrencyRow(
-                    currency: provider.baseCurrency,
-                    isBase: true,
-                    amount: provider.inputAmount,
-                    rate: 1,
-                    onAmountChanged: provider.changeAmount,
-                    onCurrencyTap: () {
-                      showCurrencySelectionSheet(
-                        context: context,
-                        selectedCurrency: provider.baseCurrency,
-                        onSelected: provider.changeBaseCurrency,
-                      );
-                    },
-                    onGraphTap: () {
-                      _openDetail(
-                        context: context,
-                        baseCurrency: provider.baseCurrency,
-                        targetCurrency: provider.baseCurrency,
-                        currentRate: 1,
-                      );
-                    },
-                  ),
-                  ...List.generate(provider.visibleCurrencies.length, (index) {
-                    final currency = provider.visibleCurrencies[index];
-                    final amount = provider.convertedAmount(currency.code);
+      child: RefreshIndicator(
+        onRefresh: provider.fetchRates,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildHeader(provider),
 
-                    return CurrencyRow(
-                      currency: currency,
-                      isBase: false,
-                      amount: amount,
-                      rate: provider.rateFor(currency.code),
-                      onCurrencyTap: () {
-                        showCurrencySelectionSheet(
-                          context: context,
-                          selectedCurrency: currency,
-                          onSelected: (newCurrency) {
-                            provider.replaceVisibleCurrency(
-                              index: index,
-                              newCurrency: newCurrency,
-                            );
-                          },
-                        );
-                      },
-                      onGraphTap: () {
-                        _openDetail(
-                          context: context,
-                          baseCurrency: provider.baseCurrency,
-                          targetCurrency: currency,
-                          currentRate: provider.rateFor(currency.code),
+              if (provider.isLoading) const LinearProgressIndicator(),
+
+              if (provider.errorMessage != null)
+                _buildErrorBox(
+                  message: provider.errorMessage!,
+                  onRetry: provider.fetchRates,
+                ),
+              // 기준 통화와 상대 통화 간의 환율을 표시하는 CurrencyRow 위젯
+              CurrencyRow(
+                currency: provider.baseCurrency,
+                isBase: true,
+                amount: provider.inputAmount,
+                rate: 1,
+                onAmountChanged: provider.changeAmount,
+                onCurrencyTap: () {
+                  showCurrencySelectionSheet(
+                    context: context,
+                    selectedCurrency: provider.baseCurrency,
+                    onSelected: provider.changeBaseCurrency,
+                  );
+                },
+                onGraphTap: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('아래 차트 영역에서 환율 변동을 확인할 수 있습니다.'),
+                    ),
+                  );
+                },
+              ),
+              // 상대 통화 목록을 표시하는 CurrencyRow 위젯 리스트
+              ...List.generate(provider.visibleCurrencies.length, (index) {
+                final currency = provider.visibleCurrencies[index];
+                final amount = provider.convertedAmount(currency.code);
+
+                return CurrencyRow(
+                  currency: currency,
+                  isBase: false,
+                  amount: amount,
+                  rate: provider.rateFor(currency.code),
+                  onCurrencyTap: () {
+                    showCurrencySelectionSheet(
+                      context: context,
+                      selectedCurrency: currency,
+                      onSelected: (newCurrency) {
+                        provider.replaceVisibleCurrency(
+                          index: index,
+                          newCurrency: newCurrency,
                         );
                       },
                     );
-                  }),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        showCurrencyManagementBottomSheet(
-                          context: context,
-                          baseCurrency: provider.baseCurrency,
-                          visibleCurrencies: provider.visibleCurrencies,
-                          onApply: provider.applyVisibleCurrencies,
-                        );
-                      },
-                      icon: const Icon(Icons.tune),
-                      label: const Text('통화 추가 / 편집'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size(double.infinity, 52),
-                        foregroundColor: Colors.blue,
-                        side: const BorderSide(color: Colors.blue),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero,
-                        ),
+                  },
+                  onGraphTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('아래 차트 영역에서 환율 변동을 확인할 수 있습니다.'),
                       ),
+                    );
+                  },
+                );
+              }),
+
+              // 통화 추가 / 편집 버튼을 표시하는 OutlinedButton 위젯
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    showCurrencyManagementBottomSheet(
+                      context: context,
+                      baseCurrency: provider.baseCurrency,
+                      visibleCurrencies: provider.visibleCurrencies,
+                      onApply: provider.applyVisibleCurrencies,
+                    );
+                  },
+                  icon: const Icon(Icons.tune),
+                  label: const Text('통화 추가 / 편집'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 52),
+                    foregroundColor: Colors.blue,
+                    side: const BorderSide(color: Colors.blue),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.zero,
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
 
-          if (provider.visibleCurrencies.isNotEmpty)
-            _buildChartSection(provider),
-        ],
+              // 차트 영역을 표시하는 ExchangeChartCarousel 위젯
+              if (provider.visibleCurrencies.isNotEmpty) ...[
+                const SizedBox(height: 64),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        '차트',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      ExchangeChartCarousel(
+                        baseCurrency: provider.baseCurrency,
+                        targetCurrencies: provider.visibleCurrencies,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
 
+  // 환율 화면의 헤더 영역을 구성하는 위젯을 반환하는 메서드
   Widget _buildHeader(ExchangeProvider provider) {
     final lastUpdated = provider.lastUpdated;
 
@@ -166,6 +190,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     );
   }
 
+  // 오류 메시지를 표시하는 박스를 구성하는 위젯을 반환하는 메서드
   Widget _buildErrorBox({
     required String message,
     required VoidCallback onRetry,
@@ -190,177 +215,6 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
           ),
           TextButton(onPressed: onRetry, child: const Text('다시 시도')),
         ],
-      ),
-    );
-  }
-
-  Widget _buildChartSection(ExchangeProvider provider) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Expanded(
-                child: Text(
-                  '차트',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                ),
-              ),
-              provider.isLoading
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : IconButton(
-                      onPressed: provider.fetchRates,
-                      icon: const Icon(Icons.refresh),
-                    ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          ...provider.visibleCurrencies.map((currency) {
-            final rate = provider.rateFor(currency.code);
-            final convertedAmount = provider.convertedAmount(currency.code);
-
-            return _buildChartPreviewCard(
-              provider: provider,
-              targetCurrency: currency,
-              rate: rate,
-              convertedAmount: convertedAmount,
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChartPreviewCard({
-    required ExchangeProvider provider,
-    required CurrencyModel targetCurrency,
-    required double? rate,
-    required double convertedAmount,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade200),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          _openDetail(
-            context: context,
-            baseCurrency: provider.baseCurrency,
-            targetCurrency: targetCurrency,
-            currentRate: rate,
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Text(
-                targetCurrency.flagEmoji,
-                style: const TextStyle(fontSize: 32),
-              ),
-              const SizedBox(width: 12),
-
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${provider.baseCurrency.code} / ${targetCurrency.code}',
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      rate == null
-                          ? '환율 데이터 없음'
-                          : '1 ${provider.baseCurrency.code} = ${_formatRate(rate)} ${targetCurrency.code}',
-                      style: const TextStyle(
-                        color: Colors.black54,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Icon(Icons.show_chart, color: Colors.blue),
-                  const SizedBox(height: 6),
-                  Text(
-                    _formatRate(convertedAmount),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatRate(double value) {
-    if (value == 0) {
-      return '0';
-    }
-
-    if (value.abs() >= 100) {
-      return value
-          .toStringAsFixed(2)
-          .replaceAllMapped(
-            RegExp(r'(\d)(?=(\d{3})+\.)'),
-            (match) => '${match[1]},',
-          );
-    }
-
-    if (value.abs() >= 1) {
-      return value.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
-    }
-
-    return value.toStringAsFixed(6).replaceAll(RegExp(r'\.?0+$'), '');
-  }
-
-  void _openDetail({
-    required BuildContext context,
-    required CurrencyModel baseCurrency,
-    required CurrencyModel targetCurrency,
-    required double? currentRate,
-  }) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) {
-          return ExchangeDetailScreen(
-            baseCurrency: baseCurrency,
-            targetCurrency: targetCurrency,
-            currentRate: currentRate,
-          );
-        },
       ),
     );
   }

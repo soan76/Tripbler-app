@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+// 번역 화면을 구성하는 StatelessWidget - 전체 수정 예정
 class TranslationScreen extends StatelessWidget {
   const TranslationScreen({super.key});
 

@@ -1,3 +1,4 @@
+// 특정 날짜의 환율 기록을 저장하는 모델 클래스
 class ExchangeRateHistoryModel {
   final DateTime date;
   final double rate;
@@ -11,6 +12,7 @@ class ExchangeRateHistoryModel {
     required this.targetCurrencyCode,
   });
 
+  // 환율 기록 객체를 JSON 형태의 Map으로 변환
   Map<String, dynamic> toJson() {
     return {
       'date': date.toIso8601String(),
@@ -20,6 +22,7 @@ class ExchangeRateHistoryModel {
     };
   }
 
+  // JSON 형태의 Map을 환율 기록 객체로 변환
   factory ExchangeRateHistoryModel.fromJson(Map<String, dynamic> json) {
     return ExchangeRateHistoryModel(
       date: DateTime.parse(json['date'] as String),
@@ -30,6 +33,7 @@ class ExchangeRateHistoryModel {
   }
 }
 
+// 환율 차트에서 선택할 수 있는 조회 기간 - 수정 예정
 enum ChartPeriod {
   sevenDays,
   oneMonth,
@@ -41,6 +45,7 @@ enum ChartPeriod {
 }
 
 extension ChartPeriodExtension on ChartPeriod {
+  // 사용자 화면에 표시할 한글 기간 이름 - 수정 예정
   String get label {
     switch (this) {
       case ChartPeriod.sevenDays:
@@ -60,6 +65,7 @@ extension ChartPeriodExtension on ChartPeriod {
     }
   }
 
+  // 사용자 화면에 표시할 짧은 기간 이름 - 수정 예정
   String get shortLabel {
     switch (this) {
       case ChartPeriod.sevenDays:
@@ -79,6 +85,7 @@ extension ChartPeriodExtension on ChartPeriod {
     }
   }
 
+  // 특정 기간의 시작 날짜를 계산하는 메서드 - 수정 예정
   DateTime startDateFrom(DateTime endDate) {
     switch (this) {
       case ChartPeriod.sevenDays:
@@ -98,6 +105,7 @@ extension ChartPeriodExtension on ChartPeriod {
     }
   }
 
+  // 차트 X축 날짜 라벨을 표시할 간격
   int get xAxisLabelInterval {
     switch (this) {
       case ChartPeriod.sevenDays:

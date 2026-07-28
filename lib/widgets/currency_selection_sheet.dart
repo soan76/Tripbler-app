@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/currency_model.dart';
 
+// 통화 선택 시트 위젯
 class CurrencySelectionSheet extends StatefulWidget {
   final CurrencyModel? selectedCurrency;
   final ValueChanged<CurrencyModel> onSelected;
@@ -15,7 +16,7 @@ class CurrencySelectionSheet extends StatefulWidget {
   @override
   State<CurrencySelectionSheet> createState() => _CurrencySelectionSheetState();
 }
-
+// CurrencySelectionSheet의 상태를 관리하는 State 클래스
 class _CurrencySelectionSheetState extends State<CurrencySelectionSheet> {
   String query = '';
 
@@ -43,6 +44,7 @@ class _CurrencySelectionSheetState extends State<CurrencySelectionSheet> {
               ),
             ),
             const SizedBox(height: 20),
+            // 검색 입력 필드
             TextField(
               decoration: InputDecoration(
                 hintText: '통화 코드, 국가명, 통화 이름 검색',
@@ -61,6 +63,7 @@ class _CurrencySelectionSheetState extends State<CurrencySelectionSheet> {
               },
             ),
             const SizedBox(height: 16),
+            // 통화 목록을 표시하는 ListView
             Expanded(
               child: ListView.separated(
                 itemCount: filteredCurrencies.length,
@@ -98,7 +101,7 @@ class _CurrencySelectionSheetState extends State<CurrencySelectionSheet> {
     );
   }
 }
-
+// CurrencySelectionSheet를 보여주는 함수
 Future<void> showCurrencySelectionSheet({
   required BuildContext context,
   required CurrencyModel? selectedCurrency,

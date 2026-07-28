@@ -4,11 +4,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/exchange_rate_history_model.dart';
 
+// 환율 데이터를 캐싱하는 서비스를 제공하는 클래스
 class ExchangeRateCacheService {
   static const String _latestRatePrefix = 'chart_latest_rate';
   static const String _historyPrefix = 'chart_history';
   static const String _lastUpdatedPrefix = 'chart_last_updated';
 
+  // 최신 환율 데이터를 저장하는 메서드
   Future<void> saveLatestRate({
     required String baseCurrencyCode,
     required String targetCurrencyCode,
@@ -23,6 +25,7 @@ class ExchangeRateCacheService {
     await prefs.setDouble(key, rate);
   }
 
+  // 최신 환율 데이터를 불러오는 메서드
   Future<double?> loadLatestRate({
     required String baseCurrencyCode,
     required String targetCurrencyCode,
@@ -36,6 +39,7 @@ class ExchangeRateCacheService {
     return prefs.getDouble(key);
   }
 
+  // 환율 변동 데이터를 저장하는 메서드
   Future<void> saveHistory({
     required String baseCurrencyCode,
     required String targetCurrencyCode,
@@ -44,6 +48,7 @@ class ExchangeRateCacheService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
+    // 캐시 키를 생성하여 SharedPreferences에 저장
     final key = _historyKey(
       baseCurrencyCode: baseCurrencyCode,
       targetCurrencyCode: targetCurrencyCode,
@@ -55,6 +60,7 @@ class ExchangeRateCacheService {
     await prefs.setString(key, encoded);
   }
 
+  // 환율 변동 데이터를 불러오는 메서드
   Future<List<ExchangeRateHistoryModel>?> loadHistory({
     required String baseCurrencyCode,
     required String targetCurrencyCode,
@@ -84,6 +90,7 @@ class ExchangeRateCacheService {
         .toList();
   }
 
+  // 마지막 업데이트 시간을 저장하는 메서드 - 수정 예정
   Future<void> saveLastUpdated({
     required String baseCurrencyCode,
     required String targetCurrencyCode,
@@ -98,7 +105,7 @@ class ExchangeRateCacheService {
 
     await prefs.setString(key, lastUpdated.toIso8601String());
   }
-
+  // 마지막 업데이트 시간을 불러오는 메서드 - 수정 예정
   Future<DateTime?> loadLastUpdated({
     required String baseCurrencyCode,
     required String targetCurrencyCode,

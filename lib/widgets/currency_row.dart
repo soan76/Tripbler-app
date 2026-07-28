@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/currency_model.dart';
 import 'amount_input_field.dart';
 
+// 통화 행 위젯
 class CurrencyRow extends StatelessWidget {
   final CurrencyModel currency;
   final bool isBase;
@@ -23,7 +24,7 @@ class CurrencyRow extends StatelessWidget {
     required this.onGraphTap,
     this.onAmountChanged,
   });
-
+  // 통화 행 위젯을 빌드하는 메서드
   @override
   Widget build(BuildContext context) {
     final numberFormat = NumberFormat('#,##0.##');
@@ -62,6 +63,7 @@ class CurrencyRow extends StatelessWidget {
               ],
             ),
           ),
+          // 환율을 표시하는 위젯
           const SizedBox(width: 12),
           Expanded(
             child: isBase

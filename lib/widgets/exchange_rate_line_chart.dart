@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../models/exchange_rate_history_model.dart';
 
+// 환율 라인 차트 위젯
 class ExchangeRateLineChart extends StatelessWidget {
   final List<ExchangeRateHistoryModel> history;
 
@@ -21,15 +22,15 @@ class ExchangeRateLineChart extends StatelessWidget {
         ),
       );
     }
-
+    // 차트에 표시할 데이터 포인트를 생성
     final spots = <FlSpot>[];
     for (int i = 0; i < history.length; i++) {
       spots.add(FlSpot(i.toDouble(), history[i].rate));
     }
-
+    // 차트의 Y축 최소값과 최대값을 계산
     final minY = history.map((e) => e.rate).reduce((a, b) => a < b ? a : b);
     final maxY = history.map((e) => e.rate).reduce((a, b) => a > b ? a : b);
-
+    // Y축에 여유 공간을 추가하여 차트가 더 보기 좋게 표시되도록 함
     final yPadding = (maxY - minY) * 0.15 == 0 ? 1.0 : (maxY - minY) * 0.15;
 
     return SizedBox(
@@ -56,7 +57,7 @@ class ExchangeRateLineChart extends StatelessWidget {
           ),
 
           borderData: FlBorderData(show: false),
-
+          // 차트의 축과 레이블을 설정
           titlesData: FlTitlesData(
             topTitles: const AxisTitles(
               sideTitles: SideTitles(showTitles: false),
@@ -64,7 +65,7 @@ class ExchangeRateLineChart extends StatelessWidget {
             rightTitles: const AxisTitles(
               sideTitles: SideTitles(showTitles: false),
             ),
-
+            // Y축 레이블을 설정
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
@@ -77,8 +78,8 @@ class ExchangeRateLineChart extends StatelessWidget {
                   );
                 },
               ),
-            ),
-
+            ),  
+            // X축 레이블을 설정
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
@@ -109,6 +110,7 @@ class ExchangeRateLineChart extends StatelessWidget {
             ),
           ),
 
+          // 차트의 터치 이벤트와 툴팁을 설정
           lineTouchData: LineTouchData(
             handleBuiltInTouches: true,
             touchTooltipData: LineTouchTooltipData(
@@ -159,7 +161,7 @@ class ExchangeRateLineChart extends StatelessWidget {
               }).toList();
             },
           ),
-
+          // 차트의 데이터 라인을 설정
           lineBarsData: [
             LineChartBarData(
               spots: spots,
@@ -189,7 +191,7 @@ class ExchangeRateLineChart extends StatelessWidget {
       ),
     );
   }
-
+  // Y축 간격을 계산하는 메서드
   double _getYInterval(double minY, double maxY) {
     final diff = maxY - minY;
 
@@ -199,7 +201,7 @@ class ExchangeRateLineChart extends StatelessWidget {
     if (diff <= 100) return 20;
     return diff / 4;
   }
-
+  // X축 간격을 계산하는 메서드
   double _getXInterval(int length) {
     if (length <= 7) return 1;
     if (length <= 31) return 5;
@@ -208,7 +210,7 @@ class ExchangeRateLineChart extends StatelessWidget {
     if (length <= 365) return 60;
     return 120;
   }
-
+  // X축 레이블을 포맷하는 메서드
   String _formatBottomDate(DateTime date, int length) {
     if (length <= 31) {
       return DateFormat('M/d').format(date);
@@ -219,6 +221,7 @@ class ExchangeRateLineChart extends StatelessWidget {
     }
   }
 
+  // Y축 레이블을 포맷하는 메서드
   String _formatRate(double value) {
     if (value == 0) return '0';
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/currency_model.dart';
 
+// 하단 통화 관리 바텀 시트 위젯
 class CurrencyManagementBottomSheet extends StatefulWidget {
   final CurrencyModel baseCurrency;
   final List<CurrencyModel> visibleCurrencies;
@@ -19,6 +20,7 @@ class CurrencyManagementBottomSheet extends StatefulWidget {
       _CurrencyManagementBottomSheetState();
 }
 
+// CurrencyManagementBottomSheet의 상태를 관리하는 State 클래스
 class _CurrencyManagementBottomSheetState
     extends State<CurrencyManagementBottomSheet> {
   late List<CurrencyModel> editableCurrencies;
@@ -30,6 +32,7 @@ class _CurrencyManagementBottomSheetState
     editableCurrencies = List.from(widget.visibleCurrencies);
   }
 
+  // 위젯을 빌드하는 메서드
   @override
   Widget build(BuildContext context) {
     final displayedCurrencies = editableCurrencies;
@@ -64,7 +67,7 @@ class _CurrencyManagementBottomSheetState
               ),
             ),
             const SizedBox(height: 16),
-
+            // 상단 바
             Row(
               children: [
                 const Expanded(
@@ -84,7 +87,7 @@ class _CurrencyManagementBottomSheetState
             ),
 
             const SizedBox(height: 12),
-
+            // 검색 입력 필드
             TextField(
               decoration: InputDecoration(
                 hintText: '통화 코드, 국가명, 통화 이름 검색',
@@ -102,14 +105,15 @@ class _CurrencyManagementBottomSheetState
                 });
               },
             ),
-
+          
             const SizedBox(height: 16),
-
+            // 기준 통화 박스
             _buildBaseCurrencyBox(),
 
             const SizedBox(height: 16),
 
             Expanded(
+              // 표시된 통화와 숨겨진 통화를 보여주는 리스트
               child: ListView(
                 children: [
                   _buildSectionTitle('현재 화면에 표시된 통화'),
@@ -117,6 +121,7 @@ class _CurrencyManagementBottomSheetState
                   if (displayedCurrencies.isEmpty)
                     _buildEmptyDisplayedBox()
                   else
+                    // 표시된 통화 목록을 드래그 앤 드롭으로 재정렬할 수 있는 ReorderableListView
                     ReorderableListView.builder(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
@@ -164,7 +169,7 @@ class _CurrencyManagementBottomSheetState
       ),
     );
   }
-
+  // 기준 통화 박스를 빌드하는 메서드
   Widget _buildBaseCurrencyBox() {
     return Container(
       padding: const EdgeInsets.all(14),
@@ -203,7 +208,7 @@ class _CurrencyManagementBottomSheetState
       ),
     );
   }
-
+  // 섹션 제목을 빌드하는 메서드
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -217,7 +222,7 @@ class _CurrencyManagementBottomSheetState
       ),
     );
   }
-
+  // 표시된 통화 타일을 빌드하는 메서드
   Widget _buildDisplayedCurrencyTile({
     required Key key,
     required CurrencyModel currency,
@@ -263,7 +268,7 @@ class _CurrencyManagementBottomSheetState
       ),
     );
   }
-
+  // 숨겨진 통화 타일을 빌드하는 메서드
   Widget _buildHiddenCurrencyTile(CurrencyModel currency) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -296,7 +301,7 @@ class _CurrencyManagementBottomSheetState
       ),
     );
   }
-
+  // 표시된 통화가 없을 때 보여주는 박스를 빌드하는 메서드
   Widget _buildEmptyDisplayedBox() {
     return Container(
       width: double.infinity,
@@ -311,7 +316,7 @@ class _CurrencyManagementBottomSheetState
       ),
     );
   }
-
+  // 숨겨진 통화가 없을 때 보여주는 박스를 빌드하는 메서드
   Widget _buildEmptyHiddenBox() {
     return Container(
       width: double.infinity,
@@ -327,7 +332,7 @@ class _CurrencyManagementBottomSheetState
     );
   }
 }
-
+// CurrencyManagementBottomSheet를 보여주는 함수
 Future<void> showCurrencyManagementBottomSheet({
   required BuildContext context,
   required CurrencyModel baseCurrency,

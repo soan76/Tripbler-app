@@ -15,6 +15,8 @@ class CurrencyModel {
     this.accentColor = Colors.blue,
   });
 
+  // CurrencyModel 객체를 JSON 형태의 Map으로 변환
+  // 로컬 저장소나 서버에 데이터를 저장할 때 사용.
   Map<String, dynamic> toJson() {
     return {
       'code': code,
@@ -24,6 +26,8 @@ class CurrencyModel {
     };
   }
 
+  // JSON 형태의 Map을 CurrencyModel 객체로 변환
+  //저장된 통화 정보를 다시 불러올 때 사용
   factory CurrencyModel.fromJson(Map<String, dynamic> json) {
     return CurrencyModel(
       code: json['code'] as String,
@@ -34,6 +38,7 @@ class CurrencyModel {
   }
 }
 
+// 지원하는 통화 목록 - 수정 예정
 const List<CurrencyModel> supportedCurrencies = [
   CurrencyModel(
     code: 'KRW',
@@ -97,9 +102,12 @@ const List<CurrencyModel> supportedCurrencies = [
   ),
 ];
 
+// 통화 코드를 이용해 supportedCurrencies 목록에서 통화 정보를 검색
 CurrencyModel findCurrencyByCode(String code) {
   return supportedCurrencies.firstWhere(
+    // 전달받은 코드와 일치하는 통화 객체를 반환
     (currency) => currency.code == code,
+    // 일치하는 통화가 없을 경우, 기본값으로 첫 번째 통화 객체를 반환
     orElse: () => supportedCurrencies.first,
   );
 }
