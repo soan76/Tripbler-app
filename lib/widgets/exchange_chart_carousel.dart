@@ -72,8 +72,7 @@ class _ExchangeChartCarouselState extends State<ExchangeChartCarousel> {
                   baseCurrency: widget.baseCurrency,
                   targetCurrency: targetCurrency,
 
-                  // 핵심:
-                  // 현재 화면에 보이는 차트만 데이터를 불러오게 함
+                  // 현재 차트와 양옆 차트를 미리 불러옵니다.
                   shouldLoad: currentPage == index,
                 ),
               );
@@ -188,47 +187,54 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
   }
   // 차트 데이터를 불러오는 메서드
   Future<void> _loadChartData() async {
+    if (isLoading) {
+      return;
+    }
+
     setState(() {
       isLoading = true;
       errorMessage = null;
     });
 
     try {
-      final latestRate = await _apiService.fetchLatestRate(
-        baseCurrencyCode: widget.baseCurrency.code,
-        targetCurrencyCode: widget.targetCurrency.code,
-      );
-
-      final historicalRates = await _apiService.fetchHistoricalRates(
-        baseCurrencyCode: widget.baseCurrency.code,
-        targetCurrencyCode: widget.targetCurrency.code,
-        period: ChartPeriod.oneMonth,
-      );
+      // 최신 환율을 먼저 불러옴.
+      final historicalRates = await _apiService
+          .fetchHistoricalRates(
+            baseCurrencyCode: widget.baseCurrency.code,
+            targetCurrencyCode: widget.targetCurrency.code,
+            period: ChartPeriod.oneMonth,
+          )
+          // 차트 요청 시간이 초과되면 예외를 발생시키도록 설정.
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () {
+              throw Exception('차트 요청 시간이 초과되었습니다.');
+            },
+          );
 
       if (!mounted) {
         return;
       }
-
+      // 데이터를 성공적으로 불러왔으므로 상태를 업데이트.
       setState(() {
-        currentRate = latestRate;
         history = historicalRates;
+        currentRate = historicalRates.isEmpty
+            ? null
+            : historicalRates.last.rate;
         hasLoaded = true;
+        isLoading = false;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('차트 로딩 실패: $e');
+      debugPrint('차트 로딩 실패 위치: $stackTrace');
+
       if (!mounted) {
         return;
       }
 
       setState(() {
         errorMessage = '환율 차트를 불러오지 못했습니다.';
-      });
-    } finally {
-      if (!mounted) {
-        return;
-      }
-
-      setState(() {
-        isLoading = false;
+        hasLoaded = false;
       });
     }
   }

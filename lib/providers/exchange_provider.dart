@@ -1,176 +1,265 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 
 import '../models/currency_model.dart';
 import '../services/exchange_api_service.dart';
 import '../services/local_storage_service.dart';
 
-// 환율 화면에서 사용하는 상태와 동작을 관리
+/// 환율 관련 상태를 관리하는 Provider.
 class ExchangeProvider extends ChangeNotifier {
-  // 최신 환율 데이터를 서버에서 받아오는 API 서비스
-  final ExchangeApiService _apiService = ExchangeApiService();
-  // 선택 통화, 입력 금액, 캐시 환율 등을 기기에 저장하는 로컬 저장소 서비스
-  final LocalStorageService _localStorageService = LocalStorageService();
+  ExchangeProvider({
+    ExchangeApiService? apiService,
+    LocalStorageService? localStorageService,
+  })  : _apiService = apiService ?? ExchangeApiService(),
+        _localStorageService =
+            localStorageService ?? LocalStorageService();
 
-  // 환율 계산의 기준이 되는 통화
-  // 앱을 처음 실행할 때는 대한민국 원화(KRW)를 기본값으로 사용
+  final ExchangeApiService _apiService;
+  final LocalStorageService _localStorageService;
+
+  // 기준 통화, 화면에 표시할 통화 목록, 입력 금액, 환율, 로딩 상태, 오류 메시지, 마지막 업데이트 시각을 관리.
   CurrencyModel _baseCurrency = findCurrencyByCode('KRW');
-
-  // 기준 통화를 제외하고 화면에 표시할 상대 통화 목록
-  List<CurrencyModel> _visibleCurrencies = [];
-
-  // 사용자가 입력한 기준 통화 금액
-  // 기본값은 10,000원
+  List<CurrencyModel> _visibleCurrencies = <CurrencyModel>[];
   double _inputAmount = 10000;
-  // 통화 코드별 환율을 저장하는 Map
-  Map<String, double> _rates = {};
+  Map<String, double> _rates = <String, double>{};
   bool _isLoading = false;
-  // API 요청 실패나 잘못된 동작이 발생했을 때 표시할 오류 메시지
   String? _errorMessage;
   DateTime? _lastUpdated;
 
   bool _hasInitialized = false;
-  
+  Future<void>? _initializationFuture;
+
+  // 가장 최근에 시작된 환율 요청을 식별함.
+  int _fetchRequestId = 0;
+  // 가장 최근에 시작된 환율 요청이 완료되었는지 확인하는 데 사용.
   CurrencyModel get baseCurrency => _baseCurrency;
-  List<CurrencyModel> get visibleCurrencies => _visibleCurrencies;
+  // 화면에 표시할 통화 목록을 읽기 전용으로 제공.
+  List<CurrencyModel> get visibleCurrencies =>
+      UnmodifiableListView(_visibleCurrencies);
+
   double get inputAmount => _inputAmount;
-  Map<String, double> get rates => _rates;
+  // 환율 정보를 읽기 전용으로 제공.
+  Map<String, double> get rates => UnmodifiableMapView(_rates);
+
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   DateTime? get lastUpdated => _lastUpdated;
-
-  // 기준 통화를 포함한 모든 화면에 표시할 통화 목록
-  List<CurrencyModel> get allRows {
-    return [_baseCurrency, ..._visibleCurrencies];
-  }
-
-  // 앱 초기화 시 로컬 저장소에서 이전 상태를 불러오고 최신 환율을 가져오는 메서드
-  Future<void> initialize() async {
+  // 기준 통화와 화면에 표시할 통화 목록을 합쳐서 읽기 전용으로 제공.
+  List<CurrencyModel> get allRows =>
+      List<CurrencyModel>.unmodifiable(<CurrencyModel>[
+        _baseCurrency,
+        ..._visibleCurrencies,
+      ]);
+  // 초기화 메서드. 이미 초기화된 경우에는 즉시 완료된 Future를 반환.
+  Future<void> initialize() {
     if (_hasInitialized) {
-      return;
+      return Future<void>.value();
     }
 
-    _hasInitialized = true;
+    final runningInitialization = _initializationFuture;
 
-    await _loadSavedState();
-    await fetchRates();
+    if (runningInitialization != null) {
+      return runningInitialization;
+    }
+
+    final initialization = _runInitialization();
+    _initializationFuture = initialization;
+
+    return initialization;
   }
+  // 초기화 과정에서 저장된 상태를 불러오고, 환율을 가져오는 비동기 작업을 수행.
+  Future<void> _runInitialization() async {
+    try {
+      await _loadSavedState();
+      await fetchRates();
 
-  // 로컬 저장소에서 이전 상태를 불러오는 메서드
+      _hasInitialized = true;
+    } finally {
+      // 초기화 과정에서 예외가 발생하면 다음 initialize()에서
+      // 다시 시도할 수 있도록 실행 중 상태를 해제함.
+      _initializationFuture = null;
+    }
+  }
+  // 저장된 상태를 불러오는 비동기 작업. 로컬 스토리지에서 기준 통화, 
+  // 화면에 표시할 통화 목록, 환율, 마지막 업데이트 시각, 입력 금액을 불러와서 Provider 상태에 반영.
   Future<void> _loadSavedState() async {
-    final savedBaseCode = await _localStorageService.loadBaseCurrency();
-    final savedVisibleCodes = await _localStorageService
-        .loadVisibleCurrencies();
-    final savedRates = await _localStorageService.loadCachedRates();
-    final savedLastUpdated = await _localStorageService.loadLastUpdated();
-    final savedAmount = await _localStorageService.loadInputAmount();
+    final savedBaseCode =
+        await _localStorageService.loadBaseCurrency();
 
-    // 로컬 저장소에서 불러온 기준 통화 코드가 존재하면 해당 통화를 기준 통화로 설정
+    final savedVisibleCodes =
+        await _localStorageService.loadVisibleCurrencies();
+
+    final savedRates =
+        await _localStorageService.loadCachedRates();
+
+    final savedLastUpdated =
+        await _localStorageService.loadLastUpdated();
+
+    final savedAmount =
+        await _localStorageService.loadInputAmount();
+
     if (savedBaseCode != null) {
       _baseCurrency = findCurrencyByCode(savedBaseCode);
     }
 
-    // 기준 통화를 제외한 화면에 표시할 통화 목록을 로컬 저장소에서 불러옴
-    if (savedVisibleCodes != null && savedVisibleCodes.isNotEmpty) {
-      _visibleCurrencies = savedVisibleCodes
-          .where((code) => code != _baseCurrency.code)
-          .map(findCurrencyByCode)
-          .toList();
+    if (savedVisibleCodes != null) {
+      _visibleCurrencies = _normalizeVisibleCurrencies(
+        savedVisibleCodes.map(findCurrencyByCode),
+      );
     }
 
-    /// 로컬 저장소에서 불러온 환율 데이터와 마지막 업데이트 시간을 상태에 반영
     if (savedRates != null) {
-      _rates = savedRates;
+      _rates = Map<String, double>.from(savedRates);
     }
 
-    if (savedLastUpdated != null) {
-      _lastUpdated = savedLastUpdated;
-    }
+    _lastUpdated = savedLastUpdated;
 
     if (savedAmount != null) {
       _inputAmount = savedAmount;
     }
-
-    notifyListeners();
   }
-
-  // 서버에서 최신 환율 데이터를 가져오는 메서드
+  
+  // 환율 정보를 가져오는 비동기 작업. 가장 최근에 시작된 요청만 처리하고, 이전 요청은 무시함.
   Future<void> fetchRates() async {
+    final requestId = ++_fetchRequestId;
+
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
-      final targetCodes = _visibleCurrencies.map((e) => e.code).toList();
+      final targetCodes = _visibleCurrencies
+          .map((currency) => currency.code)
+          .toSet()
+          .toList(growable: false);
+
+      if (targetCodes.isEmpty) {
+        if (!_isLatestRequest(requestId)) {
+          return;
+        }
+
+        _rates = <String, double>{};
+        _lastUpdated = DateTime.now();
+        return;
+      }
 
       final latestRates = await _apiService.fetchLatestRates(
         baseCurrency: _baseCurrency.code,
         targetCurrencies: targetCodes,
       );
 
-      _rates = latestRates;
-      _lastUpdated = DateTime.now();
+      if (!_isLatestRequest(requestId)) {
+        return;
+      }
 
-      await _localStorageService.saveCachedRates(_rates);
-      await _localStorageService.saveLastUpdated(_lastUpdated!);
-    } catch (e) {
-      final cachedRates = await _localStorageService.loadCachedRates();
+      final updatedAt = DateTime.now();
+
+      _rates = Map<String, double>.from(latestRates);
+      _lastUpdated = updatedAt;
+
+      try {
+        await _localStorageService.saveCachedRates(_rates);
+        await _localStorageService.saveLastUpdated(updatedAt);
+      } catch (_) {
+        if (_isLatestRequest(requestId)) {
+          _errorMessage = '최신 환율은 표시했지만 기기에 저장하지 못했습니다.';
+        }
+      }
+    } catch (_) {
+      if (!_isLatestRequest(requestId)) {
+        return;
+      }
+
+      await _restoreCachedRatesAfterFetchFailure();
+    } finally {
+      if (_isLatestRequest(requestId)) {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+  // 환율 가져오기 실패 시 로컬 캐시에서 환율 정보를 복원하는 비동기 작업.
+  Future<void> _restoreCachedRatesAfterFetchFailure() async {
+    try {
+      final cachedRates =
+          await _localStorageService.loadCachedRates();
 
       if (cachedRates != null && cachedRates.isNotEmpty) {
-        _rates = cachedRates;
-        _errorMessage = '최신 환율을 불러오지 못했습니다. 마지막 저장 데이터를 표시합니다.';
+        _rates = Map<String, double>.from(cachedRates);
+        _errorMessage =
+            '최신 환율을 불러오지 못했습니다. '
+            '마지막 저장 데이터를 표시합니다.';
       } else {
-        _errorMessage = '환율 데이터를 불러오지 못했습니다. 다시 시도해 주세요.';
+        _errorMessage =
+            '환율 데이터를 불러오지 못했습니다. '
+            '다시 시도해 주세요.';
       }
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+    } catch (_) {
+      _errorMessage =
+          '환율 데이터를 불러오지 못했습니다. '
+          '다시 시도해 주세요.';
     }
   }
 
-  // 사용자가 입력한 기준 통화 금액을 변경하는 메서드
   Future<void> changeAmount(double amount) async {
+    if (_inputAmount == amount) {
+      return;
+    }
+
     _inputAmount = amount;
-    await _localStorageService.saveInputAmount(amount);
+
+    // 입력 결과는 즉시 화면에 반영함.
     notifyListeners();
+
+    await _localStorageService.saveInputAmount(amount);
   }
 
-  // 기준 통화를 변경하는 메서드
-  Future<void> changeBaseCurrency(CurrencyModel currency) async {
+  Future<void> changeBaseCurrency(
+    CurrencyModel currency,
+  ) async {
     if (_baseCurrency.code == currency.code) {
       return;
     }
 
-    // 기준 통화를 변경할 때, 기존 기준 통화를 화면에 표시할 상대 통화 목록에 추가
-    final oldBase = _baseCurrency;
-    // 기존 기준 통화가 화면에 표시할 상대 통화 목록에 있으면 제거
-    _visibleCurrencies.removeWhere((item) => item.code == currency.code);
-
-    // 기존 기준 통화가 화면에 표시할 상대 통화 목록에 없으면 추가
-    if (!_visibleCurrencies.any((item) => item.code == oldBase.code)) {
-      _visibleCurrencies.insert(0, oldBase);
-    }
+    final oldBaseCurrency = _baseCurrency;
 
     _baseCurrency = currency;
+
+    _visibleCurrencies =
+        _normalizeVisibleCurrencies(<CurrencyModel>[
+      oldBaseCurrency,
+      ..._visibleCurrencies.where(
+        (item) => item.code != currency.code,
+      ),
+    ]);
 
     await _saveCurrencyState();
     await fetchRates();
   }
-
-  // 화면에 표시할 상대 통화를 교체하는 메서드
+  // 화면에 표시할 통화 목록에서 특정 위치의 통화를 새로운 통화로 교체하는 비동기 작업.
   Future<void> replaceVisibleCurrency({
     required int index,
     required CurrencyModel newCurrency,
   }) async {
+    if (index < 0 || index >= _visibleCurrencies.length) {
+      _setErrorMessage('변경할 통화 위치가 올바르지 않습니다.');
+      return;
+    }
+
     if (newCurrency.code == _baseCurrency.code) {
       return;
     }
-    // 중복된 통화가 이미 화면에 표시되고 있는지 확인
+
     final duplicateIndex = _visibleCurrencies.indexWhere(
       (item) => item.code == newCurrency.code,
     );
 
-    // 중복된 통화가 이미 화면에 표시되고 있고, 교체하려는 위치와 다르면 교체하지 않음
     if (duplicateIndex != -1 && duplicateIndex != index) {
+      return;
+    }
+
+    if (_visibleCurrencies[index].code == newCurrency.code) {
       return;
     }
 
@@ -180,23 +269,32 @@ class ExchangeProvider extends ChangeNotifier {
     await fetchRates();
   }
 
-  // 화면에 표시할 상대 통화 목록을 새로 적용하는 메서드
-  Future<void> applyVisibleCurrencies(List<CurrencyModel> currencies) async {
-    _visibleCurrencies = currencies
-        .where((currency) => currency.code != _baseCurrency.code)
-        .toList();
+  Future<void> applyVisibleCurrencies(
+    List<CurrencyModel> currencies,
+  ) async {
+    final normalizedCurrencies =
+        _normalizeVisibleCurrencies(currencies);
+
+    if (_hasSameCurrencyCodes(
+      _visibleCurrencies,
+      normalizedCurrencies,
+    )) {
+      return;
+    }
+
+    _visibleCurrencies = normalizedCurrencies;
 
     await _saveCurrencyState();
     await fetchRates();
   }
 
-  // 화면에 표시할 상대 통화를 추가하는 메서드
-  Future<void> addCurrency(CurrencyModel currency) async {
-    if (currency.code == _baseCurrency.code) {
-      return;
-    }
-
-    if (_visibleCurrencies.any((item) => item.code == currency.code)) {
+  Future<void> addCurrency(
+    CurrencyModel currency,
+  ) async {
+    if (currency.code == _baseCurrency.code ||
+        _visibleCurrencies.any(
+          (item) => item.code == currency.code,
+        )) {
       return;
     }
 
@@ -205,22 +303,29 @@ class ExchangeProvider extends ChangeNotifier {
     await _saveCurrencyState();
     await fetchRates();
   }
-
-  // 화면에 표시할 상대 통화를 제거하는 메서드
-  Future<void> removeCurrency(CurrencyModel currency) async {
+  // 화면에 표시할 통화 목록에서 특정 통화를 제거하는 비동기 작업. 기준 통화는 제거할 수 없음.
+  Future<void> removeCurrency(
+    CurrencyModel currency,
+  ) async {
     if (currency.code == _baseCurrency.code) {
-      _errorMessage = '기준 통화는 삭제할 수 없습니다.';
-      notifyListeners();
+      _setErrorMessage('기준 통화는 삭제할 수 없습니다.');
       return;
     }
 
-    _visibleCurrencies.removeWhere((item) => item.code == currency.code);
+    final previousLength = _visibleCurrencies.length;
+
+    _visibleCurrencies.removeWhere(
+      (item) => item.code == currency.code,
+    );
+
+    if (_visibleCurrencies.length == previousLength) {
+      return;
+    }
 
     await _saveCurrencyState();
     await fetchRates();
   }
-
-  // 기준 통화 금액을 입력받아 상대 통화 금액으로 변환하는 메서드
+  // 입력 금액을 기준으로 특정 통화로 환산한 금액을 계산하는 메서드. 기준 통화와 동일한 경우에는 입력 금액 그대로 반환.
   double convertedAmount(String targetCode) {
     if (targetCode == _baseCurrency.code) {
       return _inputAmount;
@@ -228,13 +333,9 @@ class ExchangeProvider extends ChangeNotifier {
 
     final rate = _rates[targetCode];
 
-    if (rate == null) {
-      return 0;
-    }
-
-    return _inputAmount * rate;
+    return rate == null ? 0 : _inputAmount * rate;
   }
-  // 기준 통화와 상대 통화 간의 환율을 가져오는 메서드
+
   double? rateFor(String targetCode) {
     if (targetCode == _baseCurrency.code) {
       return 1;
@@ -242,13 +343,67 @@ class ExchangeProvider extends ChangeNotifier {
 
     return _rates[targetCode];
   }
-  // 기준 통화와 상대 통화 간의 환율을 가져오는 메서드
+  // 기준 통화와 화면에 표시할 통화 목록을 로컬 스토리지에 저장하는 비동기 작업.
   Future<void> _saveCurrencyState() async {
-    await _localStorageService.saveBaseCurrency(_baseCurrency.code);
-    await _localStorageService.saveVisibleCurrencies(
-      _visibleCurrencies.map((e) => e.code).toList(),
+    await _localStorageService.saveBaseCurrency(
+      _baseCurrency.code,
     );
 
+    await _localStorageService.saveVisibleCurrencies(
+      _visibleCurrencies
+          .map((currency) => currency.code)
+          .toList(),
+    );
+  }
+  // 화면에 표시할 통화 목록에서 중복된 통화를 제거하고, 기준 통화를 제외한 고유한 통화 목록을 반환하는 메서드.
+  List<CurrencyModel> _normalizeVisibleCurrencies(
+    Iterable<CurrencyModel> currencies,
+  ) {
+    final uniqueCurrencies =
+        LinkedHashMap<String, CurrencyModel>();
+
+    for (final currency in currencies) {
+      if (currency.code == _baseCurrency.code) {
+        continue;
+      }
+
+      uniqueCurrencies.putIfAbsent(
+        currency.code,
+        () => currency,
+      );
+    }
+
+    return uniqueCurrencies.values.toList();
+  }
+  // 두 통화 목록이 동일한 통화 코드를 가지고 있는지 확인하는 메서드. 
+  // 길이가 다르거나, 동일한 위치에 다른 통화 코드가 있으면 false를 반환.
+  bool _hasSameCurrencyCodes(
+    List<CurrencyModel> first,
+    List<CurrencyModel> second,
+  ) {
+    if (first.length != second.length) {
+      return false;
+    }
+
+    for (var index = 0; index < first.length; index++) {
+      if (first[index].code != second[index].code) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  bool _isLatestRequest(int requestId) {
+    return requestId == _fetchRequestId;
+  }
+
+  void _setErrorMessage(String message) {
+    if (_errorMessage == message) {
+      return;
+    }
+
+    _errorMessage = message;
     notifyListeners();
   }
 }
