@@ -7,6 +7,7 @@ import '../services/exchange_rate_api_service.dart';
 import 'exchange_rate_line_chart.dart';
 
 /// 환율 차트 캐러셀 위젯
+/// 이 위젯은 기본 통화와 대상 통화 목록을 받아서, 각 대상 통화에 대한 환율 차트를 페이지 뷰 형태로 보여줌.
 class ExchangeChartCarousel extends StatefulWidget {
   final CurrencyModel baseCurrency;
   final List<CurrencyModel> targetCurrencies;
@@ -72,7 +73,7 @@ class _ExchangeChartCarouselState extends State<ExchangeChartCarousel> {
                   baseCurrency: widget.baseCurrency,
                   targetCurrency: targetCurrency,
 
-                  // 현재 차트와 양옆 차트를 미리 불러옵니다.
+                  // 현재 차트와 양옆 차트를 미리 불러옴.
                   shouldLoad: currentPage == index,
                 ),
               );

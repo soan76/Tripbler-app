@@ -93,16 +93,20 @@ class ExchangeRateApiService {
 
       throw Exception('기간별 환율 데이터를 불러오지 못했습니다.');
     }
-    // 응답 JSON 구조 예시:
-    // {
-    //   "latest": {
-    //     "base": "USD",
-    //     "date": "2023-04-01",
-    //     "rates": {
-    //       "KRW": 1300.0
-    //     }
-    //   }
-    // }
+    /**
+     * Frankfurter API의 기간별 환율 응답 형식은 다음과 같음:
+     * {
+     *   "amount": 1.0,
+     *   "base": "USD",
+     *   "start_date": "2023-01-01",
+     *   "end_date": "2023-01-31",
+     *   "rates": {
+     *     "2023-01-01": {
+     *       "KRW": 1300.0
+     *     }
+     *   }
+     * }
+     */
     final Map<String, dynamic> jsonBody =
         jsonDecode(response.body) as Map<String, dynamic>;
 
@@ -142,9 +146,9 @@ class ExchangeRateApiService {
     }
 
     history.sort((a, b) => a.date.compareTo(b.date));
-    // Frankfurter API는 특정 기간 동안의 환율 데이터를 제공하지만, 일부 날짜에는 데이터가 없을 수 있음. 
-    // 시작일부터 종료일까지의 모든 날짜에 대해 환율 데이터를 생성하고, 
-    // 실제 API 응답에서 누락된 날짜에 대해서는 null 또는 0과 같은 기본값을 설정할 수 있음. 이 부분은 필요에 따라 구현할 수 있음.
+    /* 기간별 환율 데이터가 비어 있는 경우, 디버그 로그를 출력하여 문제를 파악할 수 있도록 함.
+     * 이는 API 응답이 정상적이지만, 특정 기간에 대한 환율 데이터가 없는 경우에 발생할 수 있음.
+     */
     if (history.isEmpty) {
       debugPrint('기간별 환율 데이터가 비어 있음');
       debugPrint('URL: $uri');
