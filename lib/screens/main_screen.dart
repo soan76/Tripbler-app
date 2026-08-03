@@ -46,17 +46,25 @@ class MainScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final tabProvider = context.watch<TabProvider>();
     final selectedIndex = tabProvider.selectedIndex;
+    // 선택된 탭 인덱스가 유효한지 확인
+    final isValidTabIndex =
+        selectedIndex >= TabProvider.firstTabIndex &&
+        selectedIndex < tabs.length;
+
+    final stackIndex = isValidTabIndex ? selectedIndex : tabs.length;
+
+    final backgroundColor = isValidTabIndex
+        ? tabs[selectedIndex].backgroundColor
+        : Colors.white;
 
     return Scaffold(
-      backgroundColor: selectedIndex == -1
-          ? Colors.white
-          : tabs[selectedIndex].backgroundColor,
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: Column(
           children: [
             Expanded(
               child: IndexedStack(
-                index: selectedIndex == -1 ? 3 : selectedIndex,
+                index: stackIndex,
                 children: const [
                   ExchangeScreen(),
                   MapScreen(),

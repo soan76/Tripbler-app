@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -7,7 +5,13 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/translation_provider.dart';
+import '../widgets/translation/initial_camera_permission_view.dart';
+import '../widgets/translation/translation_camera_preview_card.dart';
+import '../widgets/translation/translation_header.dart';
+import '../widgets/translation/translation_result_view.dart';
+import '../widgets/translation/translation_state_views.dart';
 
+// 번역 화면을 구성하는 StatefulWidget
 class TranslationScreen extends StatefulWidget {
   const TranslationScreen({super.key});
 
@@ -31,6 +35,10 @@ class _TranslationScreenState extends State<TranslationScreen>
     WidgetsBinding.instance.addObserver(this);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
       _checkCameraPermissionOnEntry();
     });
   }
@@ -41,7 +49,7 @@ class _TranslationScreenState extends State<TranslationScreen>
     _disposeCameraController();
     super.dispose();
   }
-
+  // 앱 라이프사이클 상태 변경 시 카메라 권한 및 초기화 상태를 관리
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
@@ -54,7 +62,7 @@ class _TranslationScreenState extends State<TranslationScreen>
       _checkCameraPermissionOnEntry();
     }
   }
-
+  // 카메라 권한 확인 및 초기화 로직을 별도의 메서드로 분리 1
   Future<void> _checkCameraPermissionOnEntry() async {
     if (!mounted) {
       return;
@@ -87,7 +95,7 @@ class _TranslationScreenState extends State<TranslationScreen>
       provider.setStatus(TranslationStatus.permissionRequired);
     }
   }
-
+  // 카메라 권한 요청 및 초기화 로직을 별도의 메서드로 분리 2
   Future<void> _requestCameraPermission() async {
     if (!mounted) {
       return;
@@ -117,12 +125,12 @@ class _TranslationScreenState extends State<TranslationScreen>
       provider.setStatus(TranslationStatus.permissionDenied);
     }
   }
-
+  // 카메라 초기화 및 상태 관리 로직을 별도의 메서드로 분리 3
   Future<void> _initializeCamera() async {
     if (!mounted || _isCameraInitializing) {
       return;
     }
-
+    // 카메라 초기화 중 상태를 관리하기 위해 TranslationProvider의 상태를 업데이트
     final provider = context.read<TranslationProvider>();
     provider.setStatus(TranslationStatus.initializingCamera);
 
@@ -130,7 +138,7 @@ class _TranslationScreenState extends State<TranslationScreen>
 
     try {
       await _disposeCameraController();
-
+      // 사용 가능한 카메라 목록을 가져오기 위해 availableCameras() 호출
       final cameras = await availableCameras();
 
       if (!mounted) {
@@ -144,7 +152,7 @@ class _TranslationScreenState extends State<TranslationScreen>
         );
         return;
       }
-
+      // 후면 카메라만 필터링하여 사용 가능한 카메라를 확인
       final backCameras = cameras.where(
         (camera) => camera.lensDirection == CameraLensDirection.back,
       );
@@ -156,7 +164,7 @@ class _TranslationScreenState extends State<TranslationScreen>
         );
         return;
       }
-
+      // 후면 카메라 중 첫 번째 카메라를 선택하여 CameraController를 초기화
       final selectedCamera = backCameras.first;
 
       final controller = CameraController(
@@ -194,7 +202,7 @@ class _TranslationScreenState extends State<TranslationScreen>
       _isCameraInitializing = false;
     }
   }
-
+  // 카메라 컨트롤러를 안전하게 종료하고 상태를 초기화하는 메서드
   Future<void> _disposeCameraController() async {
     final controller = _cameraController;
     _cameraController = null;
@@ -202,7 +210,7 @@ class _TranslationScreenState extends State<TranslationScreen>
     if (controller == null) {
       return;
     }
-
+    // 플래시 모드가 켜져 있는 경우 플래시를 끄고 카메라 컨트롤러를 종료
     try {
       if (_isFlashOn) {
         await controller.setFlashMode(FlashMode.off);
@@ -219,7 +227,7 @@ class _TranslationScreenState extends State<TranslationScreen>
 
     _isFlashOn = false;
   }
-
+  // 사진 촬영 및 이미지 선택 로직을 별도의 메서드로 분리 4
   Future<void> _capturePhoto() async {
     final controller = _cameraController;
 
@@ -230,7 +238,7 @@ class _TranslationScreenState extends State<TranslationScreen>
     }
 
     _isTakingPicture = true;
-
+    // 사진 촬영 중 상태를 관리하기 위해 TranslationProvider의 상태를 업데이트
     final provider = context.read<TranslationProvider>();
     provider.setStatus(TranslationStatus.capturing);
 
@@ -254,13 +262,13 @@ class _TranslationScreenState extends State<TranslationScreen>
     } finally {
       _isTakingPicture = false;
     }
-  }
-
+  } 
+  // 갤러리에서 이미지 선택 로직을 별도의 메서드로 분리 5
   Future<void> _pickImageFromGallery() async {
     if (context.read<TranslationProvider>().isProcessing) {
       return;
     }
-
+    // 갤러리에서 이미지를 선택하고 처리하는 로직을 별도의 메서드로 분리
     try {
       final pickedImage = await _imagePicker.pickImage(
         source: ImageSource.gallery,
@@ -285,14 +293,14 @@ class _TranslationScreenState extends State<TranslationScreen>
       );
     }
   }
-
+  // 플래시 토글 로직을 별도의 메서드로 분리 6
   Future<void> _toggleFlash() async {
     final controller = _cameraController;
 
     if (controller == null || !controller.value.isInitialized) {
       return;
     }
-
+    // 플래시 모드 변경 시 발생할 수 있는 예외를 처리하고 상태를 업데이트
     try {
       final nextFlashMode = _isFlashOn ? FlashMode.off : FlashMode.torch;
       await controller.setFlashMode(nextFlashMode);
@@ -316,15 +324,15 @@ class _TranslationScreenState extends State<TranslationScreen>
       ).showSnackBar(const SnackBar(content: Text('이 기기에서는 플래시를 사용할 수 없습니다.')));
     }
   }
-
+  // 앱 설정 열기 로직을 별도의 메서드로 분리 7
   Future<void> _openSettings() async {
     await openAppSettings();
   }
-
+  // 카메라 재시도 로직을 별도의 메서드로 분리 8
   Future<void> _retryCamera() async {
     await _checkCameraPermissionOnEntry();
   }
-
+  // 사진 재촬영 로직을 별도의 메서드로 분리 9
   Future<void> _retake() async {
     context.read<TranslationProvider>().resetForRetake();
 
@@ -354,7 +362,7 @@ class _TranslationScreenState extends State<TranslationScreen>
       },
     );
   }
-
+  // 번역 화면의 본문 영역을 구성하는 위젯을 반환하는 메서드
   Widget _buildBody(TranslationProvider provider) {
     if (provider.hasImage ||
         provider.status == TranslationStatus.recognizing ||
@@ -363,16 +371,18 @@ class _TranslationScreenState extends State<TranslationScreen>
         provider.status == TranslationStatus.failed) {
       return _buildResultView(provider);
     }
-
+    // 번역 화면의 상태에 따라 적절한 위젯을 반환
     switch (provider.status) {
       case TranslationStatus.checkingPermission:
-        return _buildLoadingView('카메라 권한을 확인하고 있습니다.');
+        return const TranslationLoadingView(message: '카메라 권한을 확인하고 있습니다.');
 
       case TranslationStatus.permissionRequired:
-        return _buildInitialPermissionView();
+        return InitialCameraPermissionView(
+          onRequestPermission: _requestCameraPermission,
+        );
 
       case TranslationStatus.permissionDenied:
-        return _buildPermissionView(
+        return TranslationPermissionView(
           title: '카메라 권한이 허용되지 않았습니다',
           description: '카메라 번역을 사용하려면 카메라 권한을 허용해야 합니다.',
           primaryButtonText: '다시 권한 요청',
@@ -380,7 +390,7 @@ class _TranslationScreenState extends State<TranslationScreen>
         );
 
       case TranslationStatus.permissionPermanentlyDenied:
-        return _buildPermissionView(
+        return TranslationPermissionView(
           title: '설정에서 카메라 권한을 허용해 주세요',
           description:
               '카메라 권한이 차단되어 있습니다. 기기 설정에서 이 앱의 카메라 권한을 허용한 뒤 다시 돌아와 주세요.',
@@ -389,11 +399,12 @@ class _TranslationScreenState extends State<TranslationScreen>
         );
 
       case TranslationStatus.initializingCamera:
-        return _buildLoadingView('카메라를 준비하고 있습니다.');
+        return const TranslationLoadingView(message: '카메라를 준비하고 있습니다.');
 
       case TranslationStatus.cameraUnavailable:
-        return _buildErrorView(
-          provider.errorMessage ??
+        return TranslationErrorView(
+          message:
+              provider.errorMessage ??
               '카메라를 시작할 수 없습니다.\n카메라 상태를 확인한 뒤 다시 시도해 주세요.',
           buttonText: '다시 시도',
           onPressed: _retryCamera,
@@ -410,205 +421,7 @@ class _TranslationScreenState extends State<TranslationScreen>
         return _buildResultView(provider);
     }
   }
-
-  Widget _buildInitialPermissionView() {
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
-        child: Column(
-          children: [
-            const Spacer(),
-
-            Image.asset(
-              'assets/images/camera_permission.png',
-              width: 180,
-              height: 180,
-              fit: BoxFit.contain,
-            ),
-
-            const SizedBox(height: 32),
-
-            const Text(
-              '번역을 위해 촬영 권한이 필요합니다',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                color: Colors.black87,
-              ),
-            ),
-
-            const Spacer(),
-
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton(
-                onPressed: _requestCameraPermission,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black87,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text(
-                  '접근 권한 허용',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingView(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const CircularProgressIndicator(),
-            const SizedBox(height: 18),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPermissionView({
-    required String title,
-    required String description,
-    required String primaryButtonText,
-    required VoidCallback onPrimaryPressed,
-    String? bottomText,
-  }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 16,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.camera_alt_outlined,
-                size: 56,
-                color: Colors.black87,
-              ),
-              const SizedBox(height: 18),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                description,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.45,
-                  color: Colors.black54,
-                ),
-              ),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: onPrimaryPressed,
-                  child: Text(primaryButtonText),
-                ),
-              ),
-              if (bottomText != null) ...[
-                const SizedBox(height: 14),
-                Text(
-                  bottomText,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13, color: Colors.black45),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorView(
-    String message, {
-    required String buttonText,
-    required VoidCallback onPressed,
-  }) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.error_outline,
-                size: 52,
-                color: Colors.redAccent,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 16,
-                  height: 1.45,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton(onPressed: onPressed, child: Text(buttonText)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
+  // 카메라 뷰를 구성하는 위젯을 반환하는 메서드
   Widget _buildCameraView(TranslationProvider provider) {
     final isCameraReady =
         _cameraController != null &&
@@ -620,11 +433,24 @@ class _TranslationScreenState extends State<TranslationScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(provider),
+          TranslationHeader(
+            sourceLanguageCode: provider.sourceLanguageCode,
+            targetLanguageCode: provider.targetLanguageCode,
+            languages: provider.languages,
+            onSourceLanguageChanged: provider.changeSourceLanguage,
+            onTargetLanguageChanged: provider.changeTargetLanguage,
+            onSwapLanguages: provider.swapLanguages,
+          ),
           const SizedBox(height: 18),
-          _buildCameraPreviewCard(
+          TranslationCameraPreviewCard(
+            cameraController: _cameraController,
             isCameraReady: isCameraReady,
             isCapturing: provider.status == TranslationStatus.capturing,
+            isFlashOn: _isFlashOn,
+            onToggleFlash: _toggleFlash,
+            onCapture: _capturePhoto,
+            onPickFromGallery: _pickImageFromGallery,
+            onRetry: _retryCamera,
           ),
           const SizedBox(height: 18),
           const Text(
@@ -635,370 +461,23 @@ class _TranslationScreenState extends State<TranslationScreen>
       ),
     );
   }
-
-  Widget _buildHeader(TranslationProvider provider) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '카메라 번역',
-          style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.w900,
-            color: Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: _buildLanguageDropdown(
-                label: '원문',
-                value: provider.sourceLanguageCode,
-                languages: provider.languages,
-                onChanged: provider.changeSourceLanguage,
-              ),
-            ),
-            IconButton(
-              onPressed: provider.sourceLanguageCode == 'auto'
-                  ? null
-                  : provider.swapLanguages,
-              icon: const Icon(Icons.swap_horiz),
-            ),
-            Expanded(
-              child: _buildLanguageDropdown(
-                label: '번역',
-                value: provider.targetLanguageCode,
-                languages: provider.languages
-                    .where((language) => language.code != 'auto')
-                    .toList(),
-                onChanged: provider.changeTargetLanguage,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLanguageDropdown({
-    required String label,
-    required String value,
-    required List<TranslationLanguage> languages,
-    required ValueChanged<String> onChanged,
-  }) {
-    final safeValue = languages.any((language) => language.code == value)
-        ? value
-        : languages.first.code;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: safeValue,
-          isExpanded: true,
-          items: languages.map((language) {
-            return DropdownMenuItem<String>(
-              value: language.code,
-              child: Text('$label: ${language.label}'),
-            );
-          }).toList(),
-          onChanged: (selectedValue) {
-            if (selectedValue == null) {
-              return;
-            }
-
-            onChanged(selectedValue);
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCameraPreviewCard({
-    required bool isCameraReady,
-    required bool isCapturing,
-  }) {
-    return AspectRatio(
-      aspectRatio: 3 / 4,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: Container(
-          color: Colors.black,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (isCameraReady) _buildCameraPreview(),
-              if (!isCameraReady)
-                const Center(child: CircularProgressIndicator()),
-              _buildGuideFrame(),
-              Positioned(
-                top: 16,
-                left: 16,
-                right: 16,
-                child: Text(
-                  '번역할 문자가 프레임 안에 들어오도록 촬영해 주세요.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.95),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Positioned(
-                top: 14,
-                right: 14,
-                child: IconButton.filledTonal(
-                  onPressed: isCameraReady ? _toggleFlash : null,
-                  icon: Icon(_isFlashOn ? Icons.flash_on : Icons.flash_off),
-                ),
-              ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 22,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    IconButton.filled(
-                      onPressed: isCameraReady ? _pickImageFromGallery : null,
-                      iconSize: 30,
-                      icon: const Icon(Icons.photo_library_outlined),
-                    ),
-                    GestureDetector(
-                      onTap: isCameraReady && !isCapturing
-                          ? _capturePhoto
-                          : null,
-                      child: Container(
-                        width: 76,
-                        height: 76,
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4),
-                        ),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isCapturing ? Colors.grey : Colors.white,
-                          ),
-                          child: isCapturing
-                              ? const Padding(
-                                  padding: EdgeInsets.all(18),
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 3,
-                                  ),
-                                )
-                              : null,
-                        ),
-                      ),
-                    ),
-                    IconButton.filled(
-                      onPressed: _retryCamera,
-                      iconSize: 30,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCameraPreview() {
-    final controller = _cameraController!;
-
-    if (!controller.value.isInitialized) {
-      return const SizedBox.shrink();
-    }
-
-    final previewSize = controller.value.previewSize;
-
-    if (previewSize == null) {
-      return CameraPreview(controller);
-    }
-
-    return FittedBox(
-      fit: BoxFit.cover,
-      child: SizedBox(
-        width: previewSize.height,
-        height: previewSize.width,
-        child: CameraPreview(controller),
-      ),
-    );
-  }
-
-  Widget _buildGuideFrame() {
-    return Center(
-      child: FractionallySizedBox(
-        widthFactor: 0.78,
-        heightFactor: 0.42,
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border.all(color: Colors.white.withOpacity(0.95), width: 3),
-            borderRadius: BorderRadius.circular(20),
-          ),
-        ),
-      ),
-    );
-  }
-
+  // 번역 결과 뷰를 구성하는 위젯을 반환하는 메서드
   Widget _buildResultView(TranslationProvider provider) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildHeader(provider),
-          const SizedBox(height: 18),
-          if (provider.selectedImagePath != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: Image.file(
-                File(provider.selectedImagePath!),
-                width: double.infinity,
-                fit: BoxFit.cover,
-              ),
-            ),
-          const SizedBox(height: 18),
-          if (provider.status == TranslationStatus.recognizing)
-            _buildProcessingCard('문자를 인식하고 있습니다.'),
-          if (provider.status == TranslationStatus.translating)
-            _buildProcessingCard('번역하고 있습니다.'),
-          if (provider.errorMessage != null)
-            _buildMessageCard(
-              message: provider.errorMessage!,
-              icon: Icons.info_outline,
-            ),
-          if (provider.recognizedText.trim().isNotEmpty)
-            _buildTextCard(title: '인식된 원문', text: provider.recognizedText),
-          if (provider.translatedText.trim().isNotEmpty)
-            _buildTextCard(title: '번역 결과', text: provider.translatedText),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: provider.isProcessing ? null : _retake,
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('다시 촬영'),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: provider.isProcessing
-                      ? null
-                      : _pickImageFromGallery,
-                  icon: const Icon(Icons.photo_library_outlined),
-                  label: const Text('다시 선택'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProcessingCard(String message) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 22,
-            height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageCard({required String message, required IconData icon}) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: Colors.orange),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                fontSize: 15,
-                height: 1.45,
-                color: Colors.black87,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTextCard({required String title, required String text}) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w900,
-              color: Colors.black87,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            text,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.5,
-              color: Colors.black87,
-            ),
-          ),
-        ],
-      ),
+    return TranslationResultView(
+      status: provider.status,
+      selectedImagePath: provider.selectedImagePath,
+      errorMessage: provider.errorMessage,
+      recognizedText: provider.recognizedText,
+      translatedText: provider.translatedText,
+      isProcessing: provider.isProcessing,
+      sourceLanguageCode: provider.sourceLanguageCode,
+      targetLanguageCode: provider.targetLanguageCode,
+      languages: provider.languages,
+      onSourceLanguageChanged: provider.changeSourceLanguage,
+      onTargetLanguageChanged: provider.changeTargetLanguage,
+      onSwapLanguages: provider.swapLanguages,
+      onRetake: _retake,
+      onPickFromGallery: _pickImageFromGallery,
     );
   }
 }

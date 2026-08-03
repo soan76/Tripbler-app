@@ -6,33 +6,49 @@ import '../widgets/currency_management_bottom_sheet.dart';
 import '../widgets/currency_row.dart';
 import '../widgets/currency_selection_sheet.dart';
 import '../widgets/exchange_chart_carousel.dart';
-
+// 환율 화면을 구성하는 StatefulWidget
 class ExchangeScreen extends StatefulWidget {
   const ExchangeScreen({super.key});
 
   @override
   State<ExchangeScreen> createState() => _ExchangeScreenState();
 }
+
 // 환율 화면을 구성하는 StatefulWidget
 class _ExchangeScreenState extends State<ExchangeScreen> {
-  bool hasInitialized = false;
+  // State 내부에서만 사용하는 초기화 여부 값이므로 private 필드로 변경.
+  bool _hasInitialized = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
-    if (!hasInitialized) {
-      hasInitialized = true;
+    if (!_hasInitialized) {
+      _hasInitialized = true;
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        // callback 실행 전에 화면이 dispose된 경우 context 사용을 막음.
+        if (!mounted) {
+          return;
+        }
+
         context.read<ExchangeProvider>().initialize();
       });
     }
   }
+
   // 환율 화면의 상태를 관리하는 State 클래스
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExchangeProvider>();
+
+    // 한 번의 build 안에서 동일한 Provider 상태 snapshot을 사용하도록 지역 변수로 정리.
+    final baseCurrency = provider.baseCurrency;
+    final visibleCurrencies = provider.visibleCurrencies;
+    final inputAmount = provider.inputAmount;
+    final isLoading = provider.isLoading;
+    final errorMessage = provider.errorMessage;
+    final lastUpdated = provider.lastUpdated;
 
     return Container(
       color: Colors.white,
@@ -44,40 +60,34 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeader(provider),
+              _buildHeader(lastUpdated),
 
-              if (provider.isLoading) const LinearProgressIndicator(),
+              if (isLoading) const LinearProgressIndicator(),
 
-              if (provider.errorMessage != null)
+              if (errorMessage != null)
                 _buildErrorBox(
-                  message: provider.errorMessage!,
+                  message: errorMessage,
                   onRetry: provider.fetchRates,
                 ),
               // 기준 통화와 상대 통화 간의 환율을 표시하는 CurrencyRow 위젯
               CurrencyRow(
-                currency: provider.baseCurrency,
+                currency: baseCurrency,
                 isBase: true,
-                amount: provider.inputAmount,
+                amount: inputAmount,
                 rate: 1,
                 onAmountChanged: provider.changeAmount,
                 onCurrencyTap: () {
                   showCurrencySelectionSheet(
                     context: context,
-                    selectedCurrency: provider.baseCurrency,
+                    selectedCurrency: baseCurrency,
                     onSelected: provider.changeBaseCurrency,
                   );
                 },
-                onGraphTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('아래 차트 영역에서 환율 변동을 확인할 수 있습니다.'),
-                    ),
-                  );
-                },
+                onGraphTap: _showChartGuide,
               ),
               // 상대 통화 목록을 표시하는 CurrencyRow 위젯 리스트
-              ...List.generate(provider.visibleCurrencies.length, (index) {
-                final currency = provider.visibleCurrencies[index];
+              ...List.generate(visibleCurrencies.length, (index) {
+                final currency = visibleCurrencies[index];
                 final amount = provider.convertedAmount(currency.code);
 
                 return CurrencyRow(
@@ -97,13 +107,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                       },
                     );
                   },
-                  onGraphTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('아래 차트 영역에서 환율 변동을 확인할 수 있습니다.'),
-                      ),
-                    );
-                  },
+                  onGraphTap: _showChartGuide,
                 );
               }),
 
@@ -114,8 +118,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                   onPressed: () {
                     showCurrencyManagementBottomSheet(
                       context: context,
-                      baseCurrency: provider.baseCurrency,
-                      visibleCurrencies: provider.visibleCurrencies,
+                      baseCurrency: baseCurrency,
+                      visibleCurrencies: visibleCurrencies,
                       onApply: provider.applyVisibleCurrencies,
                     );
                   },
@@ -133,7 +137,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               ),
 
               // 차트 영역을 표시하는 ExchangeChartCarousel 위젯
-              if (provider.visibleCurrencies.isNotEmpty) ...[
+              if (visibleCurrencies.isNotEmpty) ...[
                 const SizedBox(height: 64),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
@@ -149,8 +153,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                       ),
                       const SizedBox(height: 16),
                       ExchangeChartCarousel(
-                        baseCurrency: provider.baseCurrency,
-                        targetCurrencies: provider.visibleCurrencies,
+                        baseCurrency: baseCurrency,
+                        targetCurrencies: visibleCurrencies,
                       ),
                     ],
                   ),
@@ -163,10 +167,15 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     );
   }
 
-  // 환율 화면의 헤더 영역을 구성하는 위젯을 반환하는 메서드
-  Widget _buildHeader(ExchangeProvider provider) {
-    final lastUpdated = provider.lastUpdated;
+  // 기준 통화와 상대 통화의 그래프 안내 SnackBar 중복 코드를 하나의 메서드로 분리.
+  void _showChartGuide() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('아래 차트 영역에서 환율 변동을 확인할 수 있습니다.')),
+    );
+  }
 
+  // 환율 화면의 헤더 영역을 구성하는 위젯을 반환하는 메서드
+  Widget _buildHeader(DateTime? lastUpdated) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -180,9 +189,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            lastUpdated == null
-                ? '환율 정보를 불러오는 중입니다.'
-                : '마지막 업데이트: ${lastUpdated.year}.${lastUpdated.month.toString().padLeft(2, '0')}.${lastUpdated.day.toString().padLeft(2, '0')} ${lastUpdated.hour.toString().padLeft(2, '0')}:${lastUpdated.minute.toString().padLeft(2, '0')}',
+            _formatLastUpdatedText(lastUpdated),
             style: const TextStyle(color: Colors.black54, fontSize: 13),
           ),
         ],
@@ -190,10 +197,24 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     );
   }
 
+  // 마지막 업데이트 문자열 생성 로직을 분리해 build와 header 코드를 읽기 쉽게 함.
+  String _formatLastUpdatedText(DateTime? lastUpdated) {
+    if (lastUpdated == null) {
+      return '환율 정보를 불러오는 중입니다.';
+    }
+
+    final month = lastUpdated.month.toString().padLeft(2, '0');
+    final day = lastUpdated.day.toString().padLeft(2, '0');
+    final hour = lastUpdated.hour.toString().padLeft(2, '0');
+    final minute = lastUpdated.minute.toString().padLeft(2, '0');
+
+    return '마지막 업데이트: ${lastUpdated.year}.$month.$day $hour:$minute';
+  }
+
   // 오류 메시지를 표시하는 박스를 구성하는 위젯을 반환하는 메서드
   Widget _buildErrorBox({
     required String message,
-    required VoidCallback onRetry,
+    required Future<void> Function() onRetry,
   }) {
     return Container(
       width: double.infinity,
@@ -213,7 +234,12 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               style: const TextStyle(color: Colors.redAccent),
             ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('다시 시도')),
+          TextButton(
+            onPressed: () {
+              onRetry();
+            },
+            child: const Text('다시 시도'),
+          ),
         ],
       ),
     );
