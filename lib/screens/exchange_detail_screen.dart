@@ -63,14 +63,10 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
     }
     // 최근 14일간의 환율 데이터를 가져오기 위해 API 호출
     try {
-      final now = DateTime.now();
-      final start = now.subtract(const Duration(days: _historyPeriodDays));
-
       final result = await _apiService.fetchHistoricalRates(
-        baseCurrency: widget.baseCurrency.code,
-        targetCurrency: widget.targetCurrency.code,
-        startDate: start,
-        endDate: now,
+        baseCurrencyCode: widget.baseCurrency.code,
+        targetCurrencyCode: widget.targetCurrency.code,
+        period: ChartPeriod.oneMonth,
       );
 
       if (!mounted || requestId != _requestId) {
@@ -78,7 +74,9 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
       }
 
       setState(() {
-        _historicalRates = Map<String, double>.from(result);
+        _historicalRates = <String, double>{
+          for (final item in result) _formatDate(item.date): item.rate,
+        };
         _errorMessage = null;
         _isLoading = false;
       });
@@ -92,6 +90,14 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
         _isLoading = false;
       });
     }
+  }
+
+  String _formatDate(DateTime date) {
+    final year = date.year.toString().padLeft(4, '0');
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+
+    return '$year-$month-$day';
   }
 
   // 그래프 영역을 구성하는 위젯을 반환하는 메서드

@@ -3,7 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../models/currency_model.dart';
 import '../models/exchange_rate_history_model.dart';
-import '../services/exchange_rate_api_service.dart';
+import '../services/exchange_api_service.dart';
 import 'exchange_rate_line_chart.dart';
 
 /// 환율 차트 캐러셀 위젯
@@ -135,7 +135,7 @@ class _ExchangeChartCard extends StatefulWidget {
 /// 환율 차트 카드 위젯 상태 클래스
 class _ExchangeChartCardState extends State<_ExchangeChartCard>
     with AutomaticKeepAliveClientMixin {
-  final ExchangeRateApiService _apiService = ExchangeRateApiService();
+  final ExchangeApiService _apiService = ExchangeApiService();
 
   bool isLoading = false;
   bool hasLoaded = false;

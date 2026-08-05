@@ -31,6 +31,19 @@ class ExchangeRateHistoryModel {
       targetCurrencyCode: json['targetCurrencyCode'] as String,
     );
   }
+
+  factory ExchangeRateHistoryModel.fromBackendJson(
+    Map<String, dynamic> json, {
+    required String baseCurrencyCode,
+    required String targetCurrencyCode,
+  }) {
+    return ExchangeRateHistoryModel(
+      date: DateTime.parse(json['date'] as String),
+      rate: (json['rate'] as num).toDouble(),
+      baseCurrencyCode: baseCurrencyCode,
+      targetCurrencyCode: targetCurrencyCode,
+    );
+  }
 }
 
 // 환율 차트에서 선택할 수 있는 조회 기간 - 수정 예정
