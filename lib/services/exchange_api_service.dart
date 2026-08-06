@@ -87,20 +87,36 @@ class ExchangeApiService {
       },
     );
 
-    final response = await _client.get(uri).timeout(_timeout);
+    final response = await _sendGetRequest(uri);
 
     if (response.statusCode != 200) {
       throw Exception(
-        _parseErrorMessage(response, fallbackMessage: '환율 데이터를 불러오지 못했습니다.'),
+        _parseErrorMessage(
+          response,
+          fallbackMessage: _messageForStatusCode(response.statusCode),
+        ),
       );
     }
 
-    final Map<String, dynamic> jsonBody = _decodeJsonObject(response);
+    try {
+      final Map<String, dynamic> jsonBody = _decodeJsonObject(response);
 
-    return ExchangeRateResponse.fromJson(jsonBody);
+      return ExchangeRateResponse.fromJson(jsonBody);
+    } catch (_) {
+      throw Exception('환율 응답 형식이 올바르지 않습니다.');
+    }
+  }
+  // GET 요청을 보내고 네트워크 오류와 타임아웃을 처리하는 메서드
+  Future<http.Response> _sendGetRequest(Uri uri) async {
+    try {
+      return await _client.get(uri).timeout(_timeout);
+    } on TimeoutException {
+      throw Exception('백엔드 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
+    } catch (_) {
+      throw Exception('백엔드 서버에 연결하지 못했습니다. 서버가 실행 중인지 확인해 주세요.');
+    }
   }
 
-  // 특정 기간 동안의 환율 변동 데이터를 가져오는 메서드
   //
   // 백엔드 응답:
   // {
@@ -117,7 +133,7 @@ class ExchangeApiService {
   //   "fetchedAt": "2026-08-05T22:03:47.0770315"
   // }
   //
-  // 기존 차트 코드와의 호환을 위해 Map<String, double> 형태로 반환함.
+  // 백엔드의 기간별 환율 응답을 차트에서 사용할 수 있는 모델 리스트로 변환함.
   // 특정 기간 동안의 환율 변동 데이터를 가져오는 메서드
   Future<List<ExchangeRateHistoryModel>> fetchHistoricalRates({
     required String baseCurrencyCode,
@@ -160,13 +176,13 @@ class ExchangeApiService {
       },
     );
 
-    final response = await _client.get(uri).timeout(_timeout);
+    final response = await _sendGetRequest(uri);
 
     if (response.statusCode != 200) {
       throw Exception(
         _parseErrorMessage(
           response,
-          fallbackMessage: '환율 그래프 데이터를 불러오지 못했습니다.',
+          fallbackMessage: _messageForStatusCode(response.statusCode),
         ),
       );
     }
@@ -234,6 +250,27 @@ class ExchangeApiService {
     } catch (_) {
       return fallbackMessage;
     }
+  }
+
+  // HTTP 상태 코드에 따라 사용자에게 보여줄 기본 오류 메시지를 반환하는 메서드
+  String _messageForStatusCode(int statusCode) {
+    if (statusCode == 400) {
+      return '환율 요청값이 올바르지 않습니다.';
+    }
+
+    if (statusCode == 404) {
+      return '요청한 환율 API 주소를 찾을 수 없습니다.';
+    }
+
+    if (statusCode == 500) {
+      return '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+    }
+
+    if (statusCode == 503) {
+      return '현재 환율 서비스를 이용할 수 없습니다. 잠시 후 다시 시도해 주세요.';
+    }
+
+    return '환율 데이터를 불러오지 못했습니다. 다시 시도해 주세요.';
   }
 
   // DateTime 객체를 API 요청 형식에 맞게 문자열로 변환하는 메서드

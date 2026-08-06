@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 
 import '../models/currency_model.dart';
 import '../services/exchange_api_service.dart';
-import '../services/exchange_rate_api_service.dart';
 import '../services/local_storage_service.dart';
 
 /// 환율 관련 상태를 관리하는 Provider.
@@ -181,12 +180,14 @@ class ExchangeProvider extends ChangeNotifier {
           _errorMessage = '최신 환율은 표시했지만 기기에 저장하지 못했습니다.';
         }
       }
-    } catch (_) {
+    } catch (error) {
       if (!_isLatestRequest(requestId)) {
         return;
       }
 
-      await _restoreCachedRatesAfterFetchFailure();
+      await _restoreCachedRatesAfterFetchFailure(
+        fallbackMessage: _cleanErrorMessage(error),
+      );
     } finally {
       if (_isLatestRequest(requestId)) {
         _isLoading = false;
@@ -194,16 +195,31 @@ class ExchangeProvider extends ChangeNotifier {
       }
     }
   }
+  // 오류 메시지를 정리하여 사용자에게 표시할 수 있는 형태로 반환하는 메서드.
+  String _cleanErrorMessage(Object error) {
+    final message = error.toString();
+
+    if (message.startsWith('Exception: ')) {
+      return message.replaceFirst('Exception: ', '');
+    }
+
+    if (message.trim().isEmpty) {
+      return '환율 데이터를 불러오지 못했습니다. 다시 시도해 주세요.';
+    }
+
+    return message;
+  }
 
   // 환율 가져오기 실패 시 로컬 캐시에서 환율 정보를 복원하는 비동기 작업.
-  Future<void> _restoreCachedRatesAfterFetchFailure() async {
+  Future<void> _restoreCachedRatesAfterFetchFailure({
+    required String fallbackMessage,
+  }) async {
     try {
       final cachedRates = await _localStorageService.loadCachedRates();
 
       if (cachedRates != null && cachedRates.isNotEmpty) {
         _rates = Map<String, double>.from(cachedRates);
         _errorMessage =
-            '최신 환율을 불러오지 못했습니다. '
             '마지막 저장 데이터를 표시합니다.';
       } else {
         _errorMessage =
