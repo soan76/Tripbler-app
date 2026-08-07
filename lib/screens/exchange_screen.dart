@@ -236,6 +236,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
           ),
           TextButton(
             onPressed: () {
+              // Future를 직접 await하지 않고 재시도만 트리거함.
               onRetry();
             },
             child: const Text('다시 시도'),

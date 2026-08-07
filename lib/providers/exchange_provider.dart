@@ -197,6 +197,10 @@ class ExchangeProvider extends ChangeNotifier {
   }
   // 오류 메시지를 정리하여 사용자에게 표시할 수 있는 형태로 반환하는 메서드.
   String _cleanErrorMessage(Object error) {
+    if (error is ExchangeApiException) {
+      return error.message;
+    }
+
     final message = error.toString();
 
     if (message.startsWith('Exception: ')) {
@@ -219,17 +223,18 @@ class ExchangeProvider extends ChangeNotifier {
 
       if (cachedRates != null && cachedRates.isNotEmpty) {
         _rates = Map<String, double>.from(cachedRates);
+
+        // 최신 데이터 조회는 실패했지만 캐시가 있으면 캐시 표시 사실을 함께 알려줌.
         _errorMessage =
+            '$fallbackMessage '
             '마지막 저장 데이터를 표시합니다.';
       } else {
-        _errorMessage =
-            '환율 데이터를 불러오지 못했습니다. '
-            '다시 시도해 주세요.';
+        // 캐시가 없으면 Service/백엔드에서 정리한 사용자용 메시지를 그대로 표시함.
+        _errorMessage = fallbackMessage;
       }
     } catch (_) {
-      _errorMessage =
-          '환율 데이터를 불러오지 못했습니다. '
-          '다시 시도해 주세요.';
+      // 캐시 조회마저 실패해도 기술적 예외 대신 사용자용 메시지만 표시함.
+      _errorMessage = fallbackMessage;
     }
   }
 

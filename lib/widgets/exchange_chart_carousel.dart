@@ -236,6 +236,8 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
       setState(() {
         errorMessage = '환율 차트를 불러오지 못했습니다.';
         hasLoaded = false;
+
+        isLoading = false;
       });
     }
   }

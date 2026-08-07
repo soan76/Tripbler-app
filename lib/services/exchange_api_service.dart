@@ -90,12 +90,7 @@ class ExchangeApiService {
     final response = await _sendGetRequest(uri);
 
     if (response.statusCode != 200) {
-      throw Exception(
-        _parseErrorMessage(
-          response,
-          fallbackMessage: _messageForStatusCode(response.statusCode),
-        ),
-      );
+      throw _createApiExceptionFromResponse(response);
     }
 
     try {
@@ -111,9 +106,20 @@ class ExchangeApiService {
     try {
       return await _client.get(uri).timeout(_timeout);
     } on TimeoutException {
-      throw Exception('백엔드 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.');
+      // 백엔드가 응답하지 않는 경우 사용자용 메시지로 변환함.
+      throw const ExchangeApiException(
+        message: '서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.',
+      );
+    } on http.ClientException {
+      // HTTP 클라이언트 레벨의 연결 실패를 사용자용 메시지로 변환함.
+      throw const ExchangeApiException(
+        message: '서버에 연결할 수 없습니다. 인터넷 연결 상태를 확인해 주세요.',
+      );
     } catch (_) {
-      throw Exception('백엔드 서버에 연결하지 못했습니다. 서버가 실행 중인지 확인해 주세요.');
+      // SocketException 등 플랫폼별 네트워크 예외를 한 번에 사용자용 메시지로 변환함.
+      throw const ExchangeApiException(
+        message: '서버에 연결할 수 없습니다. 인터넷 연결 상태를 확인해 주세요.',
+      );
     }
   }
 
@@ -179,12 +185,7 @@ class ExchangeApiService {
     final response = await _sendGetRequest(uri);
 
     if (response.statusCode != 200) {
-      throw Exception(
-        _parseErrorMessage(
-          response,
-          fallbackMessage: _messageForStatusCode(response.statusCode),
-        ),
-      );
+      throw _createApiExceptionFromResponse(response);
     }
 
     final Map<String, dynamic> jsonBody = _decodeJsonObject(response);
@@ -252,6 +253,61 @@ class ExchangeApiService {
     }
   }
 
+  // 백엔드 오류 응답을 읽어서 사용자에게 보여줄 예외로 변환하는 메서드
+  ExchangeApiException _createApiExceptionFromResponse(http.Response response) {
+    try {
+      final Map<String, dynamic> jsonBody = _decodeJsonObject(response);
+
+      final status = jsonBody['status'];
+      final code = jsonBody['code'];
+      final message = jsonBody['message'];
+
+      final parsedStatus = status is int ? status : response.statusCode;
+      final parsedCode = code is String ? code : null;
+
+      final backendMessage = message is String && message.trim().isNotEmpty
+          ? message.trim()
+          : _messageForStatusCode(response.statusCode);
+
+      return ExchangeApiException(
+        status: parsedStatus,
+        code: parsedCode,
+        message: _messageForErrorCode(
+          statusCode: response.statusCode,
+          code: parsedCode,
+          backendMessage: backendMessage,
+        ),
+      );
+    } catch (_) {
+      return ExchangeApiException(
+        status: response.statusCode,
+        message: _messageForStatusCode(response.statusCode),
+      );
+    }
+  }
+
+  // 백엔드 code와 HTTP 상태 코드를 기준으로 최종 사용자 메시지를 결정하는 메서드
+  String _messageForErrorCode({
+    required int statusCode,
+    required String? code,
+    required String backendMessage,
+  }) {
+    if (statusCode == 503 || code == 'EXCHANGE_PROVIDER_UNAVAILABLE') {
+      return '환율 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.';
+    }
+
+    if (statusCode == 500 || code == 'INTERNAL_SERVER_ERROR') {
+      return '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+    }
+
+    // 400 INVALID_REQUEST는 백엔드가 내려준 구체적인 message를 우선 사용함.
+    if (statusCode == 400 || code == 'INVALID_REQUEST') {
+      return backendMessage;
+    }
+
+    return backendMessage;
+  }
+
   // HTTP 상태 코드에 따라 사용자에게 보여줄 기본 오류 메시지를 반환하는 메서드
   String _messageForStatusCode(int statusCode) {
     if (statusCode == 400) {
@@ -285,5 +341,19 @@ class ExchangeApiService {
   // http.Client를 정리하는 메서드
   void dispose() {
     _client.close();
+  }
+}
+
+// 백엔드 오류와 네트워크 오류를 Flutter 내부에서 구분하기 위한 예외 클래스
+class ExchangeApiException implements Exception {
+  final int? status;
+  final String? code;
+  final String message;
+
+  const ExchangeApiException({required this.message, this.status, this.code});
+
+  @override
+  String toString() {
+    return message;
   }
 }
