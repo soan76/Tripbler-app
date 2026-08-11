@@ -243,14 +243,22 @@ class _TranslationScreenState extends State<TranslationScreen>
     provider.setStatus(TranslationStatus.capturing);
 
     try {
-      final image = await controller.takePicture();
+      debugPrint('=== takePicture 시작 ===');
+      final image = await controller.takePicture().timeout(
+        const Duration(seconds: 10),
+      );
+
+      debugPrint('=== takePicture 완료 ===');
 
       if (!mounted) {
         return;
       }
 
+      debugPrint('=== OCR 호출 직전 ===');
+
       await provider.processImage(image.path);
     } catch (error, stackTrace) {
+      debugPrint('=== takePicture catch 진입 ===');
       debugPrint('사진 촬영 실패: $error');
       debugPrint('$stackTrace');
 
@@ -424,9 +432,7 @@ class _TranslationScreenState extends State<TranslationScreen>
   // 카메라 뷰를 구성하는 위젯을 반환하는 메서드
   Widget _buildCameraView(TranslationProvider provider) {
     final isCameraReady =
-        _cameraController != null &&
-        _cameraController!.value.isInitialized &&
-        provider.status != TranslationStatus.capturing;
+        _cameraController != null && _cameraController!.value.isInitialized;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),

@@ -1,4 +1,5 @@
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+import 'package:flutter/foundation.dart';
 
 class OcrService {
   Future<String> recognizeText({
@@ -50,7 +51,13 @@ class OcrService {
     final textRecognizer = TextRecognizer(script: script);
 
     try {
+      debugPrint('=== ML Kit processImage 시작 ===');
+
       final recognizedText = await textRecognizer.processImage(inputImage);
+
+      debugPrint('=== ML Kit processImage 완료 ===');
+      debugPrint('=== 인식 텍스트: ${recognizedText.text} ===');
+
       return recognizedText.text.trim();
     } finally {
       await textRecognizer.close();

@@ -137,7 +137,8 @@ class TranslationProvider extends ChangeNotifier {
   }
 
   Future<void> processImage(String imagePath) async {
-    if (isProcessing) {
+    if (_status == TranslationStatus.recognizing ||
+        _status == TranslationStatus.translating) {
       return;
     }
 
@@ -149,10 +150,15 @@ class TranslationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('=== OCR 시작 ===');
+
       final text = await _ocrService.recognizeText(
         imagePath: imagePath,
         sourceLanguageCode: _sourceLanguageCode,
       );
+
+      debugPrint('=== OCR 완료 ===');
+      debugPrint('OCR 결과: $text');
 
       if (text.trim().isEmpty) {
         _recognizedText = '';
@@ -167,7 +173,10 @@ class TranslationProvider extends ChangeNotifier {
       _status = TranslationStatus.translating;
       notifyListeners();
 
+      debugPrint('=== 번역 시작 ===');
+
       await translateRecognizedText();
+      debugPrint('=== 번역 종료 ===');
     } catch (error, stackTrace) {
       debugPrint('OCR 처리 실패: $error');
       debugPrint('$stackTrace');
