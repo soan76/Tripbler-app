@@ -42,7 +42,7 @@ class TranslationProvider extends ChangeNotifier {
   String _translatedText = '';
   String? _errorMessage;
 
-  String _sourceLanguageCode = 'ja';
+  String _sourceLanguageCode = 'auto';
   String _targetLanguageCode = 'ko';
 
   TranslationStatus get status => _status;

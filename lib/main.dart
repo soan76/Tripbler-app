@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'providers/tab_provider.dart';
 import 'providers/exchange_provider.dart';
 import 'providers/translation_provider.dart';
+import 'providers/map_provider.dart';
 import 'screens/main_screen.dart';
 
 void main() {
@@ -13,6 +14,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => TabProvider()),
         ChangeNotifierProvider(create: (_) => ExchangeProvider()),
         ChangeNotifierProvider(create: (_) => TranslationProvider()),
+        ChangeNotifierProvider(create: (_) => MapProvider()),
       ],
       child: const TripblerApp(),
     ),
