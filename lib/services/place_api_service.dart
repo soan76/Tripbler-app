@@ -67,6 +67,7 @@ class PlaceApiService {
 
     try {
       final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      debugPrint('nearest response body: ${utf8.decode(response.bodyBytes)}');
 
       if (decodedBody is! List) {
         throw const FormatException('장소 응답이 List 형식이 아닙니다.');
@@ -149,6 +150,44 @@ class PlaceApiService {
       debugPrint('근처 장소 조회 실패: $error');
 
       throw const PlaceApiException(message: '선택한 위치의 장소 정보를 불러오지 못했습니다.');
+    }
+  }
+
+  // placeId를 기준으로 장소 상세 정보를 백엔드에서 조회함.
+  // 백엔드 엔드포인트:
+  // GET /api/v1/places/{placeId}
+  Future<PlaceModel> fetchPlaceDetails({required String placeId}) async {
+    final uri = Uri.parse('$_baseUrl/api/v1/places/$placeId');
+
+    try {
+      final response = await _client.get(uri).timeout(_timeout);
+
+      if (response.statusCode != 200) {
+        throw PlaceApiException(
+          message: _parseErrorMessage(
+            response,
+            fallbackMessage: '장소 상세 정보를 불러오지 못했습니다.',
+          ),
+        );
+      }
+
+      final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+
+      if (decodedBody is! Map<String, dynamic>) {
+        throw const PlaceApiException(message: '장소 상세 응답 형식이 올바르지 않습니다.');
+      }
+
+      return PlaceModel.fromJson(decodedBody);
+    } on TimeoutException {
+      throw const PlaceApiException(message: '장소 상세 정보 요청 시간이 초과되었습니다.');
+    } on http.ClientException {
+      throw const PlaceApiException(message: '장소 서버에 연결할 수 없습니다.');
+    } on PlaceApiException {
+      rethrow;
+    } catch (error) {
+      debugPrint('장소 상세 조회 실패: $error');
+
+      throw const PlaceApiException(message: '장소 상세 정보를 불러오는 중 문제가 발생했습니다.');
     }
   }
 
