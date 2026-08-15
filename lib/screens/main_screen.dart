@@ -55,7 +55,7 @@ class MainScreen extends StatelessWidget {
 
     final backgroundColor = isValidTabIndex
         ? tabs[selectedIndex].backgroundColor
-        : Colors.white;
+        : Theme.of(context).colorScheme.surface;
 
     return Scaffold(
       backgroundColor: backgroundColor,

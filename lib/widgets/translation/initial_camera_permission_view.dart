@@ -11,10 +11,13 @@ class InitialCameraPermissionView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
       width: double.infinity,
       height: double.infinity,
-      color: Colors.white,
+      color: colorScheme.surface,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
         child: Column(
@@ -29,14 +32,17 @@ class InitialCameraPermissionView extends StatelessWidget {
             ),
 
             const SizedBox(height: 32),
+
             // 카메라 권한 요청 텍스트
-            const Text(
+            Text(
               '번역을 위해 촬영 권한이 필요합니다',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
-                color: Colors.black87,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black,
               ),
             ),
 
@@ -50,8 +56,8 @@ class InitialCameraPermissionView extends StatelessWidget {
                   onRequestPermission();
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black87,
-                  foregroundColor: Colors.white,
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),

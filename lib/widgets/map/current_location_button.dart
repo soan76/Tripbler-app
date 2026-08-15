@@ -14,12 +14,18 @@ class CurrentLocationButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Positioned(
       right: 16,
       bottom: bottom,
       child: FloatingActionButton(
         heroTag: 'currentLocationButton',
         onPressed: isLoading ? null : onPressed,
+        // 라이트/다크 모드에 따라 버튼 배경색 변경
+        backgroundColor: colorScheme.primaryContainer,
+
+        // 버튼 아이콘 색상
+        foregroundColor: colorScheme.onPrimaryContainer,
         child: isLoading
             ? const SizedBox(
                 width: 22,

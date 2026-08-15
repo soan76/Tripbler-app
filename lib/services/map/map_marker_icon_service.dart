@@ -3,7 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
+/// 지도 마커 아이콘을 생성하는 서비스 클래스
 class MapMarkerIconService {
   const MapMarkerIconService();
 

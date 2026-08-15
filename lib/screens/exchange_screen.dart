@@ -49,9 +49,10 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     final isLoading = provider.isLoading;
     final errorMessage = provider.errorMessage;
     final lastUpdated = provider.lastUpdated;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
-      color: Colors.white,
+      color: colorScheme.surface,
       child: RefreshIndicator(
         onRefresh: provider.fetchRates,
         child: SingleChildScrollView(
@@ -176,10 +177,11 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
 
   // 환율 화면의 헤더 영역을 구성하는 위젯을 반환하는 메서드
   Widget _buildHeader(DateTime? lastUpdated) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-      color: Colors.white,
+      color: colorScheme.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

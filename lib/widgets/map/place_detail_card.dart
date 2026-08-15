@@ -18,6 +18,8 @@ class PlaceDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return SafeArea(
       top: false,
       child: Container(
@@ -25,13 +27,14 @@ class PlaceDetailCard extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          // 라이트/다크 모드에 따라 카드 배경 변경
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(22),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Colors.black26,
+              color: colorScheme.shadow.withValues(alpha: 0.25),
               blurRadius: 16,
-              offset: Offset(0, 8),
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -42,16 +45,17 @@ class PlaceDetailCard extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.place, color: Colors.redAccent, size: 28),
+                Icon(Icons.place, color: colorScheme.error, size: 28),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     place.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w800,
+                      color: colorScheme.onSurface,
                     ),
                   ),
                 ),
@@ -69,10 +73,10 @@ class PlaceDetailCard extends StatelessWidget {
               place.address,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 height: 1.4,
-                color: Colors.black87,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
 
@@ -83,16 +87,21 @@ class PlaceDetailCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _buildInfoChip(
+                  context: context,
                   icon: Icons.category_outlined,
                   label: place.category,
                 ),
+
                 if (place.rating != null)
                   _buildInfoChip(
+                    context: context,
                     icon: Icons.star,
                     label: place.rating!.toStringAsFixed(1),
                   ),
+
                 if (place.openNow != null)
                   _buildInfoChip(
+                    context: context,
                     icon: place.openNow!
                         ? Icons.check_circle_outline
                         : Icons.highlight_off_outlined,
@@ -128,21 +137,28 @@ class PlaceDetailCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoChip({required IconData icon, required String label}) {
+  Widget _buildInfoChip({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
+        // 라이트/다크 모드에 따라 Chip 배경 변경
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: Colors.black54),
+          Icon(icon, size: 15, color: colorScheme.onSurfaceVariant),
           const SizedBox(width: 5),
           Text(
             label,
-            style: const TextStyle(fontSize: 13, color: Colors.black87),
+            style: TextStyle(fontSize: 13, color: colorScheme.onSurface),
           ),
         ],
       ),

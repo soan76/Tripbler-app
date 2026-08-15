@@ -6,7 +6,7 @@ import '../models/place_model.dart';
 import '../services/place_api_service.dart';
 
 enum MapPlaceStatus { idle, loading, success, failure }
-
+/// 지도 화면에서 주변 장소를 관리하는 Provider 클래스
 class MapProvider extends ChangeNotifier {
   MapProvider({PlaceApiService? placeApiService})
     : _placeApiService = placeApiService ?? PlaceApiService();

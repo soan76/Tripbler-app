@@ -10,13 +10,15 @@ class MapScaleBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return IgnorePointer(
       // Scale Bar가 지도 드래그/확대/축소 터치를 막지 않도록 터치 이벤트를 무시함.
       ignoring: true,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.92),
+          // 라이트/다크 모드에 따라 Scale Bar 배경색 변경  
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(8),
           boxShadow: const [
             BoxShadow(
@@ -41,7 +43,9 @@ class MapScaleBar extends StatelessWidget {
             SizedBox(
               width: data.widthPx,
               height: 6,
-              child: CustomPaint(painter: _ScaleBarPainter()),
+              child: CustomPaint(
+                painter: _ScaleBarPainter(color: colorScheme.onSurface),
+              ),
             ),
           ],
         ),
@@ -51,6 +55,9 @@ class MapScaleBar extends StatelessWidget {
 }
 
 class _ScaleBarPainter extends CustomPainter {
+  final Color color;
+
+  const _ScaleBarPainter({required this.color});
   @override
   void paint(Canvas canvas, Size size) {
     const double strokeWidth = 2;
@@ -75,6 +82,6 @@ class _ScaleBarPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScaleBarPainter oldDelegate) {
-    return false;
+    return oldDelegate.color != color;
   }
 }

@@ -8,28 +8,32 @@ class TranslationProcessingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         children: [
-          const SizedBox(
+          SizedBox(
             width: 22,
             height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2.5),
+            child: CircularProgressIndicator(strokeWidth: 2.5,
+              color: colorScheme.primary,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: Colors.black87,
+                color: colorScheme.onSurface,
               ),
             ),
           ),
@@ -51,26 +55,31 @@ class TranslationMessageCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.orange),
+          Icon(
+            icon, 
+            color: colorScheme.tertiary,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 height: 1.45,
-                color: Colors.black87,
+                color: colorScheme.onSurface,
               ),
             ),
           ),
@@ -92,12 +101,14 @@ class TranslationTextCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -105,19 +116,19 @@ class TranslationTextCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w900,
-              color: Colors.black87,
+              color: colorScheme.onSurface,
             ),
           ),
           const SizedBox(height: 10),
           Text(
             text,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
               height: 1.5,
-              color: Colors.black87,
+              color: colorScheme.onSurfaceVariant,
             ),
           ),
         ],

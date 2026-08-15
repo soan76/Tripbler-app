@@ -7,7 +7,6 @@ import 'translation_header.dart';
 import 'translation_result_cards.dart';
 
 // 촬영/선택한 이미지, 인식/번역 결과, 다시 촬영/다시 선택 버튼
-// 번역 결과 화면을 구성하는 위젯
 class TranslationResultView extends StatefulWidget {
   final TranslationStatus status;
   final String? selectedImagePath;
@@ -59,8 +58,12 @@ class _TranslationResultViewState extends State<TranslationResultView> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final hasRecognizedText = widget.recognizedText.trim().isNotEmpty;
+
     final hasTranslatedText = widget.translatedText.trim().isNotEmpty;
+
     final shouldShowTextSlider = hasRecognizedText || hasTranslatedText;
 
     return SingleChildScrollView(
@@ -76,6 +79,7 @@ class _TranslationResultViewState extends State<TranslationResultView> {
             onTargetLanguageChanged: widget.onTargetLanguageChanged,
             onSwapLanguages: widget.onSwapLanguages,
           ),
+
           const SizedBox(height: 18),
 
           if (widget.selectedImagePath != null)
@@ -84,8 +88,6 @@ class _TranslationResultViewState extends State<TranslationResultView> {
               child: Image.file(
                 File(widget.selectedImagePath!),
                 width: double.infinity,
-
-                // 촬영 이미지가 너무 길게 표시되어 결과 영역까지 많이 스크롤되는 문제를 줄이기 위해 높이를 제한함.
                 height: 260,
                 fit: BoxFit.cover,
               ),
@@ -107,17 +109,19 @@ class _TranslationResultViewState extends State<TranslationResultView> {
 
           if (shouldShowTextSlider) ...[
             const SizedBox(height: 6),
-            const Text(
+
+            Text(
               '좌우로 밀어서 원문과 번역 결과를 확인하세요.',
               style: TextStyle(
                 fontSize: 13,
                 height: 1.4,
-                color: Colors.black54,
+                color: colorScheme.onSurfaceVariant,
               ),
             ),
+
             const SizedBox(height: 10),
 
-            // 인식된 원문과 번역 결과를 세로로 쌓지 않고 PageView로 묶어 화면 스크롤을 줄임.
+            // 원문 / 번역 결과 PageView
             SizedBox(
               height: 260,
               child: PageView(
@@ -145,6 +149,7 @@ class _TranslationResultViewState extends State<TranslationResultView> {
             ),
 
             const SizedBox(height: 10),
+
             _buildPageIndicator(),
           ],
 
@@ -163,7 +168,9 @@ class _TranslationResultViewState extends State<TranslationResultView> {
                   label: const Text('다시 촬영'),
                 ),
               ),
+
               const SizedBox(width: 12),
+
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: widget.isProcessing
@@ -182,13 +189,14 @@ class _TranslationResultViewState extends State<TranslationResultView> {
     );
   }
 
-  // 원문/번역 결과를 PageView 안에서 보여주기 위한 카드.
-  // 긴 텍스트는 화면 전체가 아니라 카드 내부에서만 스크롤되도록 처리함.
+  // 원문/번역 결과를 PageView 안에서 보여주는 카드
   Widget _buildTextSlideCard({
     required String title,
     required String text,
     required String emptyMessage,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final displayText = text.trim().isEmpty ? emptyMessage : text.trim();
 
     return Container(
@@ -196,8 +204,11 @@ class _TranslationResultViewState extends State<TranslationResultView> {
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.black12),
+        // 라이트/다크 모드에 따라 카드 배경 변경
+        color: colorScheme.surfaceContainerHighest,
+
+        border: Border.all(color: colorScheme.outlineVariant),
+
         borderRadius: BorderRadius.circular(16),
       ),
       child: Column(
@@ -205,20 +216,23 @@ class _TranslationResultViewState extends State<TranslationResultView> {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w800,
+              color: colorScheme.onSurface,
             ),
           ),
+
           const SizedBox(height: 12),
+
           Expanded(
             child: SingleChildScrollView(
               child: Text(
                 displayText,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 15,
                   height: 1.5,
-                  color: Colors.black87,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ),
             ),
@@ -228,8 +242,10 @@ class _TranslationResultViewState extends State<TranslationResultView> {
     );
   }
 
-  // 현재 원문/번역 중 어떤 페이지를 보고 있는지 표시하는 점 indicator.
+  // 현재 원문/번역 결과 페이지 표시
   Widget _buildPageIndicator() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(2, (index) {
@@ -241,7 +257,11 @@ class _TranslationResultViewState extends State<TranslationResultView> {
           height: 8,
           margin: const EdgeInsets.symmetric(horizontal: 4),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.green.shade700 : Colors.black26,
+            // 현재 페이지는 테마 대표색 사용
+            color: isSelected
+                ? colorScheme.primary
+                : colorScheme.outlineVariant,
+
             borderRadius: BorderRadius.circular(999),
           ),
         );

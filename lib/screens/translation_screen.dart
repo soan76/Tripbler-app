@@ -359,12 +359,14 @@ class _TranslationScreenState extends State<TranslationScreen>
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Consumer<TranslationProvider>(
       builder: (context, provider, _) {
         return Container(
           width: double.infinity,
           height: double.infinity,
-          color: const Color(0xFFC5E1A5),
+          color: colorScheme.surface,
           child: SafeArea(child: _buildBody(provider)),
         );
       },
@@ -431,6 +433,7 @@ class _TranslationScreenState extends State<TranslationScreen>
   }
   // 카메라 뷰를 구성하는 위젯을 반환하는 메서드
   Widget _buildCameraView(TranslationProvider provider) {
+    final colorScheme = Theme.of(context).colorScheme;
     final isCameraReady =
         _cameraController != null && _cameraController!.value.isInitialized;
 
@@ -459,9 +462,11 @@ class _TranslationScreenState extends State<TranslationScreen>
             onRetry: _retryCamera,
           ),
           const SizedBox(height: 18),
-          const Text(
+          Text(
             '촬영하거나 갤러리에서 선택한 이미지는 OCR 처리를 위해 사용됩니다. 현재 OCR은 기기 내 ML Kit 기능을 사용하며, 번역 API는 아직 연결하지 않았습니다.',
-            style: TextStyle(fontSize: 13, height: 1.45, color: Colors.black54),
+            style: TextStyle(fontSize: 13, height: 1.45, // 라이트/다크 모드에 맞는 보조 텍스트 색상
+              color: colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
       ),

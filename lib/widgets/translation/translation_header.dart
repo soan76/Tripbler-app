@@ -23,6 +23,8 @@ class TranslationHeader extends StatelessWidget {
   // 헤더 위젯을 구성하는 build 메서드
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final targetLanguages = languages
         .where((language) => language.code != 'auto')
         .toList();
@@ -83,6 +85,8 @@ class _LanguageDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final safeValue = languages.any((language) => language.code == value)
         ? value
         : languages.first.code;
@@ -90,13 +94,21 @@ class _LanguageDropdown extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(16),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: safeValue,
           isExpanded: true,
+
+          // 드롭다운 메뉴 자체 배경
+          dropdownColor: colorScheme.surfaceContainerHighest,
+
+          // 선택된 값의 글자/아이콘 색상
+          style: TextStyle(color: colorScheme.onSurface, fontSize: 14),
+          iconEnabledColor: colorScheme.onSurfaceVariant,
+
           items: languages.map((language) {
             return DropdownMenuItem<String>(
               value: language.code,

@@ -47,13 +47,14 @@ class TranslationCameraPreviewCard extends StatelessWidget {
                   '번역할 문자가 프레임 안에 들어오도록 촬영해 주세요.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.95),
+                    color: Colors.white.withValues(alpha: 0.95),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
+              // 플래시 버튼
               Positioned(
-                top: 14,
+                top: 20,
                 right: 14,
                 child: IconButton.filledTonal(
                   onPressed: isCameraReady
@@ -81,6 +82,8 @@ class TranslationCameraPreviewCard extends StatelessWidget {
                       iconSize: 30,
                       icon: const Icon(Icons.photo_library_outlined),
                     ),
+
+                    // 촬영 버튼
                     GestureDetector(
                       onTap: isCameraReady && !isCapturing
                           ? () {
@@ -158,7 +161,8 @@ class TranslationCameraPreviewCard extends StatelessWidget {
         heightFactor: 0.42,
         child: Container(
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.white.withOpacity(0.95), width: 3),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.95), width: 3),
             borderRadius: BorderRadius.circular(20),
           ),
         ),
