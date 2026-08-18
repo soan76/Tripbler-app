@@ -6,6 +6,7 @@ import 'providers/exchange_provider.dart';
 import 'providers/translation_provider.dart';
 import 'providers/map_provider.dart';
 import 'screens/main_screen.dart';
+import 'core/theme/app_theme.dart';
 
 void main() {
   runApp(
@@ -29,23 +30,9 @@ class TripblerApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Tripbler',      
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
-        ),
-      ),
+      theme: AppTheme.lightTheme,
 
-      darkTheme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
-      ),
+      darkTheme: AppTheme.darkTheme,
 
       themeMode: ThemeMode.system,
       home: const MainScreen(),

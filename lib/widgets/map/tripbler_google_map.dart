@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-import '../../utils/map/map_style.dart';
+import '../../core/config/map_id_config.dart';
+
 /// 구글 맵을 표시하는 위젯 클래스
 class TripblerGoogleMap extends StatelessWidget {
   final CameraPosition initialCameraPosition;
@@ -9,7 +10,6 @@ class TripblerGoogleMap extends StatelessWidget {
   final void Function(GoogleMapController controller) onMapCreated;
   final void Function(LatLng latLng) onTap;
   final void Function(CameraPosition position) onCameraMove;
-  final bool isDarkMode;
 
   const TripblerGoogleMap({
     super.key,
@@ -18,17 +18,16 @@ class TripblerGoogleMap extends StatelessWidget {
     required this.onMapCreated,
     required this.onTap,
     required this.onCameraMove,
-    required this.isDarkMode,
   });
 
   @override
   Widget build(BuildContext context) {
     return GoogleMap(
+      // 플랫폼별 Google Cloud Map ID 적용
+      cloudMapId: MapIdConfig.current,
+
       initialCameraPosition: initialCameraPosition,
       onMapCreated: onMapCreated,
-
-      // 시스템 다크 모드에 따라 지도 스타일 변경
-      style: isDarkMode ? MapStyle.dark : null,
 
       // 백엔드에서 받아온 장소 목록 + 현재 위치 방향 마커를 함께 표시함.
       markers: markers,
@@ -49,6 +48,9 @@ class TripblerGoogleMap extends StatelessWidget {
       compassEnabled: true,
       mapToolbarEnabled: false,
       zoomControlsEnabled: false,
+
+      // 건물 표시 활성화
+      buildingsEnabled: true,
 
       // 낮은 숫자일수록 줌아웃, 높은 숫자일수록 줌인.
       // Scale Bar는 5m ~ 200km 범위의 표시값을 사용함.

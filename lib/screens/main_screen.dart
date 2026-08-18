@@ -4,6 +4,9 @@ import 'package:provider/provider.dart';
 import '../models/tab_item.dart';
 import '../providers/tab_provider.dart';
 import '../widgets/bottom_tab_bar.dart';
+import '../widgets/navigation/app_drawer.dart';
+import '../widgets/navigation/app_top_bar.dart';
+
 import 'ai_chat_screen.dart';
 import 'exchange_screen.dart';
 import 'map_screen.dart';
@@ -19,7 +22,11 @@ class MainScreen extends StatelessWidget {
       icon: Icons.attach_money,
       backgroundColor: Color(0xFFB3E5FC),
     ),
-    TabItem(label: '맵', icon: Icons.map, backgroundColor: Color(0xFFFFCC80)),
+    TabItem(
+      label: '맵',
+      icon: Icons.map,
+      backgroundColor: Color(0xFFFFCC80),
+    ),
     TabItem(
       label: '번역',
       icon: Icons.translate,
@@ -27,41 +34,53 @@ class MainScreen extends StatelessWidget {
     ),
   ];
 
-  // 선택된 탭 인덱스에 따라 해당 화면을 반환하는 메서드
-  Widget getCurrentScreen(int selectedIndex) {
+  // 현재 선택된 화면 이름
+  String _getScreenTitle(int selectedIndex) {
     switch (selectedIndex) {
       case 0:
-        return const ExchangeScreen();
+        return '환율';
+
       case 1:
-        return const MapScreen();
+        return '맵';
+
       case 2:
-        return const TranslationScreen();
+        return '번역';
+
       default:
-        return const AiChatScreen();
+        return 'AI 채팅';
     }
   }
 
-  // 메인 화면을 구성하는 위젯 트리를 반환하는 build 메서드
   @override
   Widget build(BuildContext context) {
     final tabProvider = context.watch<TabProvider>();
+    final colorScheme = Theme.of(context).colorScheme;
+
     final selectedIndex = tabProvider.selectedIndex;
-    // 선택된 탭 인덱스가 유효한지 확인
+
     final isValidTabIndex =
         selectedIndex >= TabProvider.firstTabIndex &&
         selectedIndex < tabs.length;
 
     final stackIndex = isValidTabIndex ? selectedIndex : tabs.length;
 
-    final backgroundColor = isValidTabIndex
-        ? tabs[selectedIndex].backgroundColor
-        : Theme.of(context).colorScheme.surface;
+    final screenTitle = _getScreenTitle(selectedIndex);
 
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: colorScheme.surface,
+
+      // 공통 Navigation Drawer
+      drawer: const AppDrawer(),
+
       body: SafeArea(
         child: Column(
           children: [
+            // 모든 화면에 표시되는 90px 공통 상단 영역
+            AppTopBar(
+              title: screenTitle,
+            ),
+
+            // 현재 기능 화면
             Expanded(
               child: IndexedStack(
                 index: stackIndex,
@@ -73,6 +92,8 @@ class MainScreen extends StatelessWidget {
                 ],
               ),
             ),
+
+            // 기존 하단 탭
             BottomTabBar(
               tabs: tabs,
               selectedIndex: selectedIndex,

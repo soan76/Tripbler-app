@@ -311,9 +311,6 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     final mapProvider = context.watch<MapProvider>();
 
-    // 시스템 라이트/다크 모드 확인
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     // 현재 선택된 장소
     final selectedPlace = mapProvider.selectedPlace;
 
@@ -333,8 +330,6 @@ class _MapScreenState extends State<MapScreen> {
           initialCameraPosition: _initialCameraPosition,
 
           onMapCreated: _onMapCreated,
-
-          isDarkMode: isDarkMode,
 
           markers: {
             ...mapProvider.markers,

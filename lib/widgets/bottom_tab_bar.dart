@@ -18,22 +18,30 @@ class BottomTabBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
+    // 선택 상태의 의미 강조색은 기존 파란색 유지
     const selectedColor = Colors.blue;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
 
-      // 라이트/다크 모드에 따라 배경색 변경
+      // 현재 앱 테마의 배경색 사용
       color: colorScheme.surface,
 
       child: Row(
         children: List.generate(tabs.length, (index) {
           final bool isSelected = selectedIndex == index;
 
-          final borderColor = isSelected ? selectedColor : colorScheme.outline;
+          // 선택된 탭은 파란색,
+          // 선택되지 않은 탭은 현재 테마의 outline 색상 사용
+          final Color borderColor = isSelected
+              ? selectedColor
+              : colorScheme.outlineVariant;
 
-          final contentColor = isSelected
+          // 선택된 탭은 파란색,
+          // 선택되지 않은 탭은 현재 테마의 보조 텍스트 색상 사용
+          final Color contentColor = isSelected
               ? selectedColor
               : colorScheme.onSurfaceVariant;
 
@@ -45,16 +53,20 @@ class BottomTabBar extends StatelessWidget {
                 child: Container(
                   height: 64,
                   decoration: BoxDecoration(
-                    // 탭 버튼 배경도 시스템 테마를 따라감
+                    // 라이트 / 다크 모드 자동 대응
                     color: colorScheme.surface,
+
                     borderRadius: BorderRadius.zero,
+
                     border: Border.all(color: borderColor, width: 1.5),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(tabs[index].icon, color: contentColor, size: 24),
+
                       const SizedBox(height: 4),
+
                       Text(
                         tabs[index].label,
                         style: TextStyle(
