@@ -204,13 +204,6 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
             baseCurrencyCode: widget.baseCurrency.code,
             targetCurrencyCode: widget.targetCurrency.code,
             period: ChartPeriod.oneMonth,
-          )
-          // 차트 요청 시간이 초과되면 예외를 발생시키도록 설정.
-          .timeout(
-            const Duration(seconds: 5),
-            onTimeout: () {
-              throw Exception('차트 요청 시간이 초과되었습니다.');
-            },
           );
 
       if (!mounted) {
@@ -247,16 +240,18 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
     super.build(context);
 
     final latestDate = history.isEmpty ? null : history.last.date;
+
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     // 카드 전체를 감싸는 컨테이너
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDarkMode ? const Color(0xFF444440) : Colors.white,
         border: Border.all(color: Colors.grey.shade200),
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 14,
             offset: const Offset(0, 5),
           ),
@@ -287,20 +282,21 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '환율 차트',
                 style: TextStyle(
                   fontSize: 14,
-                  color: Colors.black54,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 '${widget.baseCurrency.code} / ${widget.targetCurrency.code}',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w900,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               if (latestDate != null) ...[
@@ -334,9 +330,9 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
   // 현재 환율 영역을 빌드하는 메서드
   Widget _buildCurrentRateArea() {
     if (!widget.shouldLoad && !hasLoaded) {
-      return const Text(
+      return Text(
         '차트를 넘기면 데이터를 불러옵니다.',
-        style: TextStyle(color: Colors.black54),
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
       );
     }
 
@@ -350,9 +346,9 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
         Expanded(
           child: Text(
             '1 ${widget.baseCurrency.code}',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 15,
-              color: Colors.black54,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -362,10 +358,10 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
           child: Text(
             '${_formatRate(currentRate!)} ${widget.targetCurrency.code}',
             textAlign: TextAlign.right,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w900,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
@@ -375,10 +371,12 @@ class _ExchangeChartCardState extends State<_ExchangeChartCard>
 
   Widget _buildChartArea() {
     if (!widget.shouldLoad && !hasLoaded) {
-      return const Center(
+      return Center(
         child: Text(
           '이 차트는 아직 불러오지 않았습니다.',
-          style: TextStyle(color: Colors.black54),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       );
     }

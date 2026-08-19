@@ -15,7 +15,7 @@ class ExchangeApiService {
     'TRIPBLER_API_BASE_URL',
   );
 
-  static const Duration _timeout = Duration(seconds: 8);
+  static const Duration _timeout = Duration(seconds: 15);
 
   final http.Client _client;
 

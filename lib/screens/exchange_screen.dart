@@ -73,10 +73,20 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               // 기준 통화와 상대 통화 간의 환율을 표시하는 CurrencyRow 위젯
               CurrencyRow(
                 currency: baseCurrency,
-                isBase: true,
+                isBase: provider.activeInputCurrencyCode == baseCurrency.code,
                 amount: inputAmount,
                 rate: 1,
-                onAmountChanged: provider.changeAmount,
+
+                onAmountTap: () {
+                  provider.selectInputCurrency(baseCurrency.code);
+                },
+
+                onAmountChanged: (value) {
+                  provider.changeAmountFromCurrency(
+                    currencyCode: baseCurrency.code,
+                    amount: value,
+                  );
+                },
                 onCurrencyTap: () {
                   showCurrencySelectionSheet(
                     context: context,
@@ -93,9 +103,21 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
 
                 return CurrencyRow(
                   currency: currency,
-                  isBase: false,
+                  isBase: provider.activeInputCurrencyCode == currency.code,
                   amount: amount,
                   rate: provider.rateFor(currency.code),
+
+                  onAmountTap: () {
+                    provider.selectInputCurrency(currency.code);
+                  },
+
+                  onAmountChanged: (value) {
+                    provider.changeAmountFromCurrency(
+                      currencyCode: currency.code,
+                      amount: value,
+                    );
+                  },
+
                   onCurrencyTap: () {
                     showCurrencySelectionSheet(
                       context: context,
@@ -178,23 +200,17 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
   // 환율 화면의 헤더 영역을 구성하는 위젯을 반환하는 메서드
   Widget _buildHeader(DateTime? lastUpdated) {
     final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       color: colorScheme.surface,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '환율',
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            _formatLastUpdatedText(lastUpdated),
-            style: const TextStyle(color: Colors.black54, fontSize: 13),
-          ),
-        ],
+      child: Center(
+        child: Text(
+          _formatLastUpdatedText(lastUpdated),
+          textAlign: TextAlign.center,
+          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+        ),
       ),
     );
   }

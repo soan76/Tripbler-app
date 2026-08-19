@@ -25,6 +25,7 @@ class ExchangeProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   DateTime? _lastUpdated;
+  String? _activeInputCurrencyCode;
 
   bool _hasInitialized = false;
   Future<void>? _initializationFuture;
@@ -41,6 +42,10 @@ class ExchangeProvider extends ChangeNotifier {
 
   // 사용자가 입력한 기준 통화 금액을 제공.
   double get inputAmount => _inputAmount;
+
+  // 현재 입력 중인 통화 코드를 제공.
+  String get activeInputCurrencyCode =>
+      _activeInputCurrencyCode ?? _baseCurrency.code;
 
   // 환율 정보를 읽기 전용으로 제공.
   Map<String, double> get rates => UnmodifiableMapView(_rates);
@@ -250,6 +255,49 @@ class ExchangeProvider extends ChangeNotifier {
     notifyListeners();
 
     await _localStorageService.saveInputAmount(amount);
+  }
+
+  Future<void> changeAmountFromCurrency({
+    required String currencyCode,
+    required double amount,
+  }) async {
+    // 현재 입력하고 있는 통화를 선택 상태로 변경
+    _activeInputCurrencyCode = currencyCode;
+
+    // 기준 통화에 직접 입력한 경우
+    if (currencyCode == _baseCurrency.code) {
+      _inputAmount = amount;
+
+      notifyListeners();
+
+      await _localStorageService.saveInputAmount(_inputAmount);
+      return;
+    }
+
+    // 기준 통화 → 해당 통화의 환율
+    final rate = _rates[currencyCode];
+
+    if (rate == null || rate == 0) {
+      notifyListeners();
+      return;
+    }
+
+    // 상대 통화에 입력된 값을 기준 통화 금액으로 역산
+    _inputAmount = amount / rate;
+
+    notifyListeners();
+
+    await _localStorageService.saveInputAmount(_inputAmount);
+  }
+
+  // 현재 입력 대상으로 선택된 통화
+  void selectInputCurrency(String currencyCode) {
+    if (_activeInputCurrencyCode == currencyCode) {
+      return;
+    }
+
+    _activeInputCurrencyCode = currencyCode;
+    notifyListeners();
   }
 
   // 기준 통화를 변경하는 비동기 작업.
