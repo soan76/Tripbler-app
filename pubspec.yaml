@@ -109,3 +109,6 @@ dependency_overrides:
     
   google_maps_flutter_android:
     path: packages/google_maps_flutter_android
+
+  google_maps_flutter_ios:
+    path: packages/google_maps_flutter_ios

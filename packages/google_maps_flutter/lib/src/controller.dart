@@ -321,7 +321,7 @@ class GoogleMapController {
     );
   }
 
-  /// Android Google Map의 라이트 / 다크 색상 모드를 변경한다.
+  /// Google Map의 라이트 / 다크 색상 모드를 변경한다.
   Future<void> setMapColorScheme(bool isDarkMode) {
     _checkWidgetMountedOrThrow();
 
@@ -329,6 +329,10 @@ class GoogleMapController {
         GoogleMapsFlutterPlatform.instance;
 
     if (platform is GoogleMapsFlutterAndroid) {
+      return platform.setMapColorScheme(mapId: mapId, isDarkMode: isDarkMode);
+    }
+
+    if (platform is GoogleMapsFlutterIOS) {
       return platform.setMapColorScheme(mapId: mapId, isDarkMode: isDarkMode);
     }
 

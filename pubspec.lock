@@ -335,12 +335,11 @@ packages:
     source: path
     version: "2.19.8"
   google_maps_flutter_ios:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: google_maps_flutter_ios
-      sha256: a2e3c7ad2392ea65d6775704716d0aa3c3d226cb984fd0a688bca40f6be1a451
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/google_maps_flutter_ios"
+      relative: true
+    source: path
     version: "2.17.4"
   google_maps_flutter_platform_interface:
     dependency: transitive
