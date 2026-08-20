@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/config/map_id_config.dart';
+import '../../providers/settings_provider.dart';
 
 /// 구글 맵을 표시하는 위젯 클래스
-class TripblerGoogleMap extends StatelessWidget {
+class TripblerGoogleMap extends StatefulWidget {
   final CameraPosition initialCameraPosition;
   final Set<Marker> markers;
   final void Function(GoogleMapController controller) onMapCreated;
@@ -21,22 +23,61 @@ class TripblerGoogleMap extends StatelessWidget {
   });
 
   @override
+  State<TripblerGoogleMap> createState() => _TripblerGoogleMapState();
+}
+
+class _TripblerGoogleMapState extends State<TripblerGoogleMap> {
+  GoogleMapController? _controller;
+  bool? _lastIsDarkMode;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final bool isDarkMode = context.watch<SettingsProvider>().isDarkMode;
+
+    if (_lastIsDarkMode == isDarkMode) {
+      return;
+    }
+
+    _lastIsDarkMode = isDarkMode;
+
+    final GoogleMapController? controller = _controller;
+
+    if (controller != null) {
+      controller.setMapColorScheme(isDarkMode);
+    }
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _controller = controller;
+
+    final bool isDarkMode = context.read<SettingsProvider>().isDarkMode;
+
+    _lastIsDarkMode = isDarkMode;
+
+    controller.setMapColorScheme(isDarkMode);
+
+    widget.onMapCreated(controller);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return GoogleMap(
       // 플랫폼별 Google Cloud Map ID 적용
       cloudMapId: MapIdConfig.current,
 
-      initialCameraPosition: initialCameraPosition,
-      onMapCreated: onMapCreated,
+      initialCameraPosition: widget.initialCameraPosition,
+      onMapCreated: _onMapCreated,
 
       // 백엔드에서 받아온 장소 목록 + 현재 위치 방향 마커를 함께 표시함.
-      markers: markers,
+      markers: widget.markers,
 
       // 지도 탭 좌표를 상위 화면으로 전달함.
-      onTap: onTap,
+      onTap: widget.onTap,
 
       // 지도를 이동/확대/축소할 때마다 카메라 정보를 상위 화면으로 전달함.
-      onCameraMove: onCameraMove,
+      onCameraMove: widget.onCameraMove,
 
       mapType: MapType.normal,
 

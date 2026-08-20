@@ -8,15 +8,22 @@ import 'package:intl/intl.dart';
 class AmountInputField extends StatefulWidget {
   final double amount;
   final ValueChanged<double> onChanged;
+
+  // 금액 입력 영역을 터치했을 때 호출
   final VoidCallback? onTap;
 
-  // 기준 통화인지 여부
+  // 현재 선택된 통화 행인지 여부
   final bool isBase;
+
+  // -1 = 자동
+  // 0~6 = 최대 소수점 자릿수
+  final int decimalPlaces;
 
   const AmountInputField({
     super.key,
     required this.amount,
     required this.onChanged,
+    required this.decimalPlaces,
     this.onTap,
     this.isBase = false,
   });
@@ -28,27 +35,27 @@ class AmountInputField extends StatefulWidget {
 class _AmountInputFieldState extends State<AmountInputField> {
   late final TextEditingController _controller;
 
-  final NumberFormat _formatter = NumberFormat('#,##0.########');
-
   // 기본 글자 크기
   static const double _defaultFontSize = 22;
 
-  // 너무 길어졌을 때 허용할 최소 글자 크기
+  // 숫자가 길어졌을 때 줄일 수 있는 최소 글자 크기
   static const double _minimumFontSize = 12;
 
   @override
   void initState() {
     super.initState();
 
-    _controller = TextEditingController(text: _formatter.format(widget.amount));
+    _controller = TextEditingController(text: _formatAmount(widget.amount));
   }
 
   @override
   void didUpdateWidget(covariant AmountInputField oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    if (oldWidget.amount != widget.amount) {
-      final newText = _formatter.format(widget.amount);
+    // 금액 또는 자릿수 설정이 바뀌면 표시값도 갱신
+    if (oldWidget.amount != widget.amount ||
+        oldWidget.decimalPlaces != widget.decimalPlaces) {
+      final newText = _formatAmount(widget.amount);
 
       if (_controller.text != newText) {
         _controller.value = TextEditingValue(
@@ -63,15 +70,15 @@ class _AmountInputFieldState extends State<AmountInputField> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    // 기준 통화와 일반 통화에 맞는 텍스트 색상
+    // 선택된 통화 행과 일반 통화 행의 글자색 구분
     final textColor = widget.isBase
         ? colorScheme.onPrimaryContainer
         : colorScheme.onSurface;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 현재 입력된 숫자 길이와 실제 입력 영역을 이용해
-        // 적절한 글자 크기를 계산
+        // 현재 입력값이 영역을 넘지 않도록
+        // 실제 텍스트 너비를 기준으로 글자 크기 계산
         final fontSize = _calculateFontSize(
           text: _controller.text,
           maxWidth: constraints.maxWidth,
@@ -81,6 +88,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
         return TextField(
           controller: _controller,
 
+          // 터치 즉시 해당 통화를 선택 상태로 변경
           onTap: widget.onTap,
 
           textAlign: TextAlign.right,
@@ -89,7 +97,10 @@ class _AmountInputFieldState extends State<AmountInputField> {
 
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-            _ThousandsSeparatorInputFormatter(),
+
+            _ThousandsSeparatorInputFormatter(
+              decimalPlaces: widget.decimalPlaces,
+            ),
           ],
 
           // TextField 자체의 별도 배경 제거
@@ -100,14 +111,11 @@ class _AmountInputFieldState extends State<AmountInputField> {
             disabledBorder: InputBorder.none,
             errorBorder: InputBorder.none,
             focusedErrorBorder: InputBorder.none,
-
             filled: false,
-
             isDense: true,
             contentPadding: EdgeInsets.zero,
           ),
 
-          // 입력 영역에 맞게 자동 계산된 글자 크기 사용
           style: TextStyle(
             fontSize: fontSize,
             fontWeight: FontWeight.w700,
@@ -117,11 +125,11 @@ class _AmountInputFieldState extends State<AmountInputField> {
           cursorColor: colorScheme.primary,
 
           onChanged: (value) {
-            // 입력 문자열 길이가 변경될 때
-            // 글자 크기를 다시 계산하기 위해 rebuild
+            // 입력 길이가 변경될 때 글자 크기 재계산
             setState(() {});
 
             final rawValue = value.replaceAll(',', '');
+
             final parsed = double.tryParse(rawValue) ?? 0;
 
             widget.onChanged(parsed);
@@ -131,8 +139,25 @@ class _AmountInputFieldState extends State<AmountInputField> {
     );
   }
 
-  // 현재 입력된 텍스트가 입력 영역을 넘지 않도록
-  // 적절한 글자 크기를 계산
+  // 현재 설정된 자릿수 제한에 맞게 금액 문자열 생성
+  String _formatAmount(double amount) {
+    // 자동
+    if (widget.decimalPlaces == -1) {
+      return NumberFormat('#,##0.########').format(amount);
+    }
+
+    // 소수점 없음
+    if (widget.decimalPlaces == 0) {
+      return NumberFormat('#,##0').format(amount);
+    }
+
+    // 최대 소수점 자릿수
+    final decimalPattern = '#' * widget.decimalPlaces;
+
+    return NumberFormat('#,##0.$decimalPattern').format(amount);
+  }
+
+  // 입력 영역을 넘어가지 않도록 적절한 글자 크기 계산
   double _calculateFontSize({
     required String text,
     required double maxWidth,
@@ -175,9 +200,12 @@ class _AmountInputFieldState extends State<AmountInputField> {
   }
 }
 
-// 입력값에 천 단위 구분자를 적용하는 TextInputFormatter
+// 입력값에 천 단위 구분자를 적용하고
+// 설정된 소수점 자릿수만큼 입력을 제한하는 formatter
 class _ThousandsSeparatorInputFormatter extends TextInputFormatter {
-  final NumberFormat _formatter = NumberFormat('#,##0.########');
+  final int decimalPlaces;
+
+  _ThousandsSeparatorInputFormatter({required this.decimalPlaces});
 
   @override
   TextEditingValue formatEditUpdate(
@@ -192,17 +220,34 @@ class _ThousandsSeparatorInputFormatter extends TextInputFormatter {
 
     final rawText = text.replaceAll(',', '');
 
+    // "."만 입력되는 경우 방지
     if (rawText == '.') {
       return oldValue;
     }
 
+    // 소수점 두 개 이상 입력 방지
     if ('.'.allMatches(rawText).length > 1) {
       return oldValue;
     }
 
     final parts = rawText.split('.');
+
     final integerPart = parts[0];
+
     final decimalPart = parts.length > 1 ? parts[1] : null;
+
+    // 자릿수 제한이 0이면 소수점 입력 자체를 막음
+    if (decimalPlaces == 0 && decimalPart != null) {
+      return oldValue;
+    }
+
+    // 자동(-1)이 아닌 경우
+    // 설정된 소수점 자릿수를 초과하지 못하도록 제한
+    if (decimalPlaces >= 0 &&
+        decimalPart != null &&
+        decimalPart.length > decimalPlaces) {
+      return oldValue;
+    }
 
     final integerNumber = int.tryParse(integerPart.isEmpty ? '0' : integerPart);
 
@@ -210,8 +255,11 @@ class _ThousandsSeparatorInputFormatter extends TextInputFormatter {
       return oldValue;
     }
 
-    String formatted = _formatter.format(integerNumber);
+    final formattedInteger = NumberFormat('#,##0').format(integerNumber);
 
+    String formatted = formattedInteger;
+
+    // 사용자가 소수점을 입력한 상태 유지
     if (decimalPart != null) {
       formatted = '$formatted.$decimalPart';
     }

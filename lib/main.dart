@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'providers/tab_provider.dart';
 import 'providers/exchange_provider.dart';
 import 'providers/translation_provider.dart';
+import 'providers/settings_provider.dart';
 import 'providers/map_provider.dart';
 import 'screens/main_screen.dart';
 import 'core/theme/app_theme.dart';
@@ -16,6 +17,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => ExchangeProvider()),
         ChangeNotifierProvider(create: (_) => TranslationProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),
+        ChangeNotifierProvider(create: (_) => SettingsProvider()),
       ],
       child: const TripblerApp(),
     ),
@@ -27,6 +29,8 @@ class TripblerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final settingsProvider =
+      context.watch<SettingsProvider>();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Tripbler',      
@@ -34,7 +38,7 @@ class TripblerApp extends StatelessWidget {
 
       darkTheme: AppTheme.darkTheme,
 
-      themeMode: ThemeMode.system,
+      themeMode: settingsProvider.themeMode,
       home: const MainScreen(),
     );
   }

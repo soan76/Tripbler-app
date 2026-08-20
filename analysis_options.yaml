@@ -9,6 +9,16 @@
 # packages, and plugins designed to encourage good coding practices.
 include: package:flutter_lints/flutter.yaml
 
+analyzer:
+  exclude:
+    - packages/google_maps_flutter_android/example/**
+    - packages/google_maps_flutter_android/test/**
+    - packages/google_maps_flutter_android/pigeons/**
+
+    - packages/google_maps_flutter/example/**
+    - packages/google_maps_flutter/test/**
+
+    
 linter:
   # The lint rules applied to this project can be customized in the
   # section below to disable rules from the `package:flutter_lints/flutter.yaml`

@@ -20,7 +20,6 @@ class CurrencyManagementBottomSheet extends StatefulWidget {
       _CurrencyManagementBottomSheetState();
 }
 
-// CurrencyManagementBottomSheet의 상태를 관리하는 State 클래스
 class _CurrencyManagementBottomSheetState
     extends State<CurrencyManagementBottomSheet> {
   late List<CurrencyModel> editableCurrencies;
@@ -32,13 +31,15 @@ class _CurrencyManagementBottomSheetState
     editableCurrencies = List.from(widget.visibleCurrencies);
   }
 
-  // 위젯을 빌드하는 메서드
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final displayedCurrencies = editableCurrencies;
 
     final hiddenCurrencies = supportedCurrencies.where((currency) {
       final isBaseCurrency = currency.code == widget.baseCurrency.code;
+
       final isAlreadyDisplayed = editableCurrencies.any(
         (item) => item.code == currency.code,
       );
@@ -53,129 +54,155 @@ class _CurrencyManagementBottomSheetState
       return !isBaseCurrency && !isAlreadyDisplayed && matchesQuery;
     }).toList();
 
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
-        child: Column(
-          children: [
-            Container(
-              width: 44,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(99),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // 상단 바
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    '통화 관리',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    widget.onApply(editableCurrencies);
-                    Navigator.pop(context);
-                  },
-                  child: const Text('완료'),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-            // 검색 입력 필드
-            TextField(
-              decoration: InputDecoration(
-                hintText: '통화 코드, 국가명, 통화 이름 검색',
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none,
+    return Container(
+      color: colorScheme.surface,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+          child: Column(
+            children: [
+              // 상단 드래그 핸들
+              Container(
+                width: 44,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: colorScheme.outlineVariant,
+                  borderRadius: BorderRadius.circular(99),
                 ),
               ),
-              onChanged: (value) {
-                setState(() {
-                  query = value;
-                });
-              },
-            ),
-          
-            const SizedBox(height: 16),
-            // 기준 통화 박스
-            _buildBaseCurrencyBox(),
 
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-            Expanded(
-              // 표시된 통화와 숨겨진 통화를 보여주는 리스트
-              child: ListView(
+              // 상단 바
+              Row(
                 children: [
-                  _buildSectionTitle('현재 화면에 표시된 통화'),
-
-                  if (displayedCurrencies.isEmpty)
-                    _buildEmptyDisplayedBox()
-                  else
-                    // 표시된 통화 목록을 드래그 앤 드롭으로 재정렬할 수 있는 ReorderableListView
-                    ReorderableListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: displayedCurrencies.length,
-                      onReorder: (oldIndex, newIndex) {
-                        setState(() {
-                          if (newIndex > oldIndex) {
-                            newIndex -= 1;
-                          }
-
-                          final item = editableCurrencies.removeAt(oldIndex);
-                          editableCurrencies.insert(newIndex, item);
-                        });
-                      },
-                      itemBuilder: (context, index) {
-                        final currency = displayedCurrencies[index];
-
-                        return _buildDisplayedCurrencyTile(
-                          key: ValueKey(currency.code),
-                          currency: currency,
-                          index: index,
-                        );
-                      },
+                  Expanded(
+                    child: Text(
+                      '통화 관리',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: colorScheme.onSurface,
+                      ),
                     ),
+                  ),
 
-                  const SizedBox(height: 20),
-
-                  Divider(color: Colors.grey.shade300, thickness: 1),
-
-                  const SizedBox(height: 12),
-
-                  _buildSectionTitle('표시되지 않은 통화'),
-
-                  if (hiddenCurrencies.isEmpty)
-                    _buildEmptyHiddenBox()
-                  else
-                    ...hiddenCurrencies.map((currency) {
-                      return _buildHiddenCurrencyTile(currency);
-                    }),
+                  TextButton(
+                    onPressed: () {
+                      widget.onApply(editableCurrencies);
+                      Navigator.pop(context);
+                    },
+                    child: const Text('완료'),
+                  ),
                 ],
               ),
-            ),
-          ],
+
+              const SizedBox(height: 12),
+
+              // 검색 입력 필드
+              TextField(
+                style: TextStyle(color: colorScheme.onSurface),
+                decoration: InputDecoration(
+                  hintText: '통화 코드, 국가명, 통화 이름 검색',
+
+                  hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+
+                  prefixIcon: Icon(
+                    Icons.search,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+
+                  filled: true,
+
+                  fillColor: colorScheme.surfaceContainerHighest,
+
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+                onChanged: (value) {
+                  setState(() {
+                    query = value;
+                  });
+                },
+              ),
+
+              const SizedBox(height: 16),
+
+              // 기준 통화
+              _buildBaseCurrencyBox(),
+
+              const SizedBox(height: 16),
+
+              Expanded(
+                child: ListView(
+                  children: [
+                    _buildSectionTitle('현재 화면에 표시된 통화'),
+
+                    if (displayedCurrencies.isEmpty)
+                      _buildEmptyDisplayedBox()
+                    else
+                      ReorderableListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: displayedCurrencies.length,
+
+                        onReorder: (oldIndex, newIndex) {
+                          setState(() {
+                            if (newIndex > oldIndex) {
+                              newIndex -= 1;
+                            }
+
+                            final item = editableCurrencies.removeAt(oldIndex);
+
+                            editableCurrencies.insert(newIndex, item);
+                          });
+                        },
+
+                        itemBuilder: (context, index) {
+                          final currency = displayedCurrencies[index];
+
+                          return _buildDisplayedCurrencyTile(
+                            key: ValueKey(currency.code),
+                            currency: currency,
+                            index: index,
+                          );
+                        },
+                      ),
+
+                    const SizedBox(height: 20),
+
+                    Divider(color: colorScheme.outlineVariant, thickness: 1),
+
+                    const SizedBox(height: 12),
+
+                    _buildSectionTitle('표시되지 않은 통화'),
+
+                    if (hiddenCurrencies.isEmpty)
+                      _buildEmptyHiddenBox()
+                    else
+                      ...hiddenCurrencies.map((currency) {
+                        return _buildHiddenCurrencyTile(currency);
+                      }),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-  // 기준 통화 박스를 빌드하는 메서드
+
   Widget _buildBaseCurrencyBox() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFEAF4FF),
-        border: Border.all(color: Colors.blue.shade100),
+        color: colorScheme.primaryContainer,
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -183,65 +210,88 @@ class _CurrencyManagementBottomSheetState
             widget.baseCurrency.flagEmoji,
             style: const TextStyle(fontSize: 28),
           ),
+
           const SizedBox(width: 12),
+
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   '${widget.baseCurrency.code} · 기준 통화',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w800,
                     fontSize: 16,
+                    color: colorScheme.onPrimaryContainer,
                   ),
                 ),
+
                 const SizedBox(height: 2),
+
                 Text(
-                  '${widget.baseCurrency.countryName} · ${widget.baseCurrency.currencyName}',
-                  style: const TextStyle(color: Colors.black54, fontSize: 13),
+                  '${widget.baseCurrency.countryName} · '
+                  '${widget.baseCurrency.currencyName}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: colorScheme.onPrimaryContainer,
+                  ),
                 ),
               ],
             ),
           ),
-          const Icon(Icons.lock_outline, color: Colors.grey),
+
+          Icon(Icons.lock_outline, color: colorScheme.onPrimaryContainer),
         ],
       ),
     );
   }
-  // 섹션 제목을 빌드하는 메서드
+
   Widget _buildSectionTitle(String title) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w800,
-          color: Colors.black87,
+          color: colorScheme.onSurface,
         ),
       ),
     );
   }
-  // 표시된 통화 타일을 빌드하는 메서드
+
   Widget _buildDisplayedCurrencyTile({
     required Key key,
     required CurrencyModel currency,
     required int index,
   }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       key: key,
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade200),
+        color: colorScheme.surfaceContainerLow,
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: ListTile(
         leading: Text(currency.flagEmoji, style: const TextStyle(fontSize: 28)),
+
         title: Text(
           '${currency.code} · ${currency.countryName}',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: colorScheme.onSurface,
+          ),
         ),
-        subtitle: Text(currency.currencyName),
+
+        subtitle: Text(
+          currency.currencyName,
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+        ),
+
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -254,35 +304,48 @@ class _CurrencyManagementBottomSheetState
               child: Container(
                 width: 28,
                 height: 28,
-                decoration: const BoxDecoration(
-                  color: Colors.redAccent,
+                decoration: BoxDecoration(
+                  color: colorScheme.error,
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.remove, color: Colors.white, size: 18),
+                child: Icon(Icons.remove, color: colorScheme.onError, size: 18),
               ),
             ),
+
             const SizedBox(width: 12),
-            const Icon(Icons.drag_handle, color: Colors.grey),
+
+            Icon(Icons.drag_handle, color: colorScheme.onSurfaceVariant),
           ],
         ),
       ),
     );
   }
-  // 숨겨진 통화 타일을 빌드하는 메서드
+
   Widget _buildHiddenCurrencyTile(CurrencyModel currency) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade200),
+        color: colorScheme.surfaceContainerLowest,
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: ListTile(
         leading: Text(currency.flagEmoji, style: const TextStyle(fontSize: 28)),
+
         title: Text(
           '${currency.code} · ${currency.countryName}',
-          style: const TextStyle(fontWeight: FontWeight.w700),
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: colorScheme.onSurface,
+          ),
         ),
-        subtitle: Text(currency.currencyName),
+
+        subtitle: Text(
+          currency.currencyName,
+          style: TextStyle(color: colorScheme.onSurfaceVariant),
+        ),
+
         trailing: IconButton(
           onPressed: () {
             setState(() {
@@ -290,8 +353,9 @@ class _CurrencyManagementBottomSheetState
               query = '';
             });
           },
-          icon: const Icon(Icons.add_circle, color: Colors.blue),
+          icon: Icon(Icons.add_circle, color: colorScheme.primary),
         ),
+
         onTap: () {
           setState(() {
             editableCurrencies.add(currency);
@@ -301,37 +365,42 @@ class _CurrencyManagementBottomSheetState
       ),
     );
   }
-  // 표시된 통화가 없을 때 보여주는 박스를 빌드하는 메서드
+
   Widget _buildEmptyDisplayedBox() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade200),
+        color: colorScheme.surfaceContainerLow,
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: const Text(
+      child: Text(
         '아직 추가된 환산 통화가 없습니다.',
-        style: TextStyle(color: Colors.black54),
+        style: TextStyle(color: colorScheme.onSurfaceVariant),
       ),
     );
   }
-  // 숨겨진 통화가 없을 때 보여주는 박스를 빌드하는 메서드
+
   Widget _buildEmptyHiddenBox() {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade200),
+        color: colorScheme.surfaceContainerLow,
+        border: Border.all(color: colorScheme.outlineVariant),
       ),
-      child: const Text(
+      child: Text(
         '추가할 수 있는 통화가 없습니다.',
-        style: TextStyle(color: Colors.black54),
+        style: TextStyle(color: colorScheme.onSurfaceVariant),
       ),
     );
   }
 }
+
 // CurrencyManagementBottomSheet를 보여주는 함수
 Future<void> showCurrencyManagementBottomSheet({
   required BuildContext context,
@@ -339,10 +408,15 @@ Future<void> showCurrencyManagementBottomSheet({
   required List<CurrencyModel> visibleCurrencies,
   required ValueChanged<List<CurrencyModel>> onApply,
 }) {
+  final colorScheme = Theme.of(context).colorScheme;
+
   return showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    backgroundColor: Colors.white,
+
+    // 라이트 / 다크 테마에 맞춰 바텀시트 자체 배경 변경
+    backgroundColor: colorScheme.surface,
+
     builder: (_) {
       return SizedBox(
         height: MediaQuery.of(context).size.height * 0.85,

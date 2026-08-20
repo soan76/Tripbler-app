@@ -103,3 +103,9 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+dependency_overrides:
+  google_maps_flutter:
+    path: packages/google_maps_flutter
+    
+  google_maps_flutter_android:
+    path: packages/google_maps_flutter_android

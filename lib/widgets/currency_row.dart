@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/currency_model.dart';
+import '../providers/settings_provider.dart';
 import 'amount_input_field.dart';
 
 // 통화 행 위젯
@@ -31,11 +33,14 @@ class CurrencyRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
+    // 설정 화면에서 선택한 자릿수 설정을 가져옴
+    final decimalPlaces = context.watch<SettingsProvider>().decimalPlaces;
+
     return Container(
       height: 72,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        // 기준 통화는 강조 배경,
+        // 현재 선택된 통화는 강조 배경,
         // 일반 통화는 기본 화면 배경 사용
         color: isBase ? colorScheme.primaryContainer : colorScheme.surface,
 
@@ -87,8 +92,17 @@ class CurrencyRow extends StatelessWidget {
           Expanded(
             child: AmountInputField(
               amount: amount,
+
+              // 현재 선택된 통화 여부
               isBase: isBase,
+
+              // SettingsProvider에서 가져온 자릿수 설정을 전달
+              decimalPlaces: decimalPlaces,
+
+              // 입력 영역을 터치하면 해당 통화를 선택
               onTap: onAmountTap,
+
+              // 금액 변경 시 환율 재계산
               onChanged: onAmountChanged ?? (_) {},
             ),
           ),
