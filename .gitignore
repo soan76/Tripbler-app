@@ -50,3 +50,6 @@ ios/Flutter/Secrets.xcconfig
 
 packages/google_maps_flutter/example/
 packages/google_maps_flutter_android/example/
+
+packages/google_maps_flutter_android/android/.gradle/
+packages/google_maps_flutter/android/.gradle/
