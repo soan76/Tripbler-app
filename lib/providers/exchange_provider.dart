@@ -18,7 +18,7 @@ class ExchangeProvider extends ChangeNotifier {
   final LocalStorageService _localStorageService;
 
   // 기준 통화, 화면에 표시할 통화 목록, 입력 금액, 환율, 로딩 상태, 오류 메시지, 마지막 업데이트 시각을 관리.
-  CurrencyModel _baseCurrency = findCurrencyByCode('KRW');
+  CurrencyModel _baseCurrency = findCurrencyByCode('KRW')!;
   List<CurrencyModel> _visibleCurrencies = <CurrencyModel>[];
   double _inputAmount = 10000;
   Map<String, double> _rates = <String, double>{};
@@ -112,12 +112,17 @@ class ExchangeProvider extends ChangeNotifier {
     final savedAmount = await _localStorageService.loadInputAmount();
 
     if (savedBaseCode != null) {
-      _baseCurrency = findCurrencyByCode(savedBaseCode);
+      // 저장된 기준 통화 코드가 더 이상 지원되지 않는 경우(예: 지원 통화 목록 변경),
+      // 예외를 던지는 대신 기본값(KRW)으로 안전하게 대체함.
+      _baseCurrency =
+          findCurrencyByCode(savedBaseCode) ?? findCurrencyByCode('KRW')!;
     }
 
     if (savedVisibleCodes != null) {
+      // 저장된 통화 코드 중 더 이상 지원되지 않는 코드는 조용히 걸러내고
+      // 유효한 통화만 화면에 표시할 목록으로 반영함.
       _visibleCurrencies = _normalizeVisibleCurrencies(
-        savedVisibleCodes.map(findCurrencyByCode),
+        savedVisibleCodes.map(findCurrencyByCode).whereType<CurrencyModel>(),
       );
     }
 
@@ -200,6 +205,7 @@ class ExchangeProvider extends ChangeNotifier {
       }
     }
   }
+
   // 오류 메시지를 정리하여 사용자에게 표시할 수 있는 형태로 반환하는 메서드.
   String _cleanErrorMessage(Object error) {
     if (error is ExchangeApiException) {

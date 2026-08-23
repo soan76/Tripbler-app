@@ -1,19 +1,20 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 class CurrencyModel {
   final String code;
   final String countryName;
   final String currencyName;
   final String flagEmoji;
-  final Color accentColor;
 
   const CurrencyModel({
     required this.code,
     required this.countryName,
     required this.currencyName,
     required this.flagEmoji,
-    this.accentColor = Colors.blue,
-  });
+  }) : assert(
+         code.length == 3,
+         'Currency code must be 3 letters (ISO 4217), got "$code"',
+       );
 
   // CurrencyModel 객체를 JSON 형태의 Map으로 변환
   // 로컬 저장소나 서버에 데이터를 저장할 때 사용.
@@ -27,7 +28,7 @@ class CurrencyModel {
   }
 
   // JSON 형태의 Map을 CurrencyModel 객체로 변환
-  //저장된 통화 정보를 다시 불러올 때 사용
+  // 저장된 통화 정보를 다시 불러올 때 사용
   factory CurrencyModel.fromJson(Map<String, dynamic> json) {
     return CurrencyModel(
       code: json['code'] as String,
@@ -36,6 +37,17 @@ class CurrencyModel {
       flagEmoji: json['flagEmoji'] as String,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) || (other is CurrencyModel && other.code == code);
+
+  @override
+  int get hashCode => code.hashCode;
+
+  @override
+  String toString() =>
+      'CurrencyModel(code: $code, countryName: $countryName, currencyName: $currencyName)';
 }
 
 // 지원하는 통화 목록 - 수정 예정
@@ -102,12 +114,19 @@ const List<CurrencyModel> supportedCurrencies = [
   ),
 ];
 
-// 통화 코드를 이용해 supportedCurrencies 목록에서 통화 정보를 검색
-CurrencyModel findCurrencyByCode(String code) {
-  return supportedCurrencies.firstWhere(
-    // 전달받은 코드와 일치하는 통화 객체를 반환
-    (currency) => currency.code == code,
-    // 일치하는 통화가 없을 경우, 기본값으로 첫 번째 통화 객체를 반환
-    orElse: () => supportedCurrencies.first,
-  );
+// 통화 코드를 이용해 supportedCurrencies 목록에서 통화 정보를 검색.
+// 일치하는 통화가 없으면 null을 반환하고 디버그 모드에서 경고를 남긴다.
+// 화면 표시용 기본값이 필요한 호출부는 `findCurrencyByCode(code) ?? supportedCurrencies.first`
+// 형태로 fallback 여부를 명시적으로 선택한다.
+CurrencyModel? findCurrencyByCode(String code) {
+  for (final currency in supportedCurrencies) {
+    if (currency.code == code) return currency;
+  }
+
+  assert(() {
+    debugPrint('⚠️ Unknown currency code: "$code"');
+    return true;
+  }());
+
+  return null;
 }

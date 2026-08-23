@@ -204,33 +204,18 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
 
-          // 라이트 모드 아이콘
-          Icon(
-            Icons.light_mode,
-            size: 22,
-            color: isDarkMode
-                ? colorScheme.onSurfaceVariant
-                : colorScheme.primary,
-          ),
-
-          const SizedBox(width: 6),
-
           Switch(
             value: isDarkMode,
+            thumbIcon: WidgetStateProperty.resolveWith<Icon?>((states) {
+              if (states.contains(WidgetState.selected)) {
+                return const Icon(Icons.dark_mode);
+              }
+
+              return const Icon(Icons.light_mode);
+            }),
             onChanged: (_) {
               settingsProvider.toggleTheme();
             },
-          ),
-
-          const SizedBox(width: 6),
-
-          // 다크 모드 아이콘
-          Icon(
-            Icons.dark_mode,
-            size: 22,
-            color: isDarkMode
-                ? colorScheme.primary
-                : colorScheme.onSurfaceVariant,
           ),
         ],
       ),
