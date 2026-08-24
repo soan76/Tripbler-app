@@ -5,6 +5,8 @@ enum ApiErrorCode {
   exchangeProviderUnavailable,
   translationProviderUnavailable,
   internalServerError,
+  unauthorized,
+  forbidden,
   unknown;
   /// 문자열로 변환된 code를 enum으로 변환.
   /// 백엔드에서 내려주는 code가 enum에 정의되지 않은 경우 unknown으로 처리
@@ -22,6 +24,10 @@ enum ApiErrorCode {
         return ApiErrorCode.translationProviderUnavailable;
       case 'INTERNAL_SERVER_ERROR':
         return ApiErrorCode.internalServerError;
+      case 'UNAUTHORIZED':
+        return ApiErrorCode.unauthorized;
+      case 'FORBIDDEN':
+        return ApiErrorCode.forbidden;
       default:
         return ApiErrorCode.unknown;
     }
