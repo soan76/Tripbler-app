@@ -6,6 +6,7 @@ import '../models/place_model.dart';
 import '../services/place_api_service.dart';
 
 enum MapPlaceStatus { idle, loading, success, failure }
+
 /// 지도 화면에서 주변 장소를 관리하는 Provider 클래스
 class MapProvider extends ChangeNotifier {
   MapProvider({PlaceApiService? placeApiService})
@@ -33,17 +34,18 @@ class MapProvider extends ChangeNotifier {
 
     // Nearby API로 받아온 장소 마커
     for (final place in _places) {
+      // 좌표가 없는 장소는 지도에 표시할 수 없으므로 건너뜀.
+      // (place_model의 좌표 파싱 실패 시 더 이상 (0,0)으로 대체하지 않고
+      // null을 반환하므로, 여기서 명시적으로 걸러줘야 함)
+      if (!place.hasCoordinates) {
+        continue;
+      }
+
       markers.add(
         Marker(
           markerId: MarkerId(place.id),
-          position: LatLng(
-            place.latitude,
-            place.longitude,
-          ),
-          infoWindow: InfoWindow(
-            title: place.name,
-            snippet: place.address,
-          ),
+          position: LatLng(place.latitude!, place.longitude!),
+          infoWindow: InfoWindow(title: place.name, snippet: place.address),
           onTap: () {
             selectPlace(place);
           },
@@ -54,11 +56,13 @@ class MapProvider extends ChangeNotifier {
     // 지도 탭으로 선택한 장소 전용 마커
     final selectedPlace = _selectedPlace;
 
-    if (selectedPlace != null && _tapSelectedPlaceId != null) {
+    if (selectedPlace != null &&
+        _tapSelectedPlaceId != null &&
+        selectedPlace.hasCoordinates) {
       markers.add(
         Marker(
           markerId: const MarkerId('selected_place'),
-          position: LatLng(selectedPlace.latitude, selectedPlace.longitude),
+          position: LatLng(selectedPlace.latitude!, selectedPlace.longitude!),
           infoWindow: InfoWindow(
             title: selectedPlace.name,
             snippet: selectedPlace.address,
@@ -132,7 +136,10 @@ class MapProvider extends ChangeNotifier {
 
       PlaceModel selectedPlace;
 
-      if (nearestPlace == null) {
+      // 백엔드가 nearest 장소를 못 찾은 경우뿐 아니라,
+      // 찾았더라도 좌표가 없는 경우(파싱 실패)도 동일하게
+      // "찾지 못함"으로 취급하여 탭 좌표를 그대로 사용함.
+      if (nearestPlace == null || !nearestPlace.hasCoordinates) {
         // 백엔드에서 주변 장소를 찾지 못한 경우에도
         // 사용자가 탭한 위치 자체를 선택 위치로 표시함.
         selectedPlace = PlaceModel(
@@ -150,8 +157,8 @@ class MapProvider extends ChangeNotifier {
         final distanceFromTap = Geolocator.distanceBetween(
           latitude,
           longitude,
-          nearestPlace.latitude,
-          nearestPlace.longitude,
+          nearestPlace.latitude!,
+          nearestPlace.longitude!,
         );
 
         // nearest 결과가 탭한 좌표에서 40m보다 멀면

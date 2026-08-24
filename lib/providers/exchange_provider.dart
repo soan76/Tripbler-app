@@ -85,13 +85,17 @@ class ExchangeProvider extends ChangeNotifier {
   // 초기화 과정에서 저장된 상태를 불러오고, 환율을 가져오는 비동기 작업을 수행.
   Future<void> _runInitialization() async {
     try {
-      await _loadSavedState();
-      await fetchRates();
+      try {
+        await _loadSavedState();
+      } catch (error, stackTrace) {
+        debugPrint('저장된 상태 불러오기 실패: $error');
+        debugPrint('$stackTrace');
+        // 저장된 상태를 못 불러와도 기본값(KRW, 빈 목록)으로 계속 진행함.
+      }
 
+      await fetchRates();
       _hasInitialized = true;
     } finally {
-      // 초기화 과정에서 예외가 발생하면 다음 initialize()에서
-      // 다시 시도할 수 있도록 실행 중 상태를 해제함.
       _initializationFuture = null;
     }
   }
@@ -158,7 +162,9 @@ class ExchangeProvider extends ChangeNotifier {
         }
 
         _rates = <String, double>{};
-        _lastUpdated = DateTime.now();
+        // 표시할 통화가 없어서 API를 호출하지 않은 경우이므로
+        // "마지막으로 서버에서 실제로 데이터를 받은 시각"이라는 의미를 지키기 위해
+        // _lastUpdated는 변경하지 않고 이전 값을 그대로 유지함.
         return;
       }
 

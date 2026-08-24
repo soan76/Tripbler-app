@@ -20,11 +20,14 @@ class ExchangeRateHistoryModel {
        );
 
   // 환율 기록 객체를 JSON 형태의 Map으로 변환.
-  // date는 기기 시간대에 관계없이 항상 UTC 기준으로 저장하여,
-  // 저장 시점과 로드 시점의 시간대가 다르더라도 값이 어긋나지 않도록 한다.
+  //
+  // date는 백엔드의 LocalDate(예: "2026-07-01")에서 오는 시간 정보 없는
+  // 순수 달력 날짜이므로 UTC로 변환하지 않는다. 만약 여기서 .toUtc()를
+  // 적용하면 KST 등 UTC보다 빠른 시간대에서는 자정(00:00)이 전날 오후로
+  // 밀려 date.day를 다시 읽었을 때 하루가 어긋나는 버그가 생긴다.
   Map<String, dynamic> toJson() {
     return {
-      'date': date.toUtc().toIso8601String(),
+      'date': date.toIso8601String(),
       'rate': rate,
       'baseCurrencyCode': baseCurrencyCode,
       'targetCurrencyCode': targetCurrencyCode,
@@ -62,9 +65,9 @@ class ExchangeRateHistoryModel {
   // 두 팩토리에 중복 작성되어 있던 부분을 한 곳으로 모아
   // 필드가 늘어나거나 파싱 규칙이 바뀔 때 한쪽만 고치는 실수를 방지한다.
   static (DateTime, double) _parseDateAndRate(Map<String, dynamic> json) {
-    // toJson에서 UTC로 저장했으므로, 파싱 시에도 UTC 기준임을 명시적으로 보장한다.
-    // (JSON 문자열에 오프셋이 없는 과거 데이터가 남아 있어도 안전하게 UTC로 해석됨)
-    final date = DateTime.parse(json['date'] as String).toUtc();
+    // 백엔드의 LocalDate("2026-07-01")를 그대로 순수 달력 날짜로 파싱한다.
+    // 시간 정보가 없으므로 시간대 변환은 하지 않는다.
+    final date = DateTime.parse(json['date'] as String);
     final rate = (json['rate'] as num).toDouble();
 
     return (date, rate);

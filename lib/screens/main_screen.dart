@@ -17,21 +17,9 @@ class MainScreen extends StatelessWidget {
   const MainScreen({super.key});
 
   static const List<TabItem> tabs = [
-    TabItem(
-      label: '환율',
-      icon: Icons.attach_money,
-      backgroundColor: Color(0xFFB3E5FC),
-    ),
-    TabItem(
-      label: '맵',
-      icon: Icons.map,
-      backgroundColor: Color(0xFFFFCC80),
-    ),
-    TabItem(
-      label: '번역',
-      icon: Icons.translate,
-      backgroundColor: Color(0xFFC5E1A5),
-    ),
+    TabItem(label: '환율', icon: Icons.attach_money),
+    TabItem(label: '지도', icon: Icons.map),
+    TabItem(label: '번역', icon: Icons.translate),
   ];
 
   // 현재 선택된 화면 이름
