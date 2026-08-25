@@ -6,13 +6,15 @@ import 'providers/exchange_provider.dart';
 import 'providers/translation_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/map_provider.dart';
-import 'screens/main_screen.dart';
+import 'providers/auth_provider.dart';
+import 'screens/auth/auth_gate.dart';
 import 'core/theme/app_theme.dart';
 
 void main() {
   runApp(
     MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => TabProvider()),
         ChangeNotifierProvider(create: (_) => ExchangeProvider()),
         ChangeNotifierProvider(create: (_) => TranslationProvider()),
@@ -39,7 +41,7 @@ class TripblerApp extends StatelessWidget {
       darkTheme: AppTheme.darkTheme,
 
       themeMode: settingsProvider.themeMode,
-      home: const MainScreen(),
+      home: const AuthGate(),
     );
   }
 }

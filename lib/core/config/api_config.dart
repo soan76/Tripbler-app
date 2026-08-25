@@ -32,6 +32,27 @@ class ApiConfig {
   static const String exchangeRatesPath = '/api/v1/exchange/rates';
   static const String exchangeHistoryPath = '/api/v1/exchange/history';
 
+  static const String authLoginPath = '/api/v1/auth/login';
+  static const String authRefreshPath = '/api/v1/auth/refresh';
+  static const String authLogoutPath = '/api/v1/auth/logout';
+  static const String usersMePath = '/api/v1/users/me';
+
+  static Uri get authLoginUri {
+    return Uri.parse(baseUrl).replace(path: authLoginPath);
+  }
+
+  static Uri get authRefreshUri {
+    return Uri.parse(baseUrl).replace(path: authRefreshPath);
+  }
+
+  static Uri get authLogoutUri {
+    return Uri.parse(baseUrl).replace(path: authLogoutPath);
+  }
+
+  static Uri get usersMeUri {
+    return Uri.parse(baseUrl).replace(path: usersMePath);
+  }
+
   static Uri exchangeRatesUri({
     required String baseCurrency,
     required List<String> targetCurrencies,
