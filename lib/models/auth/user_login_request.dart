@@ -1,10 +1,10 @@
 class UserLoginRequest {
-  final String email;
+  final String loginId;
   final String password;
 
-  const UserLoginRequest({required this.email, required this.password});
+  const UserLoginRequest({required this.loginId, required this.password});
 
   Map<String, dynamic> toJson() {
-    return {'email': email, 'password': password};
+    return {'loginId': loginId, 'password': password};
   }
 }

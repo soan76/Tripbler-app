@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../repositories/auth/auth_repository.dart';
+import '../models/user/user_response.dart';
 import '../core/network/api_exception.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -12,21 +13,38 @@ class AuthProvider extends ChangeNotifier {
   bool _isInitialized = false;
   bool _isLoading = false;
   bool _isAuthenticated = false;
+  bool _isCheckingLoginId = false;
 
   int? _userId;
+  String? _loginId;
+  String? _nickname;
   String? _email;
   String? _errorMessage;
+  bool? _isLoginIdAvailable;
+  String? _checkedLoginId;
+  String? _loginIdCheckMessage;
 
   bool get isInitialized => _isInitialized;
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _isAuthenticated;
+  bool get isCheckingLoginId => _isCheckingLoginId;
 
   int? get userId => _userId;
+  String? get loginId => _loginId;
+  String? get nickname => _nickname;
   String? get email => _email;
   String? get errorMessage => _errorMessage;
+  bool? get isLoginIdAvailable => _isLoginIdAvailable;
+  String? get checkedLoginId => _checkedLoginId;
+  String? get loginIdCheckMessage => _loginIdCheckMessage;
 
-  /// 로그인
-  Future<bool> login({required String email, required String password}) async {
+  /// 회원가입
+  Future<bool> signup({
+    required String loginId,
+    required String nickname,
+    required String email,
+    required String password,
+  }) async {
     if (_isLoading) {
       return false;
     }
@@ -35,14 +53,118 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
 
     try {
-      final response = await _authRepository.login(
+      await _authRepository.signup(
+        loginId: loginId,
+        nickname: nickname,
         email: email,
         password: password,
       );
 
-      _userId = response.id;
-      _email = response.email;
-      _isAuthenticated = true;
+      return true;
+    } catch (error) {
+      debugPrint('회원가입 실패: $error');
+
+      _errorMessage = error.toString();
+      notifyListeners();
+
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// 아이디 중복확인
+  Future<void> checkLoginIdAvailability(String loginId) async {
+    final trimmedLoginId = loginId.trim();
+
+    if (_isCheckingLoginId) {
+      return;
+    }
+
+    if (trimmedLoginId.isEmpty) {
+      _isLoginIdAvailable = null;
+      _checkedLoginId = null;
+      _loginIdCheckMessage = '아이디를 입력해 주세요.';
+      notifyListeners();
+      return;
+    }
+
+    if (trimmedLoginId.length < 4 || trimmedLoginId.length > 30) {
+      _isLoginIdAvailable = null;
+      _checkedLoginId = null;
+      _loginIdCheckMessage = '아이디는 4자 이상 30자 이하여야 합니다.';
+      notifyListeners();
+      return;
+    }
+
+    _isCheckingLoginId = true;
+    _isLoginIdAvailable = null;
+    _checkedLoginId = null;
+    _loginIdCheckMessage = null;
+
+    notifyListeners();
+
+    try {
+      final response = await _authRepository.checkLoginIdAvailability(
+        trimmedLoginId,
+      );
+
+      _checkedLoginId = response.loginId;
+      _isLoginIdAvailable = response.available;
+
+      _loginIdCheckMessage = response.available
+          ? '사용 가능한 아이디입니다.'
+          : '이미 사용 중인 아이디입니다.';
+    } catch (error) {
+      debugPrint('아이디 중복확인 실패: $error');
+
+      _isLoginIdAvailable = null;
+      _checkedLoginId = null;
+      _loginIdCheckMessage = '아이디 중복확인에 실패했습니다.';
+    } finally {
+      _isCheckingLoginId = false;
+      notifyListeners();
+    }
+  }
+
+  void resetLoginIdAvailability() {
+    if (_isLoginIdAvailable == null &&
+        _checkedLoginId == null &&
+        _loginIdCheckMessage == null) {
+      return;
+    }
+
+    _isLoginIdAvailable = null;
+    _checkedLoginId = null;
+    _loginIdCheckMessage = null;
+
+    notifyListeners();
+  }
+
+  bool isLoginIdCheckedAndAvailable(String loginId) {
+    return _isLoginIdAvailable == true && _checkedLoginId == loginId.trim();
+  }
+
+  /// 로그인
+  Future<bool> login({
+    required String loginId,
+    required String password,
+  }) async {
+    if (_isLoading) {
+      return false;
+    }
+
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      await _authRepository.login(loginId: loginId, password: password);
+
+      // 로그인 성공 후 /users/me 호출
+      // → loginId, nickname, email 등 현재 사용자 정보 조회
+      final user = await _authRepository.getCurrentUser();
+
+      _setCurrentUser(user);
 
       notifyListeners();
 
@@ -50,7 +172,7 @@ class AuthProvider extends ChangeNotifier {
     } catch (error) {
       debugPrint('로그인 실패: $error');
 
-      _isAuthenticated = false;
+      _clearUserState();
       _errorMessage = error.toString();
 
       notifyListeners();
@@ -59,6 +181,14 @@ class AuthProvider extends ChangeNotifier {
     } finally {
       _setLoading(false);
     }
+  }
+
+  void _setCurrentUser(UserResponse user) {
+    _userId = user.id;
+    _loginId = user.loginId;
+    _nickname = user.nickname;
+    _email = user.email;
+    _isAuthenticated = true;
   }
 
   /// 앱 시작 시 저장된 인증정보 확인
@@ -85,26 +215,19 @@ class AuthProvider extends ChangeNotifier {
       }
 
       try {
-        // 1. 기존 Access Token으로 현재 사용자 조회
+        // 기존 Access Token으로 현재 사용자 조회
         final user = await _authRepository.getCurrentUser();
 
-        _userId = user.id;
-        _email = user.email;
-        _isAuthenticated = true;
+        _setCurrentUser(user);
       } on ApiException catch (error) {
-        // 2. Access Token이 만료되었거나 인증되지 않은 경우
         if (error.statusCode == 401) {
           debugPrint('Access Token 인증 실패. Refresh Token으로 재발급을 시도합니다.');
 
-          // 새 Access Token 발급 + Secure Storage 저장
           await _authRepository.refreshAccessToken();
 
-          // 3. 새 Access Token으로 /users/me 다시 요청
           final user = await _authRepository.getCurrentUser();
 
-          _userId = user.id;
-          _email = user.email;
-          _isAuthenticated = true;
+          _setCurrentUser(user);
 
           debugPrint('Access Token 재발급 후 세션 복구 성공');
         } else {
@@ -175,7 +298,10 @@ class AuthProvider extends ChangeNotifier {
 
   void _clearUserState() {
     _isAuthenticated = false;
+
     _userId = null;
+    _loginId = null;
+    _nickname = null;
     _email = null;
   }
 

@@ -4,7 +4,9 @@ import '../../models/auth/user_login_request.dart';
 import '../../models/auth/user_login_response.dart';
 import '../../services/auth/auth_api_service.dart';
 import '../../services/auth/token_storage_service.dart';
+import '../../models/user/user_create_request.dart';
 import '../../models/user/user_response.dart';
+import '../../models/user/login_id_availability_response.dart'; 
 
 /// 인증 API와 로컬 토큰 저장소를 연결하는 Repository.
 ///
@@ -24,16 +26,38 @@ class AuthRepository {
   final AuthApiService _authApiService;
   final TokenStorageService _tokenStorageService;
 
+  /// 회원가입
+  Future<UserResponse> signup({
+    required String loginId,
+    required String nickname,
+    required String email,
+    required String password,
+  }) async {
+    final request = UserCreateRequest(
+      loginId: loginId,
+      nickname: nickname,
+      email: email,
+      password: password,
+    );
+
+    return _authApiService.signup(request);
+  }
+
+  /// 아이디 사용 가능 여부 확인
+  Future<LoginIdAvailabilityResponse> checkLoginIdAvailability(String loginId) {
+    return _authApiService.checkLoginIdAvailability(loginId);
+  }
+
   /// 로그인
   ///
   /// 1. 백엔드 로그인 API 호출
   /// 2. Access Token / Refresh Token / Token Type 저장
   /// 3. 로그인 응답 반환
   Future<UserLoginResponse> login({
-    required String email,
+    required String loginId,
     required String password,
   }) async {
-    final request = UserLoginRequest(email: email, password: password);
+    final request = UserLoginRequest(loginId: loginId, password: password);
 
     final response = await _authApiService.login(request);
 

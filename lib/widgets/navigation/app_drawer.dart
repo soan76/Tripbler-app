@@ -96,7 +96,7 @@ class AppDrawer extends StatelessWidget {
 
           Expanded(
             child: Text(
-              authProvider.email ?? '사용자',
+              authProvider.nickname ?? '사용자',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(fontSize: 20, color: colorScheme.onSurface),

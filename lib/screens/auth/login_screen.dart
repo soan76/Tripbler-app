@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import 'signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -11,33 +12,33 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _loginIdController  = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  final FocusNode _emailFocusNode = FocusNode();
+  final FocusNode _loginIdFocusNode  = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
 
   bool _obscurePassword = true;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _loginIdController.dispose();
     _passwordController.dispose();
 
-    _emailFocusNode.dispose();
+    _loginIdFocusNode.dispose();
     _passwordFocusNode.dispose();
 
     super.dispose();
   }
 
   Future<void> _login() async {
-    final email = _emailController.text.trim();
+    final loginId = _loginIdController.text.trim();
     final password = _passwordController.text;
 
-    if (email.isEmpty || password.isEmpty) {
+    if (loginId.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('이메일과 비밀번호를 입력해 주세요.')));
+      ).showSnackBar(const SnackBar(content: Text('아이디와 비밀번호를 입력해 주세요.')));
 
       return;
     }
@@ -46,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final authProvider = context.read<AuthProvider>();
 
-    final success = await authProvider.login(email: email, password: password);
+    final success = await authProvider.login(loginId: loginId, password: password);
 
     if (!mounted) {
       return;
@@ -104,10 +105,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 48),
 
-                  // 이메일
+                  // 아이디
                   TextField(
-                    controller: _emailController,
-                    focusNode: _emailFocusNode,
+                    controller: _loginIdController,
+                    focusNode: _loginIdFocusNode,
                     enabled: !authProvider.isLoading,
                     keyboardType: TextInputType.emailAddress,
                     textInputAction: TextInputAction.next,
@@ -274,8 +275,27 @@ class _LoginScreenState extends State<LoginScreen> {
                       GestureDetector(
                         onTap: authProvider.isLoading
                             ? null
-                            : () {
-                                // TODO: 회원가입 화면 연결
+                            : () async {
+                                context.read<AuthProvider>().clearError();
+                                
+                                final success = await Navigator.of(context)
+                                    .push<bool>(
+                                      MaterialPageRoute(
+                                        builder: (_) => const SignupScreen(),
+                                      ),
+                                    );
+
+                                if (!context.mounted) {
+                                  return;
+                                }
+
+                                if (success == true) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('회원가입이 완료되었습니다. 로그인해 주세요.'),
+                                    ),
+                                  );
+                                }
                               },
                         child: Text(
                           '회원가입',

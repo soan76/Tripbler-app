@@ -12,6 +12,8 @@ import '../../models/auth/user_login_request.dart';
 import '../../models/auth/user_login_response.dart';
 import '../../models/auth/token_refresh_request.dart';
 import '../../models/user/user_response.dart';
+import '../../models/user/user_create_request.dart';
+import '../../models/user/login_id_availability_response.dart';
 
 /// Tripbler 백엔드 인증 API와 통신하는 서비스.
 ///
@@ -46,6 +48,61 @@ class AuthApiService {
         debugPrint('로그인 응답 파싱 실패: $error');
 
         throw const ApiException(message: '로그인 응답 형식이 올바르지 않습니다.');
+      }
+    }
+
+    throw _createApiExceptionFromErrorResponse(
+      response: response,
+      decodedBody: decodedBody,
+    );
+  }
+
+  /// 회원가입
+  ///
+  /// POST /api/v1/users
+  Future<UserResponse> signup(UserCreateRequest request) async {
+    final response = await _sendPostRequest(
+      uri: ApiConfig.usersUri,
+      body: request.toJson(),
+    );
+
+    final decodedBody = _decodeResponseBody(response);
+
+    if (response.statusCode == 201) {
+      try {
+        return UserResponse.fromJson(decodedBody);
+      } on FormatException catch (error) {
+        debugPrint('회원가입 응답 파싱 실패: $error');
+
+        throw const ApiException(message: '회원가입 응답 형식이 올바르지 않습니다.');
+      }
+    }
+
+    throw _createApiExceptionFromErrorResponse(
+      response: response,
+      decodedBody: decodedBody,
+    );
+  }
+
+  /// 아이디 사용 가능 여부 확인
+  ///
+  /// GET /api/v1/users/check-login-id?loginId=...
+  Future<LoginIdAvailabilityResponse> checkLoginIdAvailability(
+    String loginId,
+  ) async {
+    final response = await _sendGetRequest(
+      uri: ApiConfig.usersCheckLoginIdUri(loginId: loginId),
+    );
+
+    final decodedBody = _decodeResponseBody(response);
+
+    if (response.statusCode == 200) {
+      try {
+        return LoginIdAvailabilityResponse.fromJson(decodedBody);
+      } on FormatException catch (error) {
+        debugPrint('아이디 중복확인 응답 파싱 실패: $error');
+
+        throw const ApiException(message: '아이디 중복확인 응답 형식이 올바르지 않습니다.');
       }
     }
 
@@ -174,18 +231,16 @@ class AuthApiService {
 
   Future<http.Response> _sendGetRequest({
     required Uri uri,
-    required String authorizationHeader,
+    String? authorizationHeader,
   }) async {
+    final headers = <String, String>{'Accept': 'application/json'};
+
+    if (authorizationHeader != null && authorizationHeader.trim().isNotEmpty) {
+      headers['Authorization'] = authorizationHeader;
+    }
+
     try {
-      return await _client
-          .get(
-            uri,
-            headers: {
-              'Accept': 'application/json',
-              'Authorization': authorizationHeader,
-            },
-          )
-          .timeout(_timeout);
+      return await _client.get(uri, headers: headers).timeout(_timeout);
     } on TimeoutException {
       throw const ApiException(message: '서버 응답 시간이 초과되었습니다.');
     } on http.ClientException catch (error) {
