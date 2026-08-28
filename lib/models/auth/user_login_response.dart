@@ -1,22 +1,22 @@
 class UserLoginResponse {
   final int id;
-  final String email;
+  final String loginId;
   final String accessToken;
   final String refreshToken;
   final String tokenType;
 
   const UserLoginResponse({
     required this.id,
-    required this.email,
+    required this.loginId,
     required this.accessToken,
     required this.refreshToken,
     required this.tokenType,
   });
-  
+
   factory UserLoginResponse.fromJson(Map<String, dynamic> json) {
     return UserLoginResponse(
       id: _parseInt(json['id']),
-      email: _parseRequiredString(json['email'], 'email'),
+      loginId: _parseRequiredString(json['loginId'], 'loginId'),
       accessToken: _parseRequiredString(json['accessToken'], 'accessToken'),
       refreshToken: _parseRequiredString(json['refreshToken'], 'refreshToken'),
       tokenType: _parseRequiredString(json['tokenType'], 'tokenType'),

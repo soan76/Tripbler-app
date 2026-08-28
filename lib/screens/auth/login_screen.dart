@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
 import 'signup_screen.dart';
+import 'find_id_screen.dart';
+import 'find_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,6 +22,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _obscurePassword = true;
 
+  bool _loginIdHasError = false;
+  bool _passwordHasError = false;
+
   @override
   void dispose() {
     _loginIdController.dispose();
@@ -35,29 +40,61 @@ class _LoginScreenState extends State<LoginScreen> {
     final loginId = _loginIdController.text.trim();
     final password = _passwordController.text;
 
-    if (loginId.isEmpty || password.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('아이디와 비밀번호를 입력해 주세요.')));
+    final loginIdMissing = loginId.isEmpty;
+    final passwordMissing = password.isEmpty;
 
+    if (loginIdMissing || passwordMissing) {
+      setState(() {
+        _loginIdHasError = loginIdMissing;
+        _passwordHasError = passwordMissing;
+      });
+
+      _showMessage('아이디와 비밀번호를 입력해 주세요.');
       return;
     }
+
+    setState(() {
+      _loginIdHasError = false;
+      _passwordHasError = false;
+    });
 
     FocusScope.of(context).unfocus();
 
     final authProvider = context.read<AuthProvider>();
 
-    final success = await authProvider.login(loginId: loginId, password: password);
+    final success = await authProvider.login(
+      loginId: loginId,
+      password: password,
+    );
 
     if (!mounted) {
       return;
     }
 
     if (success) {
-      // LoginScreen은 MainScreen 위에 push되어 있으므로
-      // 로그인 성공 시 현재 화면만 닫고 기존 MainScreen으로 복귀한다.
       Navigator.of(context).pop();
+    } else {
+      // 로그인 인증 실패 시 어느 값이 틀렸는지는
+      // 보안상 구분하지 않으므로 두 입력칸 모두 오류 표시
+      setState(() {
+        _loginIdHasError = true;
+        _passwordHasError = true;
+      });
+
+      final message = authProvider.errorMessage;
+
+      if (message != null) {
+        _showMessage(message);
+      }
     }
+  }
+
+  void _showMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.clearSnackBars();
+
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -110,16 +147,24 @@ class _LoginScreenState extends State<LoginScreen> {
                     controller: _loginIdController,
                     focusNode: _loginIdFocusNode,
                     enabled: !authProvider.isLoading,
-                    keyboardType: TextInputType.emailAddress,
+                    keyboardType: TextInputType.text,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
-                    autofillHints: const [AutofillHints.email],
+                    autofillHints: const [AutofillHints.username],
+                    onChanged: (_) {
+                      if (_loginIdHasError) {
+                        setState(() {
+                          _loginIdHasError = false;
+                        });
+                      }
+                    },
                     onSubmitted: (_) {
                       _passwordFocusNode.requestFocus();
                     },
                     decoration: _buildInputDecoration(
                       context: context,
-                      hintText: '이메일',
+                      hintText: '아이디',
+                      hasError: _loginIdHasError,
                     ),
                   ),
 
@@ -133,6 +178,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     obscureText: _obscurePassword,
                     textInputAction: TextInputAction.done,
                     autofillHints: const [AutofillHints.password],
+                    onChanged: (_) {
+                      if (_passwordHasError) {
+                        setState(() {
+                          _passwordHasError = false;
+                        });
+                      }
+                    },
                     onSubmitted: (_) {
                       if (!authProvider.isLoading) {
                         _login();
@@ -141,6 +193,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: _buildInputDecoration(
                       context: context,
                       hintText: '비밀번호',
+                      hasError: _passwordHasError,
                       suffixIcon: IconButton(
                         onPressed: () {
                           setState(() {
@@ -192,66 +245,68 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  // 로그인 오류
-                  if (authProvider.errorMessage != null) ...[
-                    const SizedBox(height: 12),
-
-                    Text(
-                      authProvider.errorMessage!,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        height: 1.4,
-                        color: colorScheme.error,
-                      ),
-                    ),
-                  ],
-
                   const SizedBox(height: 28),
 
-                  // 구분선
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Divider(color: colorScheme.outlineVariant),
-                      ),
-
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                      TextButton(
+                        onPressed: authProvider.isLoading
+                            ? null
+                            : () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const FindIdScreen(),
+                                  ),
+                                );
+                              },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         child: Text(
-                          '또는',
+                          '아이디 찾기',
                           style: TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
                             color: colorScheme.onSurfaceVariant,
                           ),
                         ),
                       ),
 
-                      Expanded(
-                        child: Divider(color: colorScheme.outlineVariant),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // 비밀번호 찾기
-                  Center(
-                    child: TextButton(
-                      onPressed: authProvider.isLoading
-                          ? null
-                          : () {
-                              // TODO: 비밀번호 찾기 화면 연결
-                            },
-                      child: Text(
-                        '비밀번호를 잊으셨나요?',
-                        style: TextStyle(
-                          color: colorScheme.primary,
-                          fontWeight: FontWeight.w600,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '|',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colorScheme.outlineVariant,
+                          ),
                         ),
                       ),
-                    ),
+
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const FindPasswordScreen(),
+                            ),
+                          );
+                        },
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: Text(
+                          '비밀번호 찾기',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 36),
@@ -290,11 +345,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 }
 
                                 if (success == true) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('회원가입이 완료되었습니다. 로그인해 주세요.'),
-                                    ),
-                                  );
+                                  _showMessage('회원가입이 완료되었습니다. 로그인해 주세요.');
                                 }
                               },
                         child: Text(
@@ -323,6 +374,7 @@ class _LoginScreenState extends State<LoginScreen> {
     required BuildContext context,
     required String hintText,
     Widget? suffixIcon,
+    bool hasError = false,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -337,17 +389,25 @@ class _LoginScreenState extends State<LoginScreen> {
 
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: colorScheme.outlineVariant),
+        borderSide: BorderSide(
+          color: hasError ? colorScheme.error : colorScheme.outlineVariant,
+          width: hasError ? 1.5 : 1,
+        ),
       ),
 
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
+        borderSide: BorderSide(
+          color: hasError ? colorScheme.error : colorScheme.primary,
+          width: 1.5,
+        ),
       ),
 
       disabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: BorderSide(color: colorScheme.outlineVariant),
+        borderSide: BorderSide(
+          color: hasError ? colorScheme.error : colorScheme.outlineVariant,
+        ),
       ),
     );
   }

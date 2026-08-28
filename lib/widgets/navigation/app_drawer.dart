@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../screens/settings_screen.dart';
 import '../../screens/auth/login_screen.dart';
+import '../../screens/user/user_page.dart';
 import '../../providers/auth_provider.dart';
+
 /// 앱의 Drawer 위젯
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -86,20 +88,44 @@ class AppDrawer extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Row(
         children: [
-          Icon(
-            Icons.account_circle_outlined,
-            size: 40,
-            color: colorScheme.onSurface,
-          ),
-
-          const SizedBox(width: 8),
-
           Expanded(
-            child: Text(
-              authProvider.nickname ?? '사용자',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 20, color: colorScheme.onSurface),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () {
+                Navigator.pop(context);
+
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const UserPage()));
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.account_circle_outlined,
+                      size: 40,
+                      color: colorScheme.onSurface,
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    Expanded(
+                      child: Text(
+                        authProvider.nickname?.trim().isNotEmpty == true
+                            ? authProvider.nickname!
+                            : (authProvider.loginId ?? '사용자'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 20,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
 

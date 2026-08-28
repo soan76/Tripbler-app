@@ -1,7 +1,6 @@
 enum ApiErrorCode {
   invalidRequest,
   invalidCredentials,
-  duplicateEmail,
   exchangeProviderUnavailable,
   translationProviderUnavailable,
   internalServerError,
@@ -16,8 +15,6 @@ enum ApiErrorCode {
         return ApiErrorCode.invalidRequest;
       case 'INVALID_CREDENTIALS':
         return ApiErrorCode.invalidCredentials;
-      case 'DUPLICATE_EMAIL':
-        return ApiErrorCode.duplicateEmail;
       case 'EXCHANGE_PROVIDER_UNAVAILABLE':
         return ApiErrorCode.exchangeProviderUnavailable;
       case 'TRANSLATION_PROVIDER_UNAVAILABLE':

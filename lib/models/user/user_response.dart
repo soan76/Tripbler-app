@@ -1,22 +1,19 @@
 class UserResponse {
   final int id;
   final String loginId;
-  final String nickname;
-  final String email;
+  final String? nickname;
 
   const UserResponse({
     required this.id,
     required this.loginId,
     required this.nickname,
-    required this.email,
   });
 
   factory UserResponse.fromJson(Map<String, dynamic> json) {
     return UserResponse(
       id: _parseInt(json['id']),
       loginId: _parseRequiredString(json['loginId'], 'loginId'),
-      nickname: _parseRequiredString(json['nickname'], 'nickname'),
-      email: _parseRequiredString(json['email'], 'email'),
+      nickname: _parseOptionalString(json['nickname']),
     );
   }
 
@@ -43,6 +40,16 @@ class UserResponse {
 
     if (text == null || text.isEmpty) {
       throw FormatException('$fieldName 값이 없습니다.');
+    }
+
+    return text;
+  }
+
+  static String? _parseOptionalString(dynamic value) {
+    final text = value?.toString().trim();
+
+    if (text == null || text.isEmpty) {
+      return null;
     }
 
     return text;

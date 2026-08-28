@@ -167,6 +167,29 @@ class AuthApiService {
     );
   }
 
+  /// 현재 로그인한 Tripbler 사용자에게 Google 계정을 연동한다.
+  Future<void> linkGoogleAccount({
+    required String authorizationHeader,
+    required String idToken,
+  }) async {
+    final response = await _sendPostRequest(
+      uri: ApiConfig.usersMeGoogleLinkUri,
+      authorizationHeader: authorizationHeader,
+      body: {'idToken': idToken},
+    );
+
+    if (response.statusCode == 204) {
+      return;
+    }
+
+    final decodedBody = _decodeResponseBody(response);
+
+    throw _createApiExceptionFromErrorResponse(
+      response: response,
+      decodedBody: decodedBody,
+    );
+  }
+
   /// 로그아웃
   /// POST /api/v1/auth/logout
   ///

@@ -18,7 +18,6 @@ class AuthProvider extends ChangeNotifier {
   int? _userId;
   String? _loginId;
   String? _nickname;
-  String? _email;
   String? _errorMessage;
   bool? _isLoginIdAvailable;
   String? _checkedLoginId;
@@ -32,7 +31,6 @@ class AuthProvider extends ChangeNotifier {
   int? get userId => _userId;
   String? get loginId => _loginId;
   String? get nickname => _nickname;
-  String? get email => _email;
   String? get errorMessage => _errorMessage;
   bool? get isLoginIdAvailable => _isLoginIdAvailable;
   String? get checkedLoginId => _checkedLoginId;
@@ -41,8 +39,7 @@ class AuthProvider extends ChangeNotifier {
   /// 회원가입
   Future<bool> signup({
     required String loginId,
-    required String nickname,
-    required String email,
+    String? nickname,
     required String password,
   }) async {
     if (_isLoading) {
@@ -56,15 +53,21 @@ class AuthProvider extends ChangeNotifier {
       await _authRepository.signup(
         loginId: loginId,
         nickname: nickname,
-        email: email,
         password: password,
       );
 
       return true;
+    } on ApiException catch (error) {
+      debugPrint('회원가입 실패: $error');
+
+      _errorMessage = error.message;
+      notifyListeners();
+
+      return false;
     } catch (error) {
       debugPrint('회원가입 실패: $error');
 
-      _errorMessage = error.toString();
+      _errorMessage = '회원가입 중 오류가 발생했습니다.';
       notifyListeners();
 
       return false;
@@ -161,7 +164,7 @@ class AuthProvider extends ChangeNotifier {
       await _authRepository.login(loginId: loginId, password: password);
 
       // 로그인 성공 후 /users/me 호출
-      // → loginId, nickname, email 등 현재 사용자 정보 조회
+      // → loginId, nickname 등 현재 사용자 정보 조회
       final user = await _authRepository.getCurrentUser();
 
       _setCurrentUser(user);
@@ -169,11 +172,20 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
 
       return true;
+    } on ApiException catch (error) {
+      debugPrint('로그인 실패: $error');
+
+      _clearUserState();
+      _errorMessage = error.message;
+
+      notifyListeners();
+
+      return false;
     } catch (error) {
       debugPrint('로그인 실패: $error');
 
       _clearUserState();
-      _errorMessage = error.toString();
+      _errorMessage = '로그인 중 오류가 발생했습니다.';
 
       notifyListeners();
 
@@ -187,7 +199,6 @@ class AuthProvider extends ChangeNotifier {
     _userId = user.id;
     _loginId = user.loginId;
     _nickname = user.nickname;
-    _email = user.email;
     _isAuthenticated = true;
   }
 
@@ -302,7 +313,6 @@ class AuthProvider extends ChangeNotifier {
     _userId = null;
     _loginId = null;
     _nickname = null;
-    _email = null;
   }
 
   void _setLoading(bool value) {

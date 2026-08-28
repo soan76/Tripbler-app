@@ -2,41 +2,42 @@ import '../../models/auth/token_refresh_request.dart';
 import '../../models/auth/token_refresh_response.dart';
 import '../../models/auth/user_login_request.dart';
 import '../../models/auth/user_login_response.dart';
-import '../../services/auth/auth_api_service.dart';
-import '../../services/auth/token_storage_service.dart';
+import '../../models/user/login_id_availability_response.dart';
 import '../../models/user/user_create_request.dart';
 import '../../models/user/user_response.dart';
-import '../../models/user/login_id_availability_response.dart'; 
+import '../../services/auth/auth_api_service.dart';
+import '../../services/auth/google_auth_service.dart';
+import '../../services/auth/token_storage_service.dart';
 
 /// 인증 API와 로컬 토큰 저장소를 연결하는 Repository.
 ///
 /// 담당 기능:
-/// - 로그인
-/// - Access Token 재발급
-/// - 로그아웃
-/// - 저장된 토큰 조회
-/// - 로그인 상태 확인
+/// - 회원가입 / 로그인
+/// - Google 계정 연동
+/// - Access Token 재발급 / 로그아웃
+/// - 저장된 인증 토큰 관리
 class AuthRepository {
   AuthRepository({
     AuthApiService? authApiService,
     TokenStorageService? tokenStorageService,
+    GoogleAuthService? googleAuthService,
   }) : _authApiService = authApiService ?? AuthApiService(),
-       _tokenStorageService = tokenStorageService ?? TokenStorageService();
+       _tokenStorageService = tokenStorageService ?? TokenStorageService(),
+       _googleAuthService = googleAuthService ?? GoogleAuthService();
 
   final AuthApiService _authApiService;
   final TokenStorageService _tokenStorageService;
+  final GoogleAuthService _googleAuthService;
 
   /// 회원가입
   Future<UserResponse> signup({
     required String loginId,
-    required String nickname,
-    required String email,
+    String? nickname,
     required String password,
   }) async {
     final request = UserCreateRequest(
       loginId: loginId,
       nickname: nickname,
-      email: email,
       password: password,
     );
 
@@ -50,9 +51,7 @@ class AuthRepository {
 
   /// 로그인
   ///
-  /// 1. 백엔드 로그인 API 호출
-  /// 2. Access Token / Refresh Token / Token Type 저장
-  /// 3. 로그인 응답 반환
+  /// 백엔드 로그인 후 Access / Refresh Token을 로컬에 저장한다.
   Future<UserLoginResponse> login({
     required String loginId,
     required String password,
@@ -70,10 +69,24 @@ class AuthRepository {
     return response;
   }
 
-  /// Refresh Token을 이용해 Access Token 재발급
-  ///
-  /// 저장된 Refresh Token을 읽은 뒤
-  /// 백엔드 Refresh API를 호출하고 새 Access Token을 저장한다.
+  /// Google 인증 후 현재 Tripbler 사용자 계정에 연동한다.
+  Future<void> linkGoogleAccount() async {
+    final authorizationHeader = await _tokenStorageService
+        .readAuthorizationHeader();
+
+    if (authorizationHeader == null || authorizationHeader.isEmpty) {
+      throw const AuthSessionException('저장된 Access Token이 없습니다.');
+    }
+
+    final idToken = await _googleAuthService.signInAndGetIdToken();
+
+    await _authApiService.linkGoogleAccount(
+      authorizationHeader: authorizationHeader,
+      idToken: idToken,
+    );
+  }
+
+  /// Refresh Token을 이용해 Access Token을 재발급한다.
   Future<TokenRefreshResponse> refreshAccessToken() async {
     final refreshToken = await _tokenStorageService.readRefreshToken();
 
@@ -106,10 +119,7 @@ class AuthRepository {
     );
   }
 
-  /// 로그아웃
-  ///
-  /// 서버 로그아웃 API를 호출한 뒤
-  /// 기기에 저장된 인증 토큰을 삭제한다.
+  /// 서버 로그아웃 후 로컬 인증 토큰을 삭제한다.
   Future<void> logout() async {
     final authorizationHeader = await _tokenStorageService
         .readAuthorizationHeader();
@@ -119,8 +129,6 @@ class AuthRepository {
         await _authApiService.logout(authorizationHeader: authorizationHeader);
       }
     } finally {
-      // 서버 로그아웃 호출 성공 여부와 관계없이
-      // 기기의 인증 토큰은 제거한다.
       await _tokenStorageService.clearTokens();
     }
   }
@@ -140,7 +148,7 @@ class AuthRepository {
     return _tokenStorageService.readAuthorizationHeader();
   }
 
-  /// 기기에 Access Token / Refresh Token이 모두 저장되어 있는지 확인
+  /// Access Token / Refresh Token 저장 여부 확인
   Future<bool> hasTokens() {
     return _tokenStorageService.hasTokens();
   }

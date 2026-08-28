@@ -1,21 +1,18 @@
 class UserCreateRequest {
   final String loginId;
-  final String nickname;
-  final String email;
+  final String? nickname;
   final String password;
 
   const UserCreateRequest({
     required this.loginId,
-    required this.nickname,
-    required this.email,
+    this.nickname,
     required this.password,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'loginId': loginId,
-      'nickname': nickname,
-      'email': email,
+      if (nickname != null && nickname!.isNotEmpty) 'nickname': nickname,
       'password': password,
     };
   }
