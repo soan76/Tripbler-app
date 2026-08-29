@@ -14,6 +14,9 @@ class AuthProvider extends ChangeNotifier {
   bool _isLoading = false;
   bool _isAuthenticated = false;
   bool _isCheckingLoginId = false;
+  bool _isLoadingSocialAccounts = false;
+
+  bool? _googleLinked;
 
   int? _userId;
   String? _loginId;
@@ -27,6 +30,8 @@ class AuthProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isAuthenticated => _isAuthenticated;
   bool get isCheckingLoginId => _isCheckingLoginId;
+  bool get isLoadingSocialAccounts => _isLoadingSocialAccounts;
+  bool? get googleLinked => _googleLinked;
 
   int? get userId => _userId;
   String? get loginId => _loginId;
@@ -259,6 +264,62 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  /// 현재 사용자의 Google 계정 연동 상태를 조회한다.
+  Future<void> loadLinkedSocialAccounts() async {
+    if (!_isAuthenticated || _isLoadingSocialAccounts) {
+      return;
+    }
+
+    _isLoadingSocialAccounts = true;
+    notifyListeners();
+
+    try {
+      final response = await _authRepository.getLinkedSocialAccounts();
+
+      _googleLinked = response.isLinked('GOOGLE');
+    } catch (error) {
+      debugPrint('소셜 계정 연동 상태 조회 실패: $error');
+    } finally {
+      _isLoadingSocialAccounts = false;
+      notifyListeners();
+    }
+  }
+
+  /// 현재 사용자에게 Google 계정을 연동한다.
+  Future<bool> linkGoogleAccount() async {
+    if (_isLoading) {
+      return false;
+    }
+
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      await _authRepository.linkGoogleAccount();
+
+      _googleLinked = true;
+      notifyListeners();
+
+      return true;
+    } on ApiException catch (error) {
+      debugPrint('Google 계정 연동 실패: $error');
+
+      _errorMessage = error.message;
+      notifyListeners();
+
+      return false;
+    } catch (error) {
+      debugPrint('Google 계정 연동 실패: $error');
+
+      _errorMessage = 'Google 계정 연동 중 오류가 발생했습니다.';
+      notifyListeners();
+
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   /// 로그아웃
   Future<void> logout() async {
     if (_isLoading) {
@@ -313,6 +374,7 @@ class AuthProvider extends ChangeNotifier {
     _userId = null;
     _loginId = null;
     _nickname = null;
+    _googleLinked = null;
   }
 
   void _setLoading(bool value) {

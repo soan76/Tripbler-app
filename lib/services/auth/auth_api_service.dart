@@ -11,6 +11,7 @@ import '../../models/auth/token_refresh_response.dart';
 import '../../models/auth/user_login_request.dart';
 import '../../models/auth/user_login_response.dart';
 import '../../models/auth/token_refresh_request.dart';
+import '../../models/auth/social_account_status_response.dart';
 import '../../models/user/user_response.dart';
 import '../../models/user/user_create_request.dart';
 import '../../models/user/login_id_availability_response.dart';
@@ -158,6 +159,33 @@ class AuthApiService {
         debugPrint('현재 사용자 응답 파싱 실패: $error');
 
         throw const ApiException(message: '현재 사용자 응답 형식이 올바르지 않습니다.');
+      }
+    }
+
+    throw _createApiExceptionFromErrorResponse(
+      response: response,
+      decodedBody: decodedBody,
+    );
+  }
+
+  /// 현재 사용자의 소셜 계정 연동 상태를 조회한다.
+  Future<SocialAccountStatusResponse> getLinkedSocialAccounts({
+    required String authorizationHeader,
+  }) async {
+    final response = await _sendGetRequest(
+      uri: ApiConfig.usersMeSocialAccountsUri,
+      authorizationHeader: authorizationHeader,
+    );
+
+    final decodedBody = _decodeResponseBody(response);
+
+    if (response.statusCode == 200) {
+      try {
+        return SocialAccountStatusResponse.fromJson(decodedBody);
+      } on FormatException catch (error) {
+        debugPrint('소셜 계정 연동 상태 응답 파싱 실패: $error');
+
+        throw const ApiException(message: '소셜 계정 연동 상태 응답 형식이 올바르지 않습니다.');
       }
     }
 

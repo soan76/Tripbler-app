@@ -27,7 +27,6 @@ class ExchangeDetailScreen extends StatefulWidget {
 
 // 환율 상세 화면의 상태를 관리하는 State 클래스
 class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
-  static const int _historyPeriodDays = 14;
 
   late final ExchangeApiService _apiService;
   final NumberFormat _numberFormat = NumberFormat('#,##0.####');

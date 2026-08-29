@@ -23,7 +23,6 @@ class TranslationHeader extends StatelessWidget {
   // 헤더 위젯을 구성하는 build 메서드
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
 
     final targetLanguages = languages
         .where((language) => language.code != 'auto')

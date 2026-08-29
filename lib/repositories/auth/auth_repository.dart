@@ -2,6 +2,7 @@ import '../../models/auth/token_refresh_request.dart';
 import '../../models/auth/token_refresh_response.dart';
 import '../../models/auth/user_login_request.dart';
 import '../../models/auth/user_login_response.dart';
+import '../../models/auth/social_account_status_response.dart';
 import '../../models/user/login_id_availability_response.dart';
 import '../../models/user/user_create_request.dart';
 import '../../models/user/user_response.dart';
@@ -115,6 +116,20 @@ class AuthRepository {
     }
 
     return _authApiService.getCurrentUser(
+      authorizationHeader: authorizationHeader,
+    );
+  }
+
+  /// 현재 사용자의 소셜 계정 연동 상태를 조회한다.
+  Future<SocialAccountStatusResponse> getLinkedSocialAccounts() async {
+    final authorizationHeader = await _tokenStorageService
+        .readAuthorizationHeader();
+
+    if (authorizationHeader == null || authorizationHeader.isEmpty) {
+      throw const AuthSessionException('저장된 Access Token이 없습니다.');
+    }
+
+    return _authApiService.getLinkedSocialAccounts(
       authorizationHeader: authorizationHeader,
     );
   }

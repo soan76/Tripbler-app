@@ -38,8 +38,12 @@ class ApiConfig {
   static const String authRefreshPath = '/api/v1/auth/refresh';
   static const String authLogoutPath = '/api/v1/auth/logout';
   static const String usersMePath = '/api/v1/users/me';
+  
   static const String usersMeGoogleLinkPath =
       '/api/v1/users/me/social-accounts/google';
+  static const String usersMeSocialAccountsPath =
+      '/api/v1/users/me/social-accounts';
+
   static const String usersCheckLoginIdPath = '/api/v1/users/check-login-id';
 
   static Uri get usersUri {
@@ -60,6 +64,10 @@ class ApiConfig {
 
   static Uri get usersMeUri {
     return Uri.parse(baseUrl).replace(path: usersMePath);
+  }
+
+  static Uri get usersMeSocialAccountsUri {
+    return Uri.parse(baseUrl).replace(path: usersMeSocialAccountsPath);
   }
 
   static Uri get usersMeGoogleLinkUri {

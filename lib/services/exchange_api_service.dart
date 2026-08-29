@@ -234,25 +234,6 @@ class ExchangeApiService {
     return decodedBody;
   }
 
-  // 백엔드 오류 응답에서 message 값을 추출하는 메서드
-  String _parseErrorMessage(
-    http.Response response, {
-    required String fallbackMessage,
-  }) {
-    try {
-      final Map<String, dynamic> jsonBody = _decodeJsonObject(response);
-      final message = jsonBody['message'];
-
-      if (message is String && message.trim().isNotEmpty) {
-        return message;
-      }
-
-      return fallbackMessage;
-    } catch (_) {
-      return fallbackMessage;
-    }
-  }
-
   // 백엔드 오류 응답을 읽어서 사용자에게 보여줄 예외로 변환하는 메서드
   ExchangeApiException _createApiExceptionFromResponse(http.Response response) {
     try {
