@@ -3,16 +3,14 @@ import 'package:flutter/material.dart';
 class UserAccountSection extends StatelessWidget {
   const UserAccountSection({
     super.key,
-    required this.loginId,
     required this.googleLinked,
-    required this.onChangeLoginId,
+    required this.isLoading,
     required this.onChangePassword,
     required this.onChangeSocialAccount,
   });
 
-  final String loginId;
-  final bool googleLinked;
-  final VoidCallback onChangeLoginId;
+  final bool? googleLinked;
+  final bool isLoading;
   final VoidCallback onChangePassword;
   final VoidCallback onChangeSocialAccount;
 
@@ -21,24 +19,24 @@ class UserAccountSection extends StatelessWidget {
     return Column(
       children: [
         _buildSectionTitle(context, '계정'),
-        _buildActionRow(
-          context,
-          title: '아이디',
-          value: loginId,
-          actionText: '변경',
-          onTap: onChangeLoginId,
-        ),
+
         _buildArrowRow(
           context,
           title: '비밀번호',
           value: '비밀번호 변경',
           onTap: onChangePassword,
         ),
+
         _buildActionRow(
           context,
           title: '연동된 계정',
-          value: googleLinked ? 'Google · 연동됨' : 'Google · 연동 안 됨',
-          actionText: '변경',
+          value: googleLinked == null
+              ? 'Google · 확인 중...'
+              : googleLinked!
+              ? 'Google · 연동됨'
+              : 'Google · 연동 안 됨',
+          actionText: googleLinked == true ? '연동 해제' : '연동',
+          enabled: googleLinked != null && !isLoading,
           onTap: onChangeSocialAccount,
         ),
       ],
@@ -69,6 +67,7 @@ class UserAccountSection extends StatelessWidget {
     required String value,
     required String actionText,
     required VoidCallback onTap,
+    bool enabled = true,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -79,7 +78,10 @@ class UserAccountSection extends StatelessWidget {
         value,
         style: TextStyle(color: colorScheme.onSurfaceVariant),
       ),
-      trailing: OutlinedButton(onPressed: onTap, child: Text(actionText)),
+      trailing: OutlinedButton(
+        onPressed: enabled ? onTap : null,
+        child: Text(actionText),
+      ),
     );
   }
 

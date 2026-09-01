@@ -2,13 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
-import '../settings_screen.dart';
 import '../../widgets/user/user_account_section.dart';
 import '../../widgets/user/user_app_section.dart';
 import '../../widgets/user/user_info_section.dart';
+import '../settings_screen.dart';
 
-class UserPage extends StatelessWidget {
+class UserPage extends StatefulWidget {
   const UserPage({super.key});
+
+  @override
+  State<UserPage> createState() => _UserPageState();
+}
+
+class _UserPageState extends State<UserPage> {
+  bool _hasLoadedSocialAccounts = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    if (_hasLoadedSocialAccounts) {
+      return;
+    }
+
+    _hasLoadedSocialAccounts = true;
+
+    // 화면 진입 후 소셜 계정 연동 상태를 한 번 조회한다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      context.read<AuthProvider>().loadLinkedSocialAccounts();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,7 +63,7 @@ class UserPage extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Column(
             children: [
-              UserProfileSection(
+              UserInfoSection(
                 displayName: displayName,
                 loginId: displayLoginId,
                 onEdit: () {
@@ -51,16 +78,48 @@ class UserPage extends StatelessWidget {
               const SizedBox(height: 24),
 
               UserAccountSection(
-                loginId: displayLoginId,
-                googleLinked: false,
-                onChangeLoginId: () {
-                  // 추후 아이디 변경 기능 연결
-                },
+                googleLinked: authProvider.googleLinked,
+                isLoading: authProvider.isLoading,
                 onChangePassword: () {
                   // 추후 비밀번호 변경 기능 연결
                 },
-                onChangeSocialAccount: () {
-                  // 추후 Google 연동 기능 연결
+                onChangeSocialAccount: () async {
+                  final isLinked = authProvider.googleLinked == true;
+
+                  final success = isLinked
+                      ? await authProvider.unlinkGoogleAccount()
+                      : await authProvider.linkGoogleAccount();
+
+                  if (!context.mounted) {
+                    return;
+                  }
+
+                  if (success) {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isLinked
+                              ? 'Google 계정 연동이 해제되었습니다.'
+                              : 'Google 계정이 연동되었습니다.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+
+                  final message =
+                      authProvider.errorMessage ??
+                      (isLinked
+                          ? 'Google 계정 연동 해제에 실패했습니다.'
+                          : 'Google 계정 연동에 실패했습니다.');
+                  
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(message)));
                 },
               ),
 
@@ -84,31 +143,61 @@ class UserPage extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              UserAccountActions(
-                isLoading: authProvider.isLoading,
-                onLogout: () async {
-                  await authProvider.logout();
-
-                  if (!context.mounted) {
-                    return;
-                  }
-
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('로그아웃되었습니다.')));
-                },
-                onDeleteAccount: () {
-                  // 추후 계정 탈퇴 기능 연결
-                },
-              ),
+              _buildAccountActions(context, authProvider),
 
               const SizedBox(height: 24),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAccountActions(BuildContext context, AuthProvider authProvider) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Column(
+      children: [
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: authProvider.isLoading
+                ? null
+                : () async {
+                    await authProvider.logout();
+
+                    if (!context.mounted) {
+                      return;
+                    }
+
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('로그아웃되었습니다.')));
+                  },
+            child: Text(
+              '로그아웃',
+              style: TextStyle(fontSize: 16, color: colorScheme.primary),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 8),
+
+        SizedBox(
+          width: double.infinity,
+          child: TextButton(
+            onPressed: () {
+              // 추후 계정 탈퇴 기능 연결
+            },
+            child: Text(
+              '계정 탈퇴',
+              style: TextStyle(fontSize: 16, color: colorScheme.error),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

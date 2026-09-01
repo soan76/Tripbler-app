@@ -1,3 +1,4 @@
+import '../../core/network/api_exception.dart';
 import '../../models/auth/token_refresh_request.dart';
 import '../../models/auth/token_refresh_response.dart';
 import '../../models/auth/user_login_request.dart';
@@ -9,6 +10,8 @@ import '../../models/user/user_response.dart';
 import '../../services/auth/auth_api_service.dart';
 import '../../services/auth/google_auth_service.dart';
 import '../../services/auth/token_storage_service.dart';
+
+import 'package:flutter/foundation.dart';
 
 /// 인증 API와 로컬 토큰 저장소를 연결하는 Repository.
 ///
@@ -50,6 +53,30 @@ class AuthRepository {
     return _authApiService.checkLoginIdAvailability(loginId);
   }
 
+  /// 아이디 찾기 인증코드를 이메일로 전송한다.
+  ///
+  /// 로그인하지 않은 사용자도 사용하는 공개 인증 API이므로
+  /// Access Token은 사용하지 않는다.
+  Future<void> sendFindIdVerificationCode({required String email}) {
+    return _authApiService.sendFindIdVerificationCode(email: email);
+  }
+
+  /// 아이디 찾기 인증코드를 검증하고 loginId를 반환한다.
+  ///
+  /// 로그인하지 않은 사용자도 사용하는 공개 인증 API이므로
+  /// Access Token은 사용하지 않는다.
+  Future<String> verifyFindIdVerificationCode({
+    required String email,
+    required String code,
+  }) async {
+    final response = await _authApiService.verifyFindIdVerificationCode(
+      email: email,
+      code: code,
+    );
+
+    return response.loginId;
+  }
+
   /// 로그인
   ///
   /// 백엔드 로그인 후 Access / Refresh Token을 로컬에 저장한다.
@@ -72,19 +99,23 @@ class AuthRepository {
 
   /// Google 인증 후 현재 Tripbler 사용자 계정에 연동한다.
   Future<void> linkGoogleAccount() async {
-    final authorizationHeader = await _tokenStorageService
-        .readAuthorizationHeader();
-
-    if (authorizationHeader == null || authorizationHeader.isEmpty) {
-      throw const AuthSessionException('저장된 Access Token이 없습니다.');
-    }
-
     final idToken = await _googleAuthService.signInAndGetIdToken();
 
-    await _authApiService.linkGoogleAccount(
-      authorizationHeader: authorizationHeader,
-      idToken: idToken,
-    );
+    await _requestWithTokenRetry<void>((authorizationHeader) {
+      return _authApiService.linkGoogleAccount(
+        authorizationHeader: authorizationHeader,
+        idToken: idToken,
+      );
+    });
+  }
+
+  /// 현재 사용자에게 연동된 Google 계정을 해제한다.
+  Future<void> unlinkGoogleAccount() {
+    return _requestWithTokenRetry<void>((authorizationHeader) {
+      return _authApiService.unlinkGoogleAccount(
+        authorizationHeader: authorizationHeader,
+      );
+    });
   }
 
   /// Refresh Token을 이용해 Access Token을 재발급한다.
@@ -121,17 +152,14 @@ class AuthRepository {
   }
 
   /// 현재 사용자의 소셜 계정 연동 상태를 조회한다.
-  Future<SocialAccountStatusResponse> getLinkedSocialAccounts() async {
-    final authorizationHeader = await _tokenStorageService
-        .readAuthorizationHeader();
-
-    if (authorizationHeader == null || authorizationHeader.isEmpty) {
-      throw const AuthSessionException('저장된 Access Token이 없습니다.');
-    }
-
-    return _authApiService.getLinkedSocialAccounts(
-      authorizationHeader: authorizationHeader,
-    );
+  Future<SocialAccountStatusResponse> getLinkedSocialAccounts() {
+    return _requestWithTokenRetry<SocialAccountStatusResponse>((
+      authorizationHeader,
+    ) {
+      return _authApiService.getLinkedSocialAccounts(
+        authorizationHeader: authorizationHeader,
+      );
+    });
   }
 
   /// 서버 로그아웃 후 로컬 인증 토큰을 삭제한다.
@@ -171,6 +199,41 @@ class AuthRepository {
   /// 저장된 토큰 전체 삭제
   Future<void> clearTokens() {
     return _tokenStorageService.clearTokens();
+  }
+
+  /// 인증 API가 401을 반환하면 Access Token을 재발급하고 한 번 재시도한다.
+  Future<T> _requestWithTokenRetry<T>(
+    Future<T> Function(String authorizationHeader) request,
+  ) async {
+    var authorizationHeader = await _tokenStorageService
+        .readAuthorizationHeader();
+
+    if (authorizationHeader == null || authorizationHeader.isEmpty) {
+      throw const AuthSessionException('저장된 Access Token이 없습니다.');
+    }
+
+    try {
+      return await request(authorizationHeader);
+    } on ApiException catch (error) {
+      if (error.statusCode != 401) {
+        rethrow;
+      }
+
+      debugPrint('Access Token 만료 → 재발급 시도');
+
+      await refreshAccessToken();
+
+      debugPrint('Access Token 재발급 성공 → 기존 요청 재시도');
+
+      authorizationHeader = await _tokenStorageService
+          .readAuthorizationHeader();
+
+      if (authorizationHeader == null || authorizationHeader.isEmpty) {
+        throw const AuthSessionException('Access Token 재발급에 실패했습니다.');
+      }
+
+      return request(authorizationHeader);
+    }
   }
 
   void dispose() {

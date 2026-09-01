@@ -43,19 +43,19 @@ class FindIdResultScreen extends StatelessWidget {
                       vertical: 32,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: colorScheme.surfaceContainer,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: colorScheme.outlineVariant),
                     ),
                     child: Column(
                       children: [
-                        const Text(
+                        Text(
                           '아이디 찾기가 완료되었습니다.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w800,
-                            color: Colors.black,
+                            color: colorScheme.onSurface,
                           ),
                         ),
 
@@ -64,12 +64,12 @@ class FindIdResultScreen extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text(
+                            Text(
                               '아이디 : ',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+                                color: colorScheme.onSurfaceVariant,
                               ),
                             ),
 

@@ -37,6 +37,9 @@ class ApiConfig {
   static const String authLoginPath = '/api/v1/auth/login';
   static const String authRefreshPath = '/api/v1/auth/refresh';
   static const String authLogoutPath = '/api/v1/auth/logout';
+  static const String authFindIdSendCodePath = '/api/v1/auth/find-id/send-code';
+  static const String authFindIdVerifyCodePath =
+      '/api/v1/auth/find-id/verify-code';
   static const String usersMePath = '/api/v1/users/me';
   
   static const String usersMeGoogleLinkPath =
@@ -60,6 +63,14 @@ class ApiConfig {
 
   static Uri get authLogoutUri {
     return Uri.parse(baseUrl).replace(path: authLogoutPath);
+  }
+
+  static Uri get authFindIdSendCodeUri {
+    return Uri.parse(baseUrl).replace(path: authFindIdSendCodePath);
+  }
+
+  static Uri get authFindIdVerifyCodeUri {
+    return Uri.parse(baseUrl).replace(path: authFindIdVerifyCodePath);
   }
 
   static Uri get usersMeUri {

@@ -12,6 +12,7 @@ import '../../models/auth/user_login_request.dart';
 import '../../models/auth/user_login_response.dart';
 import '../../models/auth/token_refresh_request.dart';
 import '../../models/auth/social_account_status_response.dart';
+import '../../models/auth/find_id_verify_code_response.dart';
 import '../../models/user/user_response.dart';
 import '../../models/user/user_create_request.dart';
 import '../../models/user/login_id_availability_response.dart';
@@ -104,6 +105,57 @@ class AuthApiService {
         debugPrint('아이디 중복확인 응답 파싱 실패: $error');
 
         throw const ApiException(message: '아이디 중복확인 응답 형식이 올바르지 않습니다.');
+      }
+    }
+
+    throw _createApiExceptionFromErrorResponse(
+      response: response,
+      decodedBody: decodedBody,
+    );
+  }
+
+  /// 아이디 찾기 인증코드 발송
+  ///
+  /// POST /api/v1/auth/find-id/send-code
+  Future<void> sendFindIdVerificationCode({required String email}) async {
+    final response = await _sendPostRequest(
+      uri: ApiConfig.authFindIdSendCodeUri,
+      body: {'email': email},
+    );
+
+    if (response.statusCode == 204) {
+      return;
+    }
+
+    final decodedBody = _decodeResponseBody(response);
+
+    throw _createApiExceptionFromErrorResponse(
+      response: response,
+      decodedBody: decodedBody,
+    );
+  }
+
+  /// 아이디 찾기 인증코드 검증
+  ///
+  /// POST /api/v1/auth/find-id/verify-code
+  Future<FindIdVerifyCodeResponse> verifyFindIdVerificationCode({
+    required String email,
+    required String code,
+  }) async {
+    final response = await _sendPostRequest(
+      uri: ApiConfig.authFindIdVerifyCodeUri,
+      body: {'email': email, 'code': code},
+    );
+
+    final decodedBody = _decodeResponseBody(response);
+
+    if (response.statusCode == 200) {
+      try {
+        return FindIdVerifyCodeResponse.fromJson(decodedBody);
+      } on FormatException catch (error) {
+        debugPrint('아이디 찾기 인증 응답 파싱 실패: $error');
+
+        throw const ApiException(message: '아이디 찾기 응답 형식이 올바르지 않습니다.');
       }
     }
 
@@ -218,6 +270,27 @@ class AuthApiService {
     );
   }
 
+  /// 현재 사용자에게 연동된 Google 계정을 해제한다.
+  Future<void> unlinkGoogleAccount({
+    required String authorizationHeader,
+  }) async {
+    final response = await _sendDeleteRequest(
+      uri: ApiConfig.usersMeGoogleLinkUri,
+      authorizationHeader: authorizationHeader,
+    );
+
+    if (response.statusCode == 204) {
+      return;
+    }
+
+    final decodedBody = _decodeResponseBody(response);
+
+    throw _createApiExceptionFromErrorResponse(
+      response: response,
+      decodedBody: decodedBody,
+    );
+  }
+
   /// 로그아웃
   /// POST /api/v1/auth/logout
   ///
@@ -299,6 +372,21 @@ class AuthApiService {
 
       throw const ApiException(message: '서버에 연결할 수 없습니다.');
     }
+  }
+
+  Future<http.Response> _sendDeleteRequest({
+    required Uri uri,
+    required String authorizationHeader,
+  }) {
+    return _client
+        .delete(
+          uri,
+          headers: {
+            'Authorization': authorizationHeader,
+            'Content-Type': 'application/json',
+          },
+        )
+        .timeout(_timeout);
   }
 
   /// HTTP 응답 JSON 파싱

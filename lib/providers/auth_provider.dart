@@ -153,6 +153,78 @@ class AuthProvider extends ChangeNotifier {
     return _isLoginIdAvailable == true && _checkedLoginId == loginId.trim();
   }
 
+  /// 아이디 찾기 인증코드를 이메일로 전송한다.
+  Future<bool> sendFindIdVerificationCode({required String email}) async {
+    if (_isLoading) {
+      return false;
+    }
+
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      await _authRepository.sendFindIdVerificationCode(email: email.trim());
+
+      return true;
+    } on ApiException catch (error) {
+      debugPrint('아이디 찾기 인증코드 전송 실패: $error');
+
+      _errorMessage = error.message;
+      notifyListeners();
+
+      return false;
+    } catch (error) {
+      debugPrint('아이디 찾기 인증코드 전송 실패: $error');
+
+      _errorMessage = '인증코드 전송 중 오류가 발생했습니다.';
+      notifyListeners();
+
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// 아이디 찾기 인증코드를 검증하고 loginId를 반환한다.
+  ///
+  /// 실패하면 null을 반환하고 errorMessage에 오류 메시지를 저장한다.
+  Future<String?> verifyFindIdVerificationCode({
+    required String email,
+    required String code,
+  }) async {
+    if (_isLoading) {
+      return null;
+    }
+
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      final loginId = await _authRepository.verifyFindIdVerificationCode(
+        email: email.trim(),
+        code: code.trim(),
+      );
+
+      return loginId;
+    } on ApiException catch (error) {
+      debugPrint('아이디 찾기 인증코드 확인 실패: $error');
+
+      _errorMessage = error.message;
+      notifyListeners();
+
+      return null;
+    } catch (error) {
+      debugPrint('아이디 찾기 인증코드 확인 실패: $error');
+
+      _errorMessage = '인증코드 확인 중 오류가 발생했습니다.';
+      notifyListeners();
+
+      return null;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
   /// 로그인
   Future<bool> login({
     required String loginId,
@@ -312,6 +384,41 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('Google 계정 연동 실패: $error');
 
       _errorMessage = 'Google 계정 연동 중 오류가 발생했습니다.';
+      notifyListeners();
+
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+
+  /// 현재 사용자에게 연동된 Google 계정을 해제한다.
+  Future<bool> unlinkGoogleAccount() async {
+    if (_isLoading) {
+      return false;
+    }
+
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      await _authRepository.unlinkGoogleAccount();
+
+      _googleLinked = false;
+      notifyListeners();
+
+      return true;
+    } on ApiException catch (error) {
+      debugPrint('Google 계정 연동 해제 실패: $error');
+
+      _errorMessage = error.message;
+      notifyListeners();
+
+      return false;
+    } catch (error) {
+      debugPrint('Google 계정 연동 해제 실패: $error');
+
+      _errorMessage = 'Google 계정 연동 해제 중 오류가 발생했습니다.';
       notifyListeners();
 
       return false;
