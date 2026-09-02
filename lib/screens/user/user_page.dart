@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/user/user_account_section.dart';
 import '../../widgets/user/user_app_section.dart';
 import '../../widgets/user/user_info_section.dart';
+import '../auth/find_password_screen.dart';
 import '../settings_screen.dart';
 
 class UserPage extends StatefulWidget {
@@ -35,6 +36,70 @@ class _UserPageState extends State<UserPage> {
 
       context.read<AuthProvider>().loadLinkedSocialAccounts();
     });
+  }
+
+  /// 비밀번호 변경 화면으로 이동한다.
+  ///
+  /// 현재 비밀번호 변경도 비밀번호 찾기와 동일하게
+  /// 연동 이메일 인증을 거친 뒤 재설정하도록 한다.
+  void _openFindPasswordScreen() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const FindPasswordScreen()));
+  }
+
+  /// 설정 화면으로 이동한다.
+  void _openSettingsScreen() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+  }
+
+  /// Google 계정 연동 또는 연동 해제를 처리한다.
+  Future<void> _handleSocialAccountChange(AuthProvider authProvider) async {
+    final isLinked = authProvider.googleLinked == true;
+
+    final success = isLinked
+        ? await authProvider.unlinkGoogleAccount()
+        : await authProvider.linkGoogleAccount();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      _showMessage(isLinked ? 'Google 계정 연동이 해제되었습니다.' : 'Google 계정이 연동되었습니다.');
+
+      return;
+    }
+
+    final message =
+        authProvider.errorMessage ??
+        (isLinked ? 'Google 계정 연동 해제에 실패했습니다.' : 'Google 계정 연동에 실패했습니다.');
+
+    _showMessage(message);
+  }
+
+  /// 로그아웃을 처리한다.
+  Future<void> _handleLogout(AuthProvider authProvider) async {
+    await authProvider.logout();
+
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).popUntil((route) => route.isFirst);
+
+    _showMessage('로그아웃되었습니다.');
+  }
+
+  /// 공통 SnackBar 출력
+  void _showMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+
+    messenger.hideCurrentSnackBar();
+
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -80,46 +145,13 @@ class _UserPageState extends State<UserPage> {
               UserAccountSection(
                 googleLinked: authProvider.googleLinked,
                 isLoading: authProvider.isLoading,
-                onChangePassword: () {
-                  // 추후 비밀번호 변경 기능 연결
-                },
-                onChangeSocialAccount: () async {
-                  final isLinked = authProvider.googleLinked == true;
 
-                  final success = isLinked
-                      ? await authProvider.unlinkGoogleAccount()
-                      : await authProvider.linkGoogleAccount();
+                // 비밀번호 변경
+                onChangePassword: _openFindPasswordScreen,
 
-                  if (!context.mounted) {
-                    return;
-                  }
-
-                  if (success) {
-                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isLinked
-                              ? 'Google 계정 연동이 해제되었습니다.'
-                              : 'Google 계정이 연동되었습니다.',
-                        ),
-                      ),
-                    );
-                    return;
-                  }
-
-                  final message =
-                      authProvider.errorMessage ??
-                      (isLinked
-                          ? 'Google 계정 연동 해제에 실패했습니다.'
-                          : 'Google 계정 연동에 실패했습니다.');
-                  
-                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(message)));
+                // Google 계정 연동 / 해제
+                onChangeSocialAccount: () {
+                  _handleSocialAccountChange(authProvider);
                 },
               ),
 
@@ -129,13 +161,7 @@ class _UserPageState extends State<UserPage> {
 
               const SizedBox(height: 24),
 
-              UserAppSection(
-                onOpenSettings: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                },
-              ),
+              UserAppSection(onOpenSettings: _openSettingsScreen),
 
               const SizedBox(height: 24),
 
@@ -163,18 +189,8 @@ class _UserPageState extends State<UserPage> {
           child: TextButton(
             onPressed: authProvider.isLoading
                 ? null
-                : () async {
-                    await authProvider.logout();
-
-                    if (!context.mounted) {
-                      return;
-                    }
-
-                    Navigator.of(context).popUntil((route) => route.isFirst);
-
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('로그아웃되었습니다.')));
+                : () {
+                    _handleLogout(authProvider);
                   },
             child: Text(
               '로그아웃',

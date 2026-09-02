@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../providers/account_recovery_provider.dart';
+import '../../utils/auth/reset_password_validator.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
-  final String loginId;
+  final String resetToken;
 
-  const ResetPasswordScreen({super.key, required this.loginId});
+  const ResetPasswordScreen({super.key, required this.resetToken});
 
   @override
   State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -36,53 +40,62 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
-  void _goToLogin() {
+  /// 입력값 검증 후 백엔드에 비밀번호 재설정을 요청한다.
+  Future<void> _resetPassword() async {
     final password = _passwordController.text;
     final passwordConfirm = _passwordConfirmController.text;
 
-    final passwordEmpty = password.isEmpty;
-    final passwordConfirmEmpty = passwordConfirm.isEmpty;
-
-    if (passwordEmpty || passwordConfirmEmpty) {
-      setState(() {
-        _passwordHasError = passwordEmpty;
-        _passwordConfirmHasError = passwordConfirmEmpty;
-      });
-
-      _showMessage('새 비밀번호를 모두 입력해 주세요.');
-      return;
-    }
-
-    if (password != passwordConfirm) {
-      setState(() {
-        _passwordHasError = true;
-        _passwordConfirmHasError = true;
-      });
-
-      _showMessage('새 비밀번호가 일치하지 않습니다.');
-      return;
-    }
+    // 비밀번호 입력 규칙은 ResetPasswordValidator에서 검사한다.
+    final validationResult = ResetPasswordValidator.validate(
+      password: password,
+      passwordConfirm: passwordConfirm,
+    );
 
     setState(() {
-      _passwordHasError = false;
-      _passwordConfirmHasError = false;
+      _passwordHasError = validationResult.passwordHasError;
+      _passwordConfirmHasError = validationResult.passwordConfirmHasError;
     });
+
+    if (!validationResult.isValid) {
+      _showMessage(validationResult.message ?? '비밀번호 입력값을 확인해 주세요.');
+
+      return;
+    }
 
     FocusScope.of(context).unfocus();
 
-    // TODO:
-    // 이후 백엔드 비밀번호 재설정 API를 호출한다.
-    //
-    // 현재는 UI 구현 단계이므로
-    // 비밀번호 검증 후 로그인 화면으로 돌아간다.
+    final recoveryProvider = context.read<AccountRecoveryProvider>();
 
+    final success = await recoveryProvider.resetPassword(
+      resetToken: widget.resetToken,
+      newPassword: password,
+    );
+
+    if (!mounted) {
+      return;
+    }
+
+    if (!success) {
+      _showMessage(recoveryProvider.errorMessage ?? '비밀번호 재설정에 실패했습니다.');
+
+      return;
+    }
+
+    _showMessage('비밀번호가 변경되었습니다.');
+
+    // ResetPasswordScreen 종료
     Navigator.of(context).pop();
+
+    // FindPasswordScreen 종료
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final recoveryProvider = context.watch<AccountRecoveryProvider>();
+
+    final isLoading = recoveryProvider.isLoading;
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -90,9 +103,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         backgroundColor: colorScheme.surface,
         elevation: 0,
         leading: IconButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-          },
+          onPressed: isLoading
+              ? null
+              : () {
+                  Navigator.of(context).pop();
+                },
           icon: const Icon(Icons.arrow_back),
         ),
         title: Text(
@@ -124,6 +139,17 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     ),
                   ),
 
+                  const SizedBox(height: 12),
+
+                  Text(
+                    '새로 사용할 비밀번호를 입력하세요',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+
                   const SizedBox(height: 48),
 
                   _buildPasswordRow(
@@ -132,6 +158,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     controller: _passwordController,
                     hasError: _passwordHasError,
                     obscureText: _obscurePassword,
+                    enabled: !isLoading,
+                    textInputAction: TextInputAction.next,
                     onVisibilityPressed: () {
                       setState(() {
                         _obscurePassword = !_obscurePassword;
@@ -154,6 +182,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     controller: _passwordConfirmController,
                     hasError: _passwordConfirmHasError,
                     obscureText: _obscurePasswordConfirm,
+                    enabled: !isLoading,
+                    textInputAction: TextInputAction.done,
                     onVisibilityPressed: () {
                       setState(() {
                         _obscurePasswordConfirm = !_obscurePasswordConfirm;
@@ -164,6 +194,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         setState(() {
                           _passwordConfirmHasError = false;
                         });
+                      }
+                    },
+                    onSubmitted: () {
+                      if (!isLoading) {
+                        _resetPassword();
                       }
                     },
                   ),
@@ -179,21 +214,32 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       width: 220,
                       height: 52,
                       child: ElevatedButton(
-                        onPressed: _goToLogin,
+                        onPressed: isLoading ? null : _resetPassword,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: colorScheme.primary,
                           foregroundColor: colorScheme.onPrimary,
+                          disabledBackgroundColor:
+                              colorScheme.surfaceContainerHighest,
+                          disabledForegroundColor: colorScheme.onSurfaceVariant,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
                         ),
-                        child: const Text(
-                          '로그인 화면으로 넘어가기',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                        child: isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                '비밀번호 변경',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
                       ),
                     ),
                   ),
@@ -212,8 +258,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     required TextEditingController controller,
     required bool hasError,
     required bool obscureText,
+    required bool enabled,
+    required TextInputAction textInputAction,
     required VoidCallback onVisibilityPressed,
     required VoidCallback onChanged,
+    VoidCallback? onSubmitted,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -235,19 +284,24 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
         Expanded(
           child: TextField(
             controller: controller,
+            enabled: enabled,
             obscureText: obscureText,
             keyboardType: TextInputType.visiblePassword,
+            textInputAction: textInputAction,
             autocorrect: false,
             enableSuggestions: false,
             onChanged: (_) {
               onChanged();
+            },
+            onSubmitted: (_) {
+              onSubmitted?.call();
             },
             decoration: _buildInputDecoration(
               context,
               hintText: '비밀번호를 입력하세요',
               hasError: hasError,
               suffixIcon: IconButton(
-                onPressed: onVisibilityPressed,
+                onPressed: enabled ? onVisibilityPressed : null,
                 icon: Icon(
                   obscureText
                       ? Icons.visibility_off_outlined
@@ -289,6 +343,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
           color: hasError ? colorScheme.error : colorScheme.primary,
           width: 1.5,
         ),
+      ),
+      disabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: colorScheme.outlineVariant),
       ),
     );
   }

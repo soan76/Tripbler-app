@@ -7,6 +7,7 @@ import 'providers/translation_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/map_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/account_recovery_provider.dart';
 import 'screens/auth/auth_gate.dart';
 import 'core/theme/app_theme.dart';
 
@@ -15,6 +16,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => AccountRecoveryProvider()),
         ChangeNotifierProvider(create: (_) => TabProvider()),
         ChangeNotifierProvider(create: (_) => ExchangeProvider()),
         ChangeNotifierProvider(create: (_) => TranslationProvider()),

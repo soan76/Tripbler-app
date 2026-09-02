@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../providers/auth_provider.dart';
+import '../../providers/account_recovery_provider.dart';
 import 'find_id_result_screen.dart';
 
 class FindIdScreen extends StatefulWidget {
@@ -277,16 +277,16 @@ class _FindIdScreenState extends State<FindIdScreen> {
       return;
     }
 
-    final authProvider = context.read<AuthProvider>();
+    final recoveryProvider = context.read<AccountRecoveryProvider>();
 
-    final success = await authProvider.sendFindIdVerificationCode(email: email);
+    final success = await recoveryProvider.sendFindIdVerificationCode(email: email);
 
     if (!mounted) {
       return;
     }
 
     if (!success) {
-      _showMessage(authProvider.errorMessage ?? '인증코드 전송에 실패했습니다.');
+      _showMessage(recoveryProvider.errorMessage ?? '인증코드 전송에 실패했습니다.');
       return;
     }
 
@@ -312,16 +312,16 @@ class _FindIdScreenState extends State<FindIdScreen> {
       return;
     }
 
-    final authProvider = context.read<AuthProvider>();
+    final recoveryProvider = context.read<AccountRecoveryProvider>();
 
-    final success = await authProvider.sendFindIdVerificationCode(email: email);
+    final success = await recoveryProvider.sendFindIdVerificationCode(email: email);
 
     if (!mounted) {
       return;
     }
 
     if (!success) {
-      _showMessage(authProvider.errorMessage ?? '인증코드 재전송에 실패했습니다.');
+      _showMessage(recoveryProvider.errorMessage ?? '인증코드 재전송에 실패했습니다.');
       return;
     }
 
@@ -346,9 +346,9 @@ class _FindIdScreenState extends State<FindIdScreen> {
       return;
     }
 
-    final authProvider = context.read<AuthProvider>();
+    final recoveryProvider = context.read<AccountRecoveryProvider>();
 
-    final loginId = await authProvider.verifyFindIdVerificationCode(
+    final loginId = await recoveryProvider.verifyFindIdVerificationCode(
       email: email,
       code: code,
     );
@@ -358,7 +358,7 @@ class _FindIdScreenState extends State<FindIdScreen> {
     }
 
     if (loginId == null) {
-      _showMessage(authProvider.errorMessage ?? '인증코드 확인에 실패했습니다.');
+      _showMessage(recoveryProvider.errorMessage ?? '인증코드 확인에 실패했습니다.');
       return;
     }
 

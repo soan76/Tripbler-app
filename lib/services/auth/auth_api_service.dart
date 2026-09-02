@@ -7,24 +7,19 @@ import 'package:http/http.dart' as http;
 import '../../core/config/api_config.dart';
 import '../../core/network/api_exception.dart';
 import '../../models/api_error_response.dart';
+import '../../models/auth/find_id_verify_code_response.dart';
+import '../../models/auth/password_reset_verify_code_response.dart';
+import '../../models/auth/social_account_status_response.dart';
+import '../../models/auth/token_refresh_request.dart';
 import '../../models/auth/token_refresh_response.dart';
 import '../../models/auth/user_login_request.dart';
 import '../../models/auth/user_login_response.dart';
-import '../../models/auth/token_refresh_request.dart';
-import '../../models/auth/social_account_status_response.dart';
-import '../../models/auth/find_id_verify_code_response.dart';
-import '../../models/user/user_response.dart';
-import '../../models/user/user_create_request.dart';
 import '../../models/user/login_id_availability_response.dart';
+import '../../models/user/user_create_request.dart';
+import '../../models/user/user_response.dart';
 
-/// Tripbler 백엔드 인증 API와 통신하는 서비스.
-///
-/// 담당 기능:
-/// - 로그인
-/// - Access Token 재발급
-/// - 로그아웃
-///
-/// 토큰 저장/삭제는 TokenStorageService 또는 AuthRepository에서 담당한다.
+/// Tripbler 인증 관련 백엔드 API 통신을 담당한다.
+/// 토큰 저장과 인증 상태 관리는 Repository / Provider에서 처리한다.
 class AuthApiService {
   AuthApiService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -33,62 +28,38 @@ class AuthApiService {
   final http.Client _client;
 
   /// 로그인
-  ///
-  /// POST /api/v1/auth/login
   Future<UserLoginResponse> login(UserLoginRequest request) async {
     final response = await _sendPostRequest(
       uri: ApiConfig.authLoginUri,
       body: request.toJson(),
     );
 
-    final decodedBody = _decodeResponseBody(response);
-
-    if (response.statusCode == 200) {
-      try {
-        return UserLoginResponse.fromJson(decodedBody);
-      } on FormatException catch (error) {
-        debugPrint('로그인 응답 파싱 실패: $error');
-
-        throw const ApiException(message: '로그인 응답 형식이 올바르지 않습니다.');
-      }
-    }
-
-    throw _createApiExceptionFromErrorResponse(
+    return _parseJsonResponse<UserLoginResponse>(
       response: response,
-      decodedBody: decodedBody,
+      successStatusCode: 200,
+      parser: UserLoginResponse.fromJson,
+      parseErrorLog: '로그인 응답 파싱 실패',
+      invalidResponseMessage: '로그인 응답 형식이 올바르지 않습니다.',
     );
   }
 
   /// 회원가입
-  ///
-  /// POST /api/v1/users
   Future<UserResponse> signup(UserCreateRequest request) async {
     final response = await _sendPostRequest(
       uri: ApiConfig.usersUri,
       body: request.toJson(),
     );
 
-    final decodedBody = _decodeResponseBody(response);
-
-    if (response.statusCode == 201) {
-      try {
-        return UserResponse.fromJson(decodedBody);
-      } on FormatException catch (error) {
-        debugPrint('회원가입 응답 파싱 실패: $error');
-
-        throw const ApiException(message: '회원가입 응답 형식이 올바르지 않습니다.');
-      }
-    }
-
-    throw _createApiExceptionFromErrorResponse(
+    return _parseJsonResponse<UserResponse>(
       response: response,
-      decodedBody: decodedBody,
+      successStatusCode: 201,
+      parser: UserResponse.fromJson,
+      parseErrorLog: '회원가입 응답 파싱 실패',
+      invalidResponseMessage: '회원가입 응답 형식이 올바르지 않습니다.',
     );
   }
 
   /// 아이디 사용 가능 여부 확인
-  ///
-  /// GET /api/v1/users/check-login-id?loginId=...
   Future<LoginIdAvailabilityResponse> checkLoginIdAvailability(
     String loginId,
   ) async {
@@ -96,48 +67,26 @@ class AuthApiService {
       uri: ApiConfig.usersCheckLoginIdUri(loginId: loginId),
     );
 
-    final decodedBody = _decodeResponseBody(response);
-
-    if (response.statusCode == 200) {
-      try {
-        return LoginIdAvailabilityResponse.fromJson(decodedBody);
-      } on FormatException catch (error) {
-        debugPrint('아이디 중복확인 응답 파싱 실패: $error');
-
-        throw const ApiException(message: '아이디 중복확인 응답 형식이 올바르지 않습니다.');
-      }
-    }
-
-    throw _createApiExceptionFromErrorResponse(
+    return _parseJsonResponse<LoginIdAvailabilityResponse>(
       response: response,
-      decodedBody: decodedBody,
+      successStatusCode: 200,
+      parser: LoginIdAvailabilityResponse.fromJson,
+      parseErrorLog: '아이디 중복확인 응답 파싱 실패',
+      invalidResponseMessage: '아이디 중복확인 응답 형식이 올바르지 않습니다.',
     );
   }
 
   /// 아이디 찾기 인증코드 발송
-  ///
-  /// POST /api/v1/auth/find-id/send-code
   Future<void> sendFindIdVerificationCode({required String email}) async {
     final response = await _sendPostRequest(
       uri: ApiConfig.authFindIdSendCodeUri,
       body: {'email': email},
     );
 
-    if (response.statusCode == 204) {
-      return;
-    }
-
-    final decodedBody = _decodeResponseBody(response);
-
-    throw _createApiExceptionFromErrorResponse(
-      response: response,
-      decodedBody: decodedBody,
-    );
+    _ensureNoContentResponse(response);
   }
 
   /// 아이디 찾기 인증코드 검증
-  ///
-  /// POST /api/v1/auth/find-id/verify-code
   Future<FindIdVerifyCodeResponse> verifyFindIdVerificationCode({
     required String email,
     required String code,
@@ -147,53 +96,78 @@ class AuthApiService {
       body: {'email': email, 'code': code},
     );
 
-    final decodedBody = _decodeResponseBody(response);
-
-    if (response.statusCode == 200) {
-      try {
-        return FindIdVerifyCodeResponse.fromJson(decodedBody);
-      } on FormatException catch (error) {
-        debugPrint('아이디 찾기 인증 응답 파싱 실패: $error');
-
-        throw const ApiException(message: '아이디 찾기 응답 형식이 올바르지 않습니다.');
-      }
-    }
-
-    throw _createApiExceptionFromErrorResponse(
+    return _parseJsonResponse<FindIdVerifyCodeResponse>(
       response: response,
-      decodedBody: decodedBody,
+      successStatusCode: 200,
+      parser: FindIdVerifyCodeResponse.fromJson,
+      parseErrorLog: '아이디 찾기 인증 응답 파싱 실패',
+      invalidResponseMessage: '아이디 찾기 응답 형식이 올바르지 않습니다.',
     );
   }
 
-  /// Refresh Token을 사용해 새로운 Access Token 발급
-  /// POST /api/v1/auth/refresh
+  /// 비밀번호 재설정 인증코드 발송
+  Future<void> sendPasswordResetVerificationCode({
+    required String loginId,
+    required String email,
+  }) async {
+    final response = await _sendPostRequest(
+      uri: ApiConfig.authPasswordResetSendCodeUri,
+      body: {'loginId': loginId, 'email': email},
+    );
+
+    _ensureNoContentResponse(response);
+  }
+
+  /// 비밀번호 재설정 인증코드를 검증하고 resetToken을 반환한다.
+  Future<PasswordResetVerifyCodeResponse> verifyPasswordResetVerificationCode({
+    required String loginId,
+    required String email,
+    required String code,
+  }) async {
+    final response = await _sendPostRequest(
+      uri: ApiConfig.authPasswordResetVerifyCodeUri,
+      body: {'loginId': loginId, 'email': email, 'code': code},
+    );
+
+    return _parseJsonResponse<PasswordResetVerifyCodeResponse>(
+      response: response,
+      successStatusCode: 200,
+      parser: PasswordResetVerifyCodeResponse.fromJson,
+      parseErrorLog: '비밀번호 재설정 인증 응답 파싱 실패',
+      invalidResponseMessage: '비밀번호 재설정 인증 응답 형식이 올바르지 않습니다.',
+    );
+  }
+
+  /// resetToken을 사용해 새 비밀번호로 변경한다.
+  Future<void> resetPassword({
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    final response = await _sendPostRequest(
+      uri: ApiConfig.authPasswordResetUri,
+      body: {'resetToken': resetToken, 'newPassword': newPassword},
+    );
+
+    _ensureNoContentResponse(response);
+  }
+
+  /// Refresh Token으로 새로운 Access Token을 발급한다.
   Future<TokenRefreshResponse> refresh(TokenRefreshRequest request) async {
     final response = await _sendPostRequest(
       uri: ApiConfig.authRefreshUri,
       body: request.toJson(),
     );
 
-    final decodedBody = _decodeResponseBody(response);
-
-    if (response.statusCode == 200) {
-      try {
-        return TokenRefreshResponse.fromJson(decodedBody);
-      } on FormatException catch (error) {
-        debugPrint('토큰 재발급 응답 파싱 실패: $error');
-
-        throw const ApiException(message: '토큰 재발급 응답 형식이 올바르지 않습니다.');
-      }
-    }
-
-    throw _createApiExceptionFromErrorResponse(
+    return _parseJsonResponse<TokenRefreshResponse>(
       response: response,
-      decodedBody: decodedBody,
+      successStatusCode: 200,
+      parser: TokenRefreshResponse.fromJson,
+      parseErrorLog: '토큰 재발급 응답 파싱 실패',
+      invalidResponseMessage: '토큰 재발급 응답 형식이 올바르지 않습니다.',
     );
   }
 
-  /// 현재 로그인 사용자 조회
-  ///
-  /// GET /api/v1/users/me
+  /// 현재 로그인 사용자 정보를 조회한다.
   Future<UserResponse> getCurrentUser({
     required String authorizationHeader,
   }) async {
@@ -202,21 +176,12 @@ class AuthApiService {
       authorizationHeader: authorizationHeader,
     );
 
-    final decodedBody = _decodeResponseBody(response);
-
-    if (response.statusCode == 200) {
-      try {
-        return UserResponse.fromJson(decodedBody);
-      } on FormatException catch (error) {
-        debugPrint('현재 사용자 응답 파싱 실패: $error');
-
-        throw const ApiException(message: '현재 사용자 응답 형식이 올바르지 않습니다.');
-      }
-    }
-
-    throw _createApiExceptionFromErrorResponse(
+    return _parseJsonResponse<UserResponse>(
       response: response,
-      decodedBody: decodedBody,
+      successStatusCode: 200,
+      parser: UserResponse.fromJson,
+      parseErrorLog: '현재 사용자 응답 파싱 실패',
+      invalidResponseMessage: '현재 사용자 응답 형식이 올바르지 않습니다.',
     );
   }
 
@@ -229,25 +194,16 @@ class AuthApiService {
       authorizationHeader: authorizationHeader,
     );
 
-    final decodedBody = _decodeResponseBody(response);
-
-    if (response.statusCode == 200) {
-      try {
-        return SocialAccountStatusResponse.fromJson(decodedBody);
-      } on FormatException catch (error) {
-        debugPrint('소셜 계정 연동 상태 응답 파싱 실패: $error');
-
-        throw const ApiException(message: '소셜 계정 연동 상태 응답 형식이 올바르지 않습니다.');
-      }
-    }
-
-    throw _createApiExceptionFromErrorResponse(
+    return _parseJsonResponse<SocialAccountStatusResponse>(
       response: response,
-      decodedBody: decodedBody,
+      successStatusCode: 200,
+      parser: SocialAccountStatusResponse.fromJson,
+      parseErrorLog: '소셜 계정 연동 상태 응답 파싱 실패',
+      invalidResponseMessage: '소셜 계정 연동 상태 응답 형식이 올바르지 않습니다.',
     );
   }
 
-  /// 현재 로그인한 Tripbler 사용자에게 Google 계정을 연동한다.
+  /// 현재 로그인한 사용자에게 Google 계정을 연동한다.
   Future<void> linkGoogleAccount({
     required String authorizationHeader,
     required String idToken,
@@ -258,16 +214,7 @@ class AuthApiService {
       body: {'idToken': idToken},
     );
 
-    if (response.statusCode == 204) {
-      return;
-    }
-
-    final decodedBody = _decodeResponseBody(response);
-
-    throw _createApiExceptionFromErrorResponse(
-      response: response,
-      decodedBody: decodedBody,
-    );
+    _ensureNoContentResponse(response);
   }
 
   /// 현재 사용자에게 연동된 Google 계정을 해제한다.
@@ -279,42 +226,20 @@ class AuthApiService {
       authorizationHeader: authorizationHeader,
     );
 
-    if (response.statusCode == 204) {
-      return;
-    }
-
-    final decodedBody = _decodeResponseBody(response);
-
-    throw _createApiExceptionFromErrorResponse(
-      response: response,
-      decodedBody: decodedBody,
-    );
+    _ensureNoContentResponse(response);
   }
 
-  /// 로그아웃
-  /// POST /api/v1/auth/logout
-  ///
-  /// 백엔드에서 Access Token 인증이 필요하므로
-  /// Authorization 헤더 값을 전달받는다.
+  /// 서버에서 로그아웃한다.
   Future<void> logout({required String authorizationHeader}) async {
     final response = await _sendPostRequest(
       uri: ApiConfig.authLogoutUri,
       authorizationHeader: authorizationHeader,
     );
 
-    if (response.statusCode == 204) {
-      return;
-    }
-
-    final decodedBody = _decodeResponseBody(response);
-
-    throw _createApiExceptionFromErrorResponse(
-      response: response,
-      decodedBody: decodedBody,
-    );
+    _ensureNoContentResponse(response);
   }
 
-  /// POST 요청 공통 처리
+  /// POST 요청의 공통 네트워크 처리를 담당한다.
   Future<http.Response> _sendPostRequest({
     required Uri uri,
     Map<String, dynamic>? body,
@@ -353,6 +278,7 @@ class AuthApiService {
     }
   }
 
+  /// GET 요청의 공통 네트워크 처리를 담당한다.
   Future<http.Response> _sendGetRequest({
     required Uri uri,
     String? authorizationHeader,
@@ -374,6 +300,7 @@ class AuthApiService {
     }
   }
 
+  /// DELETE 요청의 공통 네트워크 처리를 담당한다.
   Future<http.Response> _sendDeleteRequest({
     required Uri uri,
     required String authorizationHeader,
@@ -389,7 +316,42 @@ class AuthApiService {
         .timeout(_timeout);
   }
 
-  /// HTTP 응답 JSON 파싱
+  /// 204 응답을 확인하고 실패 응답은 공통 오류 처리로 전달한다.
+  void _ensureNoContentResponse(http.Response response) {
+    if (response.statusCode == 204) {
+      return;
+    }
+
+    _throwApiError(response);
+  }
+
+  /// 성공 JSON 응답을 파싱하고 실패 응답은 공통 오류 처리한다.
+  T _parseJsonResponse<T>({
+    required http.Response response,
+    required int successStatusCode,
+    required T Function(Map<String, dynamic> json) parser,
+    required String parseErrorLog,
+    required String invalidResponseMessage,
+  }) {
+    if (response.statusCode != successStatusCode) {
+      _throwApiError(response);
+    }
+
+    final decodedBody = _decodeResponseBody(response);
+
+    try {
+      return parser(decodedBody);
+    } on FormatException catch (error) {
+      debugPrint('$parseErrorLog: $error');
+
+      throw ApiException(
+        statusCode: response.statusCode,
+        message: invalidResponseMessage,
+      );
+    }
+  }
+
+  /// HTTP 응답 본문을 JSON 객체로 변환한다.
   Map<String, dynamic> _decodeResponseBody(http.Response response) {
     if (response.body.trim().isEmpty) {
       throw ApiException(
@@ -418,7 +380,17 @@ class AuthApiService {
     }
   }
 
-  /// 백엔드 ErrorResponse를 ApiException으로 변환
+  /// 실패 응답을 ApiException으로 변환해 즉시 전달한다.
+  Never _throwApiError(http.Response response) {
+    final decodedBody = _decodeResponseBody(response);
+
+    throw _createApiExceptionFromErrorResponse(
+      response: response,
+      decodedBody: decodedBody,
+    );
+  }
+
+  /// 백엔드 ErrorResponse를 ApiException으로 변환한다.
   ApiException _createApiExceptionFromErrorResponse({
     required http.Response response,
     required Map<String, dynamic> decodedBody,
@@ -443,7 +415,7 @@ class AuthApiService {
     );
   }
 
-  /// 응답 본문이 없거나 파싱할 수 없을 때 사용하는 기본 메시지
+  /// 서버 메시지가 없을 때 HTTP 상태코드에 맞는 기본 메시지를 반환한다.
   String _messageForStatusCode({
     required int statusCode,
     String? serverMessage,

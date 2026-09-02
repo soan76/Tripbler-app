@@ -77,6 +77,43 @@ class AuthRepository {
     return response.loginId;
   }
 
+  /// 비밀번호 재설정 인증코드를 이메일로 전송한다.
+  Future<void> sendPasswordResetVerificationCode({
+    required String loginId,
+    required String email,
+  }) {
+    return _authApiService.sendPasswordResetVerificationCode(
+      loginId: loginId,
+      email: email,
+    );
+  }
+
+  /// 비밀번호 재설정 인증코드를 검증하고 resetToken을 반환한다.
+  Future<String> verifyPasswordResetVerificationCode({
+    required String loginId,
+    required String email,
+    required String code,
+  }) async {
+    final response = await _authApiService.verifyPasswordResetVerificationCode(
+      loginId: loginId,
+      email: email,
+      code: code,
+    );
+
+    return response.resetToken;
+  }
+
+  /// resetToken을 사용해 새 비밀번호로 변경한다.
+  Future<void> resetPassword({
+    required String resetToken,
+    required String newPassword,
+  }) {
+    return _authApiService.resetPassword(
+      resetToken: resetToken,
+      newPassword: newPassword,
+    );
+  }
+
   /// 로그인
   ///
   /// 백엔드 로그인 후 Access / Refresh Token을 로컬에 저장한다.
