@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../../core/config/api_config.dart';
 import '../../core/network/api_exception.dart';
+import 'auth_api_messages.dart';
 import '../../models/api_error_response.dart';
 import '../../models/auth/find_id_verify_code_response.dart';
 import '../../models/auth/password_reset_verify_code_response.dart';
@@ -21,11 +22,16 @@ import '../../models/user/user_response.dart';
 /// Tripbler 인증 관련 백엔드 API 통신을 담당한다.
 /// 토큰 저장과 인증 상태 관리는 Repository / Provider에서 처리한다.
 class AuthApiService {
-  AuthApiService({http.Client? client}) : _client = client ?? http.Client();
+  AuthApiService({
+    http.Client? client,
+    AuthApiMessages messages = const KoreanAuthApiMessages(),
+  }) : _client = client ?? http.Client(),
+       _messages = messages;
 
   static const Duration _timeout = Duration(seconds: 8);
 
   final http.Client _client;
+  final AuthApiMessages _messages;
 
   /// 로그인
   Future<UserLoginResponse> login(UserLoginRequest request) async {
@@ -39,7 +45,7 @@ class AuthApiService {
       successStatusCode: 200,
       parser: UserLoginResponse.fromJson,
       parseErrorLog: '로그인 응답 파싱 실패',
-      invalidResponseMessage: '로그인 응답 형식이 올바르지 않습니다.',
+      invalidResponseMessage: _messages.invalidLoginResponse,
     );
   }
 
@@ -55,7 +61,7 @@ class AuthApiService {
       successStatusCode: 201,
       parser: UserResponse.fromJson,
       parseErrorLog: '회원가입 응답 파싱 실패',
-      invalidResponseMessage: '회원가입 응답 형식이 올바르지 않습니다.',
+      invalidResponseMessage: _messages.invalidSignupResponse,
     );
   }
 
@@ -72,7 +78,7 @@ class AuthApiService {
       successStatusCode: 200,
       parser: LoginIdAvailabilityResponse.fromJson,
       parseErrorLog: '아이디 중복확인 응답 파싱 실패',
-      invalidResponseMessage: '아이디 중복확인 응답 형식이 올바르지 않습니다.',
+      invalidResponseMessage: _messages.invalidLoginIdAvailabilityResponse,
     );
   }
 
@@ -101,7 +107,7 @@ class AuthApiService {
       successStatusCode: 200,
       parser: FindIdVerifyCodeResponse.fromJson,
       parseErrorLog: '아이디 찾기 인증 응답 파싱 실패',
-      invalidResponseMessage: '아이디 찾기 응답 형식이 올바르지 않습니다.',
+      invalidResponseMessage: _messages.invalidFindIdResponse,
     );
   }
 
@@ -134,7 +140,8 @@ class AuthApiService {
       successStatusCode: 200,
       parser: PasswordResetVerifyCodeResponse.fromJson,
       parseErrorLog: '비밀번호 재설정 인증 응답 파싱 실패',
-      invalidResponseMessage: '비밀번호 재설정 인증 응답 형식이 올바르지 않습니다.',
+      invalidResponseMessage:
+          _messages.invalidPasswordResetVerificationResponse,
     );
   }
 
@@ -163,7 +170,7 @@ class AuthApiService {
       successStatusCode: 200,
       parser: TokenRefreshResponse.fromJson,
       parseErrorLog: '토큰 재발급 응답 파싱 실패',
-      invalidResponseMessage: '토큰 재발급 응답 형식이 올바르지 않습니다.',
+      invalidResponseMessage: _messages.invalidTokenRefreshResponse,
     );
   }
 
@@ -181,7 +188,7 @@ class AuthApiService {
       successStatusCode: 200,
       parser: UserResponse.fromJson,
       parseErrorLog: '현재 사용자 응답 파싱 실패',
-      invalidResponseMessage: '현재 사용자 응답 형식이 올바르지 않습니다.',
+      invalidResponseMessage: _messages.invalidCurrentUserResponse,
     );
   }
 
@@ -199,7 +206,7 @@ class AuthApiService {
       successStatusCode: 200,
       parser: SocialAccountStatusResponse.fromJson,
       parseErrorLog: '소셜 계정 연동 상태 응답 파싱 실패',
-      invalidResponseMessage: '소셜 계정 연동 상태 응답 형식이 올바르지 않습니다.',
+      invalidResponseMessage: _messages.invalidSocialAccountStatusResponse,
     );
   }
 
@@ -229,6 +236,16 @@ class AuthApiService {
     _ensureNoContentResponse(response);
   }
 
+  /// 현재 로그인 사용자의 계정을 탈퇴 처리한다.
+  Future<void> deleteAccount({required String authorizationHeader}) async {
+    final response = await _sendDeleteRequest(
+      uri: ApiConfig.usersMeUri,
+      authorizationHeader: authorizationHeader,
+    );
+
+    _ensureNoContentResponse(response);
+  }
+
   /// 서버에서 로그아웃한다.
   Future<void> logout({required String authorizationHeader}) async {
     final response = await _sendPostRequest(
@@ -239,87 +256,121 @@ class AuthApiService {
     _ensureNoContentResponse(response);
   }
 
-  /// POST 요청의 공통 네트워크 처리를 담당한다.
+  /// POST 요청을 공통 요청 헬퍼로 전달한다.
   Future<http.Response> _sendPostRequest({
     required Uri uri,
     Map<String, dynamic>? body,
     String? authorizationHeader,
-  }) async {
-    final headers = <String, String>{
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-    };
-
-    if (authorizationHeader != null && authorizationHeader.trim().isNotEmpty) {
-      headers['Authorization'] = authorizationHeader;
-    }
-
-    try {
-      return await _client
-          .post(
-            uri,
-            headers: headers,
-            body: body == null ? null : jsonEncode(body),
-          )
-          .timeout(_timeout);
-    } on TimeoutException {
-      throw const ApiException(
-        message: '백엔드 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.',
-      );
-    } on ApiException {
-      rethrow;
-    } catch (error, stackTrace) {
-      debugPrint('인증 API 연결 실패: $error');
-      debugPrint('$stackTrace');
-
-      throw const ApiException(
-        message: '백엔드 서버에 연결하지 못했습니다. 서버가 실행 중인지 확인해 주세요.',
-      );
-    }
+  }) {
+    return _sendRequest(
+      method: _HttpMethod.post,
+      uri: uri,
+      authorizationHeader: authorizationHeader,
+      body: body,
+    );
   }
 
-  /// GET 요청의 공통 네트워크 처리를 담당한다.
+  /// GET 요청을 공통 요청 헬퍼로 전달한다.
   Future<http.Response> _sendGetRequest({
     required Uri uri,
     String? authorizationHeader,
-  }) async {
-    final headers = <String, String>{'Accept': 'application/json'};
-
-    if (authorizationHeader != null && authorizationHeader.trim().isNotEmpty) {
-      headers['Authorization'] = authorizationHeader;
-    }
-
-    try {
-      return await _client.get(uri, headers: headers).timeout(_timeout);
-    } on TimeoutException {
-      throw const ApiException(message: '서버 응답 시간이 초과되었습니다.');
-    } on http.ClientException catch (error) {
-      debugPrint('인증 API 네트워크 오류: $error');
-
-      throw const ApiException(message: '서버에 연결할 수 없습니다.');
-    }
+  }) {
+    return _sendRequest(
+      method: _HttpMethod.get,
+      uri: uri,
+      authorizationHeader: authorizationHeader,
+    );
   }
 
-  /// DELETE 요청의 공통 네트워크 처리를 담당한다.
+  /// DELETE 요청을 공통 요청 헬퍼로 전달한다.
   Future<http.Response> _sendDeleteRequest({
     required Uri uri,
     required String authorizationHeader,
   }) {
-    return _client
-        .delete(
-          uri,
-          headers: {
-            'Authorization': authorizationHeader,
-            'Content-Type': 'application/json',
-          },
-        )
-        .timeout(_timeout);
+    return _sendRequest(
+      method: _HttpMethod.delete,
+      uri: uri,
+      authorizationHeader: authorizationHeader,
+    );
   }
 
-  /// 204 응답을 확인하고 실패 응답은 공통 오류 처리로 전달한다.
+  /// 인증 API의 공통 HTTP 요청, 헤더 구성, 타임아웃, 예외 매핑을 담당한다.
+  Future<http.Response> _sendRequest({
+    required _HttpMethod method,
+    required Uri uri,
+    Map<String, dynamic>? body,
+    String? authorizationHeader,
+  }) async {
+    final headers = <String, String>{'Accept': 'application/json'};
+
+    if (body != null ||
+        method == _HttpMethod.post ||
+        method == _HttpMethod.delete) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    if (authorizationHeader != null && authorizationHeader.trim().isNotEmpty) {
+      headers['Authorization'] = authorizationHeader.trim();
+    }
+
+    final encodedBody = _encodeRequestBody(body);
+
+    try {
+      switch (method) {
+        case _HttpMethod.post:
+          return await _client
+              .post(uri, headers: headers, body: encodedBody)
+              .timeout(_timeout);
+
+        case _HttpMethod.get:
+          return await _client.get(uri, headers: headers).timeout(_timeout);
+
+        case _HttpMethod.delete:
+          return await _client
+              .delete(uri, headers: headers, body: encodedBody)
+              .timeout(_timeout);
+      }
+    } on TimeoutException {
+      throw ApiException(message: _messages.requestTimeout);
+    } catch (error, stackTrace) {
+      _debugLog(
+        '인증 API 연결 실패 [${method.name.toUpperCase()} $uri]: $error',
+        stackTrace,
+      );
+
+      throw ApiException(message: _messages.connectionFailed);
+    }
+  }
+
+  /// 요청 본문을 JSON 문자열로 직렬화한다.
+  ///
+  /// 직렬화 실패는 네트워크 연결 실패와 구분해서 처리한다.
+  String? _encodeRequestBody(Map<String, dynamic>? body) {
+    if (body == null) {
+      return null;
+    }
+
+    try {
+      return jsonEncode(body);
+    } catch (error, stackTrace) {
+      _debugLog('인증 API 요청 본문 직렬화 실패: $error', stackTrace);
+      throw ApiException(message: _messages.requestSerializationFailed);
+    }
+  }
+
+  /// 204 또는 200 + 빈 본문 응답을 성공으로 인정한다.
+  /// 현재 백엔드가 204로 통일되어 있다면 200 허용은 호환성을 위한 방어 처리다.
   void _ensureNoContentResponse(http.Response response) {
     if (response.statusCode == 204) {
       return;
+    }
+
+    if (response.statusCode == 200) {
+      final responseBody = _decodeUtf8Body(response);
+
+      if (responseBody.trim().isEmpty) {
+        return;
+      }
     }
 
     _throwApiError(response);
@@ -341,8 +392,8 @@ class AuthApiService {
 
     try {
       return parser(decodedBody);
-    } on FormatException catch (error) {
-      debugPrint('$parseErrorLog: $error');
+    } catch (error, stackTrace) {
+      _debugLog('$parseErrorLog: $error', stackTrace);
 
       throw ApiException(
         statusCode: response.statusCode,
@@ -351,31 +402,45 @@ class AuthApiService {
     }
   }
 
-  /// HTTP 응답 본문을 JSON 객체로 변환한다.
-  Map<String, dynamic> _decodeResponseBody(http.Response response) {
-    if (response.body.trim().isEmpty) {
+  /// HTTP 응답 본문을 UTF-8 문자열로 한 번만 디코딩한다.
+  String _decodeUtf8Body(http.Response response) {
+    try {
+      return utf8.decode(response.bodyBytes);
+    } catch (error, stackTrace) {
+      _debugLog('인증 응답 UTF-8 디코딩 실패: $error', stackTrace);
+
       throw ApiException(
         statusCode: response.statusCode,
-        message: _messageForStatusCode(statusCode: response.statusCode),
+        message: _messages.invalidServerResponse,
+      );
+    }
+  }
+
+  /// HTTP 응답 본문을 JSON 객체로 변환한다.
+  Map<String, dynamic> _decodeResponseBody(http.Response response) {
+    final responseBody = _decodeUtf8Body(response);
+
+    if (responseBody.trim().isEmpty) {
+      throw ApiException(
+        statusCode: response.statusCode,
+        message: _messages.forStatusCode(statusCode: response.statusCode),
       );
     }
 
     try {
-      final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
+      final decodedBody = jsonDecode(responseBody);
 
       if (decodedBody is! Map<String, dynamic>) {
         throw const FormatException('응답 본문이 JSON 객체가 아닙니다.');
       }
 
       return decodedBody;
-    } on ApiException {
-      rethrow;
-    } catch (error) {
-      debugPrint('인증 응답 JSON 디코딩 실패: $error');
+    } catch (error, stackTrace) {
+      _debugLog('인증 응답 JSON 디코딩 실패: $error', stackTrace);
 
       throw ApiException(
         statusCode: response.statusCode,
-        message: '서버 응답 형식이 올바르지 않습니다.',
+        message: _messages.invalidServerResponse,
       );
     }
   }
@@ -399,14 +464,15 @@ class AuthApiService {
 
     try {
       errorResponse = ApiErrorResponse.fromJson(decodedBody);
-    } catch (_) {
+    } catch (error, stackTrace) {
+      _debugLog('인증 오류 응답 파싱 실패: $error', stackTrace);
       errorResponse = null;
     }
 
     return ApiException(
       statusCode: response.statusCode,
       code: errorResponse?.code,
-      message: _messageForStatusCode(
+      message: _messages.forStatusCode(
         statusCode: response.statusCode,
         serverMessage: errorResponse?.message,
       ),
@@ -415,30 +481,16 @@ class AuthApiService {
     );
   }
 
-  /// 서버 메시지가 없을 때 HTTP 상태코드에 맞는 기본 메시지를 반환한다.
-  String _messageForStatusCode({
-    required int statusCode,
-    String? serverMessage,
-  }) {
-    if (serverMessage != null && serverMessage.trim().isNotEmpty) {
-      return serverMessage;
+  /// 디버그 빌드에서만 내부 오류 상세를 출력한다.
+  void _debugLog(String message, [StackTrace? stackTrace]) {
+    if (!kDebugMode) {
+      return;
     }
 
-    switch (statusCode) {
-      case 400:
-        return '인증 요청값이 올바르지 않습니다.';
+    debugPrint(message);
 
-      case 401:
-        return '인증 정보가 올바르지 않거나 만료되었습니다.';
-
-      case 403:
-        return '접근 권한이 없습니다.';
-
-      case 500:
-        return '서버 내부 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
-
-      default:
-        return '인증 요청을 처리하지 못했습니다.';
+    if (stackTrace != null) {
+      debugPrint('$stackTrace');
     }
   }
 
@@ -446,3 +498,5 @@ class AuthApiService {
     _client.close();
   }
 }
+
+enum _HttpMethod { get, post, delete }

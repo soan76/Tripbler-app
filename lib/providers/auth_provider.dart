@@ -3,21 +3,21 @@ import 'package:flutter/foundation.dart';
 import '../repositories/auth/auth_repository.dart';
 import '../models/user/user_response.dart';
 import '../core/network/api_exception.dart';
-
+/// 앱의 인증 상태를 관리하는 ChangeNotifier 기반 클래스
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthRepository? authRepository})
     : _authRepository = authRepository ?? AuthRepository();
 
   final AuthRepository _authRepository;
-
+  /// 앱 초기화 시 인증 상태를 복구했는지 여부
   bool _isInitialized = false;
   bool _isLoading = false;
   bool _isAuthenticated = false;
   bool _isCheckingLoginId = false;
   bool _isLoadingSocialAccounts = false;
-
+  /// 현재 로그인 사용자의 Google 계정 연동 상태
   bool? _googleLinked;
-
+  /// 현재 로그인 사용자의 정보
   int? _userId;
   String? _loginId;
   String? _nickname;
@@ -46,39 +46,18 @@ class AuthProvider extends ChangeNotifier {
     required String loginId,
     String? nickname,
     required String password,
-  }) async {
-    if (_isLoading) {
-      return false;
-    }
-
-    _setLoading(true);
-    _errorMessage = null;
-
-    try {
-      await _authRepository.signup(
-        loginId: loginId,
-        nickname: nickname,
-        password: password,
-      );
-
-      return true;
-    } on ApiException catch (error) {
-      debugPrint('회원가입 실패: $error');
-
-      _errorMessage = error.message;
-      notifyListeners();
-
-      return false;
-    } catch (error) {
-      debugPrint('회원가입 실패: $error');
-
-      _errorMessage = '회원가입 중 오류가 발생했습니다.';
-      notifyListeners();
-
-      return false;
-    } finally {
-      _setLoading(false);
-    }
+  }) {
+    return _runGuardedAction(
+      action: () async {
+        await _authRepository.signup(
+          loginId: loginId,
+          nickname: nickname,
+          password: password,
+        );
+      },
+      logPrefix: '회원가입 실패',
+      fallbackErrorMessage: '회원가입 중 오류가 발생했습니다.',
+    );
   }
 
   /// 아이디 중복확인
@@ -154,50 +133,21 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// 로그인
-  Future<bool> login({
-    required String loginId,
-    required String password,
-  }) async {
-    if (_isLoading) {
-      return false;
-    }
+  Future<bool> login({required String loginId, required String password}) {
+    return _runGuardedAction(
+      action: () async {
+        await _authRepository.login(loginId: loginId, password: password);
 
-    _setLoading(true);
-    _errorMessage = null;
+        // 로그인 성공 후 /users/me 호출
+        // → loginId, nickname 등 현재 사용자 정보 조회
+        final user = await _authRepository.getCurrentUser();
 
-    try {
-      await _authRepository.login(loginId: loginId, password: password);
-
-      // 로그인 성공 후 /users/me 호출
-      // → loginId, nickname 등 현재 사용자 정보 조회
-      final user = await _authRepository.getCurrentUser();
-
-      _setCurrentUser(user);
-
-      notifyListeners();
-
-      return true;
-    } on ApiException catch (error) {
-      debugPrint('로그인 실패: $error');
-
-      _clearUserState();
-      _errorMessage = error.message;
-
-      notifyListeners();
-
-      return false;
-    } catch (error) {
-      debugPrint('로그인 실패: $error');
-
-      _clearUserState();
-      _errorMessage = '로그인 중 오류가 발생했습니다.';
-
-      notifyListeners();
-
-      return false;
-    } finally {
-      _setLoading(false);
-    }
+        _setCurrentUser(user);
+      },
+      logPrefix: '로그인 실패',
+      fallbackErrorMessage: '로그인 중 오류가 발생했습니다.',
+      onFailure: _clearUserState,
+    );
   }
 
   void _setCurrentUser(UserResponse user) {
@@ -226,7 +176,7 @@ class AuthProvider extends ChangeNotifier {
       final hasTokens = await _authRepository.hasTokens();
 
       if (!hasTokens) {
-        _isAuthenticated = false;
+        _clearUserState();
         return;
       }
 
@@ -286,73 +236,43 @@ class AuthProvider extends ChangeNotifier {
   }
 
   /// 현재 사용자에게 Google 계정을 연동한다.
-  Future<bool> linkGoogleAccount() async {
-    if (_isLoading) {
-      return false;
-    }
-
-    _setLoading(true);
-    _errorMessage = null;
-
-    try {
-      await _authRepository.linkGoogleAccount();
-
-      _googleLinked = true;
-      notifyListeners();
-
-      return true;
-    } on ApiException catch (error) {
-      debugPrint('Google 계정 연동 실패: $error');
-
-      _errorMessage = error.message;
-      notifyListeners();
-
-      return false;
-    } catch (error) {
-      debugPrint('Google 계정 연동 실패: $error');
-
-      _errorMessage = 'Google 계정 연동 중 오류가 발생했습니다.';
-      notifyListeners();
-
-      return false;
-    } finally {
-      _setLoading(false);
-    }
+  Future<bool> linkGoogleAccount() {
+    return _runGuardedAction(
+      action: () async {
+        await _authRepository.linkGoogleAccount();
+        _googleLinked = true;
+      },
+      logPrefix: 'Google 계정 연동 실패',
+      fallbackErrorMessage: 'Google 계정 연동 중 오류가 발생했습니다.',
+    );
   }
 
   /// 현재 사용자에게 연동된 Google 계정을 해제한다.
-  Future<bool> unlinkGoogleAccount() async {
-    if (_isLoading) {
-      return false;
-    }
+  Future<bool> unlinkGoogleAccount() {
+    return _runGuardedAction(
+      action: () async {
+        await _authRepository.unlinkGoogleAccount();
+        _googleLinked = false;
+      },
+      logPrefix: 'Google 계정 연동 해제 실패',
+      fallbackErrorMessage: 'Google 계정 연동 해제 중 오류가 발생했습니다.',
+    );
+  }
 
-    _setLoading(true);
-    _errorMessage = null;
+  /// 현재 로그인 사용자의 계정을 탈퇴 처리한다.
+  Future<bool> deleteAccount() {
+    return _runGuardedAction(
+      canRun: _isAuthenticated,
+      action: () async {
+        await _authRepository.deleteAccount();
 
-    try {
-      await _authRepository.unlinkGoogleAccount();
-
-      _googleLinked = false;
-      notifyListeners();
-
-      return true;
-    } on ApiException catch (error) {
-      debugPrint('Google 계정 연동 해제 실패: $error');
-
-      _errorMessage = error.message;
-      notifyListeners();
-
-      return false;
-    } catch (error) {
-      debugPrint('Google 계정 연동 해제 실패: $error');
-
-      _errorMessage = 'Google 계정 연동 해제 중 오류가 발생했습니다.';
-      notifyListeners();
-
-      return false;
-    } finally {
-      _setLoading(false);
-    }
+        // 서버에서 계정 삭제가 완료된 경우
+        // Flutter의 현재 사용자 상태도 비로그인으로 초기화한다.
+        _clearUserState();
+      },
+      logPrefix: '계정 탈퇴 실패',
+      fallbackErrorMessage: '계정 탈퇴 중 오류가 발생했습니다.',
+    );
   }
 
   /// 로그아웃
@@ -366,10 +286,14 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       await _authRepository.logout();
+    } on ApiException catch (error) {
+      debugPrint('로그아웃 API 호출 실패: $error');
+
+      _errorMessage = error.message;
     } catch (error) {
       debugPrint('로그아웃 API 호출 실패: $error');
 
-      _errorMessage = error.toString();
+      _errorMessage = '로그아웃 중 오류가 발생했습니다.';
     } finally {
       // AuthRepository에서 서버 로그아웃 성공 여부와 관계없이
       // 로컬 토큰을 제거하므로 Flutter 인증 상태도 로그아웃으로 변경한다.
@@ -394,6 +318,46 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 인증 관련 단일 작업의 로딩 상태와 예외 처리를 공통으로 관리한다.
+  ///
+  /// 상태 변경은 action / onFailure에서 수행하고,
+  /// UI 알림은 작업 종료 시 _setLoading(false)를 통해 한 번에 반영한다.
+  Future<bool> _runGuardedAction({
+    required Future<void> Function() action,
+    required String logPrefix,
+    required String fallbackErrorMessage,
+    VoidCallback? onFailure,
+    bool canRun = true,
+  }) async {
+    if (_isLoading || !canRun) {
+      return false;
+    }
+
+    _setLoading(true);
+    _errorMessage = null;
+
+    try {
+      await action();
+      return true;
+    } on ApiException catch (error) {
+      debugPrint('$logPrefix: $error');
+
+      onFailure?.call();
+      _errorMessage = error.message;
+
+      return false;
+    } catch (error) {
+      debugPrint('$logPrefix: $error');
+
+      onFailure?.call();
+      _errorMessage = fallbackErrorMessage;
+
+      return false;
+    } finally {
+      _setLoading(false);
+    }
+  }
+  /// 인증 관련 예외 메시지를 초기화한다.
   void clearError() {
     if (_errorMessage == null) {
       return;
@@ -402,7 +366,7 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
   }
-
+  /// 현재 로그인 사용자의 상태를 초기화한다.
   void _clearUserState() {
     _isAuthenticated = false;
 
@@ -411,7 +375,7 @@ class AuthProvider extends ChangeNotifier {
     _nickname = null;
     _googleLinked = null;
   }
-
+  /// 로딩 상태를 변경하고 ChangeNotifier에 알린다.
   void _setLoading(bool value) {
     if (_isLoading == value) {
       return;
@@ -420,7 +384,7 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = value;
     notifyListeners();
   }
-
+  /// AuthProvider를 더 이상 사용하지 않을 때 호출한다.
   @override
   void dispose() {
     _authRepository.dispose();

@@ -6,15 +6,20 @@ class UserInfoSection extends StatelessWidget {
     required this.displayName,
     required this.loginId,
     required this.onEdit,
+    this.isLoading = false,
+    this.profileImage,
   });
 
   final String displayName;
   final String loginId;
   final VoidCallback onEdit;
+  final bool isLoading;
+  final ImageProvider<Object>? profileImage;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final canEdit = !isLoading;
 
     return Center(
       child: Column(
@@ -22,33 +27,44 @@ class UserInfoSection extends StatelessWidget {
           CircleAvatar(
             radius: 48,
             backgroundColor: colorScheme.surfaceContainerHighest,
-            child: Icon(
-              Icons.person,
-              size: 52,
-              color: colorScheme.onSurfaceVariant,
-            ),
+            backgroundImage: profileImage,
+            child: profileImage == null
+                ? Icon(
+                    Icons.person,
+                    size: 52,
+                    color: colorScheme.onSurfaceVariant,
+                  )
+                : null,
           ),
           const SizedBox(height: 16),
           InkWell(
             borderRadius: BorderRadius.circular(8),
-            onTap: onEdit,
+            onTap: canEdit ? onEdit : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    displayName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: colorScheme.onSurface,
-                      fontWeight: FontWeight.w600,
+                  Flexible(
+                    child: Text(
+                      displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: canEdit
+                            ? colorScheme.onSurface
+                            : colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Icon(
                     Icons.edit_outlined,
                     size: 18,
-                    color: colorScheme.onSurfaceVariant,
+                    color: canEdit
+                        ? colorScheme.onSurfaceVariant
+                        : Theme.of(context).disabledColor,
                   ),
                 ],
               ),
@@ -58,6 +74,8 @@ class UserInfoSection extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               '@$loginId',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 14,
                 color: colorScheme.onSurfaceVariant,
@@ -66,50 +84,6 @@ class UserInfoSection extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-}
-
-class UserAccountActions extends StatelessWidget {
-  const UserAccountActions({
-    super.key,
-    required this.isLoading,
-    required this.onLogout,
-    required this.onDeleteAccount,
-  });
-
-  final bool isLoading;
-  final VoidCallback onLogout;
-  final VoidCallback onDeleteAccount;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      children: [
-        SizedBox(
-          width: double.infinity,
-          child: TextButton(
-            onPressed: isLoading ? null : onLogout,
-            child: Text(
-              '로그아웃',
-              style: TextStyle(fontSize: 16, color: colorScheme.primary),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: TextButton(
-            onPressed: onDeleteAccount,
-            child: Text(
-              '계정 탈퇴',
-              style: TextStyle(fontSize: 16, color: colorScheme.error),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -199,6 +199,22 @@ class AuthRepository {
     });
   }
 
+  /// 현재 로그인 사용자의 계정을 삭제한다.
+  /// 서버 계정 삭제가 성공한 뒤 로컬 Access / Refresh Token도 제거한다.
+  Future<void> deleteAccount() async {
+    await _requestWithTokenRetry<void>((authorizationHeader) {
+      return _authApiService.deleteAccount(
+        authorizationHeader: authorizationHeader,
+      );
+    });
+
+    try {
+      await _tokenStorageService.clearTokens();
+    } catch (error) {
+      debugPrint('계정 탈퇴 후 로컬 토큰 삭제 실패: $error');
+    }
+  }
+
   /// 서버 로그아웃 후 로컬 인증 토큰을 삭제한다.
   Future<void> logout() async {
     final authorizationHeader = await _tokenStorageService
