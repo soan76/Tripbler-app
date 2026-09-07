@@ -33,6 +33,10 @@ class AuthRepository {
   final TokenStorageService _tokenStorageService;
   final GoogleAuthService _googleAuthService;
 
+  /// 동시에 여러 인증 요청이 401을 받아도
+  /// 하나의 Access Token 재발급 요청만 공유하도록 보관한다.
+  Future<TokenRefreshResponse>? _ongoingRefresh;
+
   /// 회원가입
   Future<UserResponse> signup({
     required String loginId,
@@ -156,7 +160,32 @@ class AuthRepository {
   }
 
   /// Refresh Token을 이용해 Access Token을 재발급한다.
+  ///
+  /// 이미 재발급이 진행 중이면 새 요청을 만들지 않고
+  /// 진행 중인 Future를 공유해 중복 재발급을 방지한다.
   Future<TokenRefreshResponse> refreshAccessToken() async {
+    final ongoingRefresh = _ongoingRefresh;
+
+    if (ongoingRefresh != null) {
+      return ongoingRefresh;
+    }
+
+    final refreshFuture = _performRefreshAccessToken();
+
+    _ongoingRefresh = refreshFuture;
+
+    try {
+      return await refreshFuture;
+    } finally {
+      if (identical(_ongoingRefresh, refreshFuture)) {
+        _ongoingRefresh = null;
+      }
+    }
+  }
+
+  /// 실제 Refresh Token 조회, API 호출,
+  /// 새 Access Token 저장을 수행한다.
+  Future<TokenRefreshResponse> _performRefreshAccessToken() async {
     final refreshToken = await _tokenStorageService.readRefreshToken();
 
     if (refreshToken == null || refreshToken.isEmpty) {
@@ -174,18 +203,30 @@ class AuthRepository {
 
     return response;
   }
+  
+  /// 현재 로그인 사용자 정보를 조회한다.
+  ///
+  /// Access Token이 만료되어 401이 반환되면 토큰을 재발급한 뒤
+  /// 사용자 조회 요청을 한 번 다시 시도한다.
+  Future<UserResponse> getCurrentUser() {
+    return _requestWithTokenRetry<UserResponse>((authorizationHeader) {
+      return _authApiService.getCurrentUser(
+        authorizationHeader: authorizationHeader,
+      );
+    });
+  }
 
-  Future<UserResponse> getCurrentUser() async {
-    final authorizationHeader = await _tokenStorageService
-        .readAuthorizationHeader();
-
-    if (authorizationHeader == null || authorizationHeader.isEmpty) {
-      throw const AuthSessionException('저장된 Access Token이 없습니다.');
-    }
-
-    return _authApiService.getCurrentUser(
-      authorizationHeader: authorizationHeader,
-    );
+  /// 현재 로그인 사용자의 닉네임을 변경한다.
+  ///
+  /// Access Token이 만료되어 401이 반환되면 토큰을 재발급한 뒤
+  /// 닉네임 변경 요청을 한 번 다시 시도한다.
+  Future<UserResponse> updateNickname({required String nickname}) {
+    return _requestWithTokenRetry<UserResponse>((authorizationHeader) {
+      return _authApiService.updateNickname(
+        authorizationHeader: authorizationHeader,
+        nickname: nickname,
+      );
+    });
   }
 
   /// 현재 사용자의 소셜 계정 연동 상태를 조회한다.
@@ -272,20 +313,38 @@ class AuthRepository {
         rethrow;
       }
 
+      final latestAuthorizationHeader = await _tokenStorageService
+          .readAuthorizationHeader();
+
+      if (latestAuthorizationHeader != null &&
+          latestAuthorizationHeader.isNotEmpty &&
+          latestAuthorizationHeader != authorizationHeader) {
+        debugPrint(
+          '다른 요청에서 Access Token 재발급 완료 '
+          '→ 최신 토큰으로 기존 요청 재시도',
+        );
+
+        return request(latestAuthorizationHeader);
+      }
+
       debugPrint('Access Token 만료 → 재발급 시도');
 
       await refreshAccessToken();
 
-      debugPrint('Access Token 재발급 성공 → 기존 요청 재시도');
+      debugPrint(
+        'Access Token 재발급 성공 '
+        '→ 기존 요청 재시도',
+      );
 
-      authorizationHeader = await _tokenStorageService
+      final refreshedAuthorizationHeader = await _tokenStorageService
           .readAuthorizationHeader();
 
-      if (authorizationHeader == null || authorizationHeader.isEmpty) {
+      if (refreshedAuthorizationHeader == null ||
+          refreshedAuthorizationHeader.isEmpty) {
         throw const AuthSessionException('Access Token 재발급에 실패했습니다.');
       }
 
-      return request(authorizationHeader);
+      return request(refreshedAuthorizationHeader);
     }
   }
 

@@ -30,6 +30,11 @@ class FakeAuthRepository implements AuthRepository {
   Future<UserResponse> getCurrentUser() async => currentUser;
 
   @override
+  Future<UserResponse> updateNickname({required String nickname}) {
+    throw UnsupportedError('updateNickname()은 이 Fake에서 아직 구현되지 않았습니다.');
+  }
+
+  @override
   Future<void> deleteAccount() async {
     deleteAccountCallCount++;
 

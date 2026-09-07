@@ -5,14 +5,14 @@ class UserInfoSection extends StatelessWidget {
     super.key,
     required this.displayName,
     required this.loginId,
-    required this.onEdit,
+    required this.onEditNickname,
     this.isLoading = false,
     this.profileImage,
   });
 
   final String displayName;
   final String loginId;
-  final VoidCallback onEdit;
+  final VoidCallback onEditNickname;
   final bool isLoading;
   final ImageProvider<Object>? profileImage;
 
@@ -37,38 +37,47 @@ class UserInfoSection extends StatelessWidget {
                 : null,
           ),
           const SizedBox(height: 16),
-          InkWell(
-            borderRadius: BorderRadius.circular(8),
-            onTap: canEdit ? onEdit : null,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: Text(
-                      displayName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: canEdit
-                            ? colorScheme.onSurface
-                            : colorScheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(width: 30, height: 30),
+
+              Flexible(
+                child: Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: canEdit
+                        ? colorScheme.onSurface
+                        : colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
                   ),
-                  const SizedBox(width: 6),
-                  Icon(
+                ),
+              ),
+
+              SizedBox(
+                width: 30,
+                height: 30,
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 30,
+                    height: 30,
+                  ),
+                  tooltip: '닉네임 변경',
+                  onPressed: canEdit ? onEditNickname : null,
+                  icon: Icon(
                     Icons.edit_outlined,
                     size: 18,
                     color: canEdit
                         ? colorScheme.onSurfaceVariant
                         : Theme.of(context).disabledColor,
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
           if (loginId.isNotEmpty) ...[
             const SizedBox(height: 4),

@@ -49,6 +49,8 @@ class ApiConfig {
   static const String authPasswordResetPath = '/api/v1/auth/password-reset';
 
   static const String usersMePath = '/api/v1/users/me';
+
+  static const String usersMeNicknamePath = '/api/v1/users/me/nickname';
   
   static const String usersMeGoogleLinkPath =
       '/api/v1/users/me/social-accounts/google';
@@ -95,6 +97,10 @@ class ApiConfig {
 
   static Uri get usersMeUri {
     return Uri.parse(baseUrl).replace(path: usersMePath);
+  }
+
+  static Uri get usersMeNicknameUri {
+    return Uri.parse(baseUrl).replace(path: usersMeNicknamePath);
   }
 
   static Uri get usersMeSocialAccountsUri {

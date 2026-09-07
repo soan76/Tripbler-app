@@ -47,6 +47,10 @@ class _TestAuthApiMessages extends AuthApiMessages {
   String get invalidCurrentUserResponse => 'INVALID_CURRENT_USER_RESPONSE';
 
   @override
+  String get invalidUpdateNicknameResponse =>
+      'INVALID_UPDATE_NICKNAME_RESPONSE';
+
+  @override
   String get invalidSocialAccountStatusResponse =>
       'INVALID_SOCIAL_ACCOUNT_STATUS_RESPONSE';
 
@@ -93,9 +97,9 @@ void main() {
         expect(capturedRequest.headers['Authorization'], 'Bearer access-token');
         expect(capturedRequest.headers['Accept'], 'application/json');
 
-        // 현재 AuthApiService는 본문 없는 DELETE에도
-        // Content-Type: application/json을 명시한다.
-        expect(capturedRequest.headers['Content-Type'], 'application/json');
+        // 본문 없는 DELETE 요청에는
+        // Content-Type 헤더를 추가하지 않는다.
+        expect(capturedRequest.headers['Content-Type'], isNull);
       },
     );
 

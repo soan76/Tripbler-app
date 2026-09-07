@@ -15,6 +15,7 @@ abstract class AuthApiMessages {
   String get invalidPasswordResetVerificationResponse;
   String get invalidTokenRefreshResponse;
   String get invalidCurrentUserResponse;
+  String get invalidUpdateNicknameResponse;
   String get invalidSocialAccountStatusResponse;
 
   String forStatusCode({required int statusCode, String? serverMessage});
@@ -58,6 +59,9 @@ class KoreanAuthApiMessages extends AuthApiMessages {
 
   @override
   String get invalidCurrentUserResponse => '현재 사용자 응답 형식이 올바르지 않습니다.';
+
+  @override
+  String get invalidUpdateNicknameResponse => '닉네임 변경 응답 형식이 올바르지 않습니다.';
 
   @override
   String get invalidSocialAccountStatusResponse =>

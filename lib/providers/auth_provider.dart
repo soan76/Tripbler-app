@@ -157,6 +157,24 @@ class AuthProvider extends ChangeNotifier {
     _isAuthenticated = true;
   }
 
+  /// 현재 로그인 사용자의 닉네임을 변경한다.
+  ///
+  /// 서버에서 반환한 최신 사용자 정보를 Provider 상태에 반영한다.
+  Future<bool> updateNickname({required String nickname}) {
+    return _runGuardedAction(
+      canRun: _isAuthenticated,
+      action: () async {
+        final user = await _authRepository.updateNickname(
+          nickname: nickname.trim(),
+        );
+
+        _setCurrentUser(user);
+      },
+      logPrefix: '닉네임 변경 실패',
+      fallbackErrorMessage: '닉네임 변경 중 오류가 발생했습니다.',
+    );
+  }
+
   /// 앱 시작 시 저장된 인증정보 확인
   ///
   /// 현재 단계에서는 Access Token / Refresh Token의

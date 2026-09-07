@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../widgets/user/user_account_section.dart';
 import '../../widgets/user/user_app_section.dart';
 import '../../widgets/user/user_info_section.dart';
+import '../../widgets/user/nickname_edit_dialog.dart';
 import '../../widgets/user/user_account_actions.dart';
 import '../../widgets/user/account_deletion_dialog.dart';
 import '../auth/find_password_screen.dart';
@@ -64,6 +65,29 @@ class _UserPageState
             const SettingsScreen(),
       ),
     );
+  }
+
+  /// 닉네임 수정 다이얼로그를 열고 변경 요청을 처리한다.
+  Future<void> _handleNicknameEdit(AuthProvider authProvider) async {
+    final success = await NicknameEditDialog.show(
+      context,
+      initialNickname: authProvider.nickname,
+      onSubmit: (nickname) async {
+        final updated = await authProvider.updateNickname(nickname: nickname);
+
+        if (updated) {
+          return null;
+        }
+
+        return authProvider.errorMessage ?? '닉네임 변경에 실패했습니다.';
+      },
+    );
+
+    if (!mounted || !success) {
+      return;
+    }
+
+    _showMessage('닉네임이 변경되었습니다.');
   }
 
   /// Google 계정 연동 또는 연동 해제를 처리한다.
@@ -256,12 +280,11 @@ class _UserPageState
           child: Column(
             children: [
               UserInfoSection(
-                displayName:
-                    displayName,
-                loginId:
-                    displayLoginId,
-                onEdit: () {
-                  // 추후 프로필 편집 기능 연결
+                displayName: displayName,
+                loginId: displayLoginId,
+                isLoading: authProvider.isLoading,
+                onEditNickname: () {
+                  _handleNicknameEdit(authProvider);
                 },
               ),
 
