@@ -109,5 +109,43 @@ void main() {
 
       service.dispose();
     });
+    
+    test('409 DUPLICATE_NICKNAME 응답을 ApiException으로 변환한다', () async {
+      final client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'timestamp': '2026-09-08T20:00:00Z',
+            'status': 409,
+            'code': 'DUPLICATE_NICKNAME',
+            'message': '이미 사용 중인 닉네임입니다.',
+            'path': '/api/v1/users/me/nickname',
+          }),
+          409,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      final service = AuthApiService(client: client);
+
+      await expectLater(
+        service.updateNickname(
+          authorizationHeader: 'Bearer access-token',
+          nickname: '여행자',
+        ),
+        throwsA(
+          isA<ApiException>()
+              .having((error) => error.statusCode, 'statusCode', 409)
+              .having((error) => error.code, 'code', 'DUPLICATE_NICKNAME')
+              .having((error) => error.message, 'message', '이미 사용 중인 닉네임입니다.')
+              .having(
+                (error) => error.path,
+                'path',
+                '/api/v1/users/me/nickname',
+              ),
+        ),
+      );
+
+      service.dispose();
+    });
   });
 }

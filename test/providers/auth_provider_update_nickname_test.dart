@@ -116,6 +116,28 @@ void main() {
       expect(provider.isLoading, isFalse);
     });
 
+    test('중복 닉네임이면 기존 닉네임을 유지하고 중복 오류 메시지를 저장한다', () async {
+      await provider.restoreSession();
+
+      repository.updateNicknameError = const ApiException(
+        statusCode: 409,
+        code: 'DUPLICATE_NICKNAME',
+        message: '이미 사용 중인 닉네임입니다.',
+      );
+
+      final success = await provider.updateNickname(nickname: '사용중닉네임');
+
+      expect(success, isFalse);
+      expect(repository.updateNicknameCallCount, 1);
+
+      expect(provider.nickname, '기존닉네임');
+      expect(provider.isAuthenticated, isTrue);
+
+      expect(provider.errorMessage, '이미 사용 중인 닉네임입니다.');
+
+      expect(provider.isLoading, isFalse);
+    });
+
     test('로그인 상태가 아니면 닉네임 변경 요청을 실행하지 않는다', () async {
       repository.hasStoredTokens = false;
 
