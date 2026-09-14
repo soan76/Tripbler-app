@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/auth_provider.dart';
+import '../../services/user/profile_image_picker_service.dart';
 import '../../widgets/user/user_account_section.dart';
 import '../../widgets/user/user_app_section.dart';
 import '../../widgets/user/user_info_section.dart';
@@ -15,12 +16,13 @@ class UserPage extends StatefulWidget {
   const UserPage({super.key});
 
   @override
-  State<UserPage> createState() =>
-      _UserPageState();
+  State<UserPage> createState() => _UserPageState();
 }
 
-class _UserPageState
-    extends State<UserPage> {
+class _UserPageState extends State<UserPage> {
+  final ProfileImagePickerService _profileImagePickerService =
+      ProfileImagePickerService();
+
   bool _hasLoadedSocialAccounts = false;
   bool _isDeletingAccount = false;
 
@@ -35,36 +37,27 @@ class _UserPageState
     _hasLoadedSocialAccounts = true;
 
     // 화면 진입 후 소셜 계정 연동 상태를 한 번 조회한다.
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
 
-      context
-          .read<AuthProvider>()
-          .loadLinkedSocialAccounts();
+      context.read<AuthProvider>().loadLinkedSocialAccounts();
     });
   }
 
   /// 비밀번호 변경 화면으로 이동한다.
   void _openFindPasswordScreen() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            const FindPasswordScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const FindPasswordScreen()));
   }
 
   /// 설정 화면으로 이동한다.
   void _openSettingsScreen() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            const SettingsScreen(),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
   }
 
   /// 닉네임 수정 다이얼로그를 열고 변경 요청을 처리한다.
@@ -90,61 +83,98 @@ class _UserPageState
     _showMessage('닉네임이 변경되었습니다.');
   }
 
-  /// Google 계정 연동 또는 연동 해제를 처리한다.
-  Future<void> _handleSocialAccountChange(
-    AuthProvider authProvider,
-  ) async {
-    final isLinked =
-        authProvider.googleLinked == true;
+  /// 갤러리에서 프로필 이미지를 선택하고 변경한다.
+  Future<void> _handleProfileImageChange(AuthProvider authProvider) async {
+    if (authProvider.isLoading) {
+      return;
+    }
 
-    final success = isLinked
-        ? await authProvider
-            .unlinkGoogleAccount()
-        : await authProvider
-            .linkGoogleAccount();
+    try {
+      final filePath = await _profileImagePickerService.pickFromGallery();
+
+      if (!mounted || filePath == null) {
+        return;
+      }
+
+      final success = await authProvider.updateProfileImage(filePath: filePath);
+
+      if (!mounted) {
+        return;
+      }
+
+      if (success) {
+        _showMessage('프로필 이미지가 변경되었습니다.');
+        return;
+      }
+
+      _showMessage(authProvider.errorMessage ?? '프로필 이미지 변경에 실패했습니다.');
+    } catch (error) {
+      debugPrint('프로필 이미지 선택 실패: $error');
+
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage('이미지를 선택하지 못했습니다.');
+    }
+  }
+
+  /// 현재 프로필 이미지를 삭제한다.
+  Future<void> _handleProfileImageDelete(AuthProvider authProvider) async {
+    if (authProvider.isLoading || authProvider.profileImageUrl == null) {
+      return;
+    }
+
+    final success = await authProvider.deleteProfileImage();
 
     if (!mounted) {
       return;
     }
 
     if (success) {
-      _showMessage(
-        isLinked
-            ? 'Google 계정 연동이 해제되었습니다.'
-            : 'Google 계정이 연동되었습니다.',
-      );
+      _showMessage('프로필 이미지가 삭제되었습니다.');
+      return;
+    }
+
+    _showMessage(authProvider.errorMessage ?? '프로필 이미지 삭제에 실패했습니다.');
+  }
+
+  /// Google 계정 연동 또는 연동 해제를 처리한다.
+  Future<void> _handleSocialAccountChange(AuthProvider authProvider) async {
+    final isLinked = authProvider.googleLinked == true;
+
+    final success = isLinked
+        ? await authProvider.unlinkGoogleAccount()
+        : await authProvider.linkGoogleAccount();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (success) {
+      _showMessage(isLinked ? 'Google 계정 연동이 해제되었습니다.' : 'Google 계정이 연동되었습니다.');
 
       return;
     }
 
     final message =
         authProvider.errorMessage ??
-        (
-          isLinked
-              ? 'Google 계정 연동 해제에 실패했습니다.'
-              : 'Google 계정 연동에 실패했습니다.'
-        );
+        (isLinked ? 'Google 계정 연동 해제에 실패했습니다.' : 'Google 계정 연동에 실패했습니다.');
 
     _showMessage(message);
   }
 
   /// 로그아웃을 처리한다.
-  Future<void> _handleLogout(
-    AuthProvider authProvider,
-  ) async {
+  Future<void> _handleLogout(AuthProvider authProvider) async {
     await authProvider.logout();
 
     if (!mounted) {
       return;
     }
 
-    Navigator.of(context).popUntil(
-      (route) => route.isFirst,
-    );
+    Navigator.of(context).popUntil((route) => route.isFirst);
 
-    _showMessage(
-      '로그아웃되었습니다.',
-    );
+    _showMessage('로그아웃되었습니다.');
   }
 
   /// 계정 탈퇴를 처리한다.
@@ -215,159 +245,110 @@ class _UserPageState
   }
 
   /// 공통 SnackBar 출력
-  void _showMessage(
-    String message,
-  ) {
-    final messenger =
-        ScaffoldMessenger.of(context);
+  void _showMessage(String message) {
+    final messenger = ScaffoldMessenger.of(context);
 
     messenger.hideCurrentSnackBar();
 
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message),
-      ),
-    );
+    messenger.showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
-  Widget build(
-    BuildContext context,
-  ) {
-    final authProvider =
-        context.watch<AuthProvider>();
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
 
-    final colorScheme =
-        Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    final nickname =
-        authProvider.nickname;
+    final nickname = authProvider.nickname;
 
-    final loginId =
-        authProvider.loginId;
+    final loginId = authProvider.loginId;
 
-    final displayName =
-        nickname?.trim().isNotEmpty == true
+    final profileImageUrl = authProvider.profileImageUrl?.trim();
+
+    final ImageProvider<Object>? profileImage =
+        profileImageUrl != null && profileImageUrl.isNotEmpty
+        ? NetworkImage(profileImageUrl)
+        : null;
+
+    final displayName = nickname?.trim().isNotEmpty == true
         ? nickname!
         : (loginId ?? '사용자');
 
-    final displayLoginId =
-        loginId ?? '';
+    final displayLoginId = loginId ?? '';
 
     return Scaffold(
-      backgroundColor:
-          colorScheme.surface,
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
-        backgroundColor:
-            colorScheme.surface,
-        surfaceTintColor:
-            Colors.transparent,
-        title: Text(
-          '사용자',
-          style: TextStyle(
-            color:
-                colorScheme.onSurface,
-          ),
-        ),
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        title: Text('사용자', style: TextStyle(color: colorScheme.onSurface)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding:
-              const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 24,
-              ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           child: Column(
             children: [
               UserInfoSection(
                 displayName: displayName,
                 loginId: displayLoginId,
                 isLoading: authProvider.isLoading,
+                profileImage: profileImage,
+
+                onChangeProfileImage: () {
+                  _handleProfileImageChange(authProvider);
+                },
+
+                onDeleteProfileImage: () {
+                  _handleProfileImageDelete(authProvider);
+                },
+                
                 onEditNickname: () {
                   _handleNicknameEdit(authProvider);
                 },
               ),
 
-              const SizedBox(
-                height: 32,
-              ),
+              const SizedBox(height: 32),
 
-              _buildDivider(
-                context,
-              ),
+              _buildDivider(context),
 
-              const SizedBox(
-                height: 24,
-              ),
+              const SizedBox(height: 24),
 
               UserAccountSection(
-                googleLinked:
-                    authProvider
-                        .googleLinked,
-                isLoading:
-                    authProvider
-                        .isLoading,
+                googleLinked: authProvider.googleLinked,
+                isLoading: authProvider.isLoading,
 
-                onChangePassword:
-                    _openFindPasswordScreen,
+                onChangePassword: _openFindPasswordScreen,
 
-                onChangeSocialAccount:
-                    () {
-                  _handleSocialAccountChange(
-                    authProvider,
-                  );
+                onChangeSocialAccount: () {
+                  _handleSocialAccountChange(authProvider);
                 },
               ),
 
-              const SizedBox(
-                height: 24,
-              ),
+              const SizedBox(height: 24),
 
-              _buildDivider(
-                context,
-              ),
+              _buildDivider(context),
 
-              const SizedBox(
-                height: 24,
-              ),
+              const SizedBox(height: 24),
 
-              UserAppSection(
-                onOpenSettings:
-                    _openSettingsScreen,
-              ),
+              UserAppSection(onOpenSettings: _openSettingsScreen),
 
-              const SizedBox(
-                height: 24,
-              ),
+              const SizedBox(height: 24),
 
-              _buildDivider(
-                context,
-              ),
+              _buildDivider(context),
 
-              const SizedBox(
-                height: 24,
-              ),
+              const SizedBox(height: 24),
 
               UserAccountActions(
-                isLoading:
-                    authProvider
-                        .isLoading ||
-                    _isDeletingAccount,
+                isLoading: authProvider.isLoading || _isDeletingAccount,
                 onLogout: () {
-                  _handleLogout(
-                    authProvider,
-                  );
+                  _handleLogout(authProvider);
                 },
                 onDeleteAccount: () {
-                  _handleDeleteAccount(
-                    authProvider,
-                  );
+                  _handleDeleteAccount(authProvider);
                 },
               ),
 
-              const SizedBox(
-                height: 24,
-              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -375,15 +356,11 @@ class _UserPageState
     );
   }
 
-  Widget _buildDivider(
-    BuildContext context,
-  ) {
+  Widget _buildDivider(BuildContext context) {
     return Divider(
       height: 1,
       thickness: 1,
-      color: Theme.of(
-        context,
-      ).colorScheme.outlineVariant,
+      color: Theme.of(context).colorScheme.outlineVariant,
     );
   }
 }

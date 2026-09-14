@@ -11,6 +11,7 @@ class FakeNicknameAuthRepository extends AuthRepository {
     id: 1,
     loginId: 'testuser01',
     nickname: '기존닉네임',
+    profileImageUrl: 'https://example.com/profile.png',
   );
 
   int updateNicknameCallCount = 0;
@@ -41,6 +42,7 @@ class FakeNicknameAuthRepository extends AuthRepository {
       id: currentUser.id,
       loginId: currentUser.loginId,
       nickname: nickname,
+      profileImageUrl: currentUser.profileImageUrl,
     );
 
     return currentUser;
@@ -80,6 +82,7 @@ void main() {
       expect(provider.userId, 1);
       expect(provider.loginId, 'testuser01');
       expect(provider.nickname, '새닉네임');
+      expect(provider.profileImageUrl, 'https://example.com/profile.png');
       expect(provider.isAuthenticated, isTrue);
       expect(provider.errorMessage, isNull);
       expect(provider.isLoading, isFalse);

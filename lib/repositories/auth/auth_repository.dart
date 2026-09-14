@@ -229,6 +229,31 @@ class AuthRepository {
     });
   }
 
+  /// 현재 로그인 사용자의 프로필 이미지를 변경한다.
+  ///
+  /// Access Token이 만료되어 401이 반환되면 토큰을 재발급한 뒤
+  /// 이미지 변경 요청을 한 번 다시 시도한다.
+  Future<UserResponse> updateProfileImage({required String filePath}) {
+    return _requestWithTokenRetry<UserResponse>((authorizationHeader) {
+      return _authApiService.updateProfileImage(
+        authorizationHeader: authorizationHeader,
+        filePath: filePath,
+      );
+    });
+  }
+
+  /// 현재 로그인 사용자의 프로필 이미지를 삭제한다.
+  ///
+  /// Access Token이 만료되어 401이 반환되면 토큰을 재발급한 뒤
+  /// 이미지 삭제 요청을 한 번 다시 시도한다.
+  Future<void> deleteProfileImage() {
+    return _requestWithTokenRetry<void>((authorizationHeader) {
+      return _authApiService.deleteProfileImage(
+        authorizationHeader: authorizationHeader,
+      );
+    });
+  }
+
   /// 현재 사용자의 소셜 계정 연동 상태를 조회한다.
   Future<SocialAccountStatusResponse> getLinkedSocialAccounts() {
     return _requestWithTokenRetry<SocialAccountStatusResponse>((

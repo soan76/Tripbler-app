@@ -12,7 +12,8 @@ class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({this.hasStoredTokens = true, UserResponse? currentUser})
     : currentUser =
           currentUser ??
-          const UserResponse(id: 1, loginId: 'testuser01', nickname: '테스트사용자');
+          const UserResponse(id: 1, loginId: 'testuser01', nickname: '테스트사용자', profileImageUrl: 'https://example.com/profile.png',
+          );
 
   bool hasStoredTokens;
   UserResponse currentUser;
@@ -32,6 +33,16 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<UserResponse> updateNickname({required String nickname}) {
     throw UnsupportedError('updateNickname()은 이 Fake에서 아직 구현되지 않았습니다.');
+  }
+
+  @override
+  Future<UserResponse> updateProfileImage({required String filePath}) {
+    throw UnsupportedError('updateProfileImage()는 이 Fake에서 아직 구현되지 않았습니다.');
+  }
+
+  @override
+  Future<void> deleteProfileImage() {
+    throw UnsupportedError('deleteProfileImage()는 이 Fake에서 아직 구현되지 않았습니다.');
   }
 
   @override
@@ -191,6 +202,7 @@ void main() {
       expect(provider.userId, 1);
       expect(provider.loginId, 'testuser01');
       expect(provider.nickname, '테스트사용자');
+      expect(provider.profileImageUrl, 'https://example.com/profile.png');
 
       final success = await provider.deleteAccount();
 
@@ -200,6 +212,7 @@ void main() {
       expect(provider.userId, isNull);
       expect(provider.loginId, isNull);
       expect(provider.nickname, isNull);
+      expect(provider.profileImageUrl, isNull);
       expect(provider.googleLinked, isNull);
       expect(provider.errorMessage, isNull);
       expect(provider.isLoading, isFalse);

@@ -21,6 +21,7 @@ class AuthProvider extends ChangeNotifier {
   int? _userId;
   String? _loginId;
   String? _nickname;
+  String? _profileImageUrl;
   String? _errorMessage;
   bool? _isLoginIdAvailable;
   String? _checkedLoginId;
@@ -36,6 +37,7 @@ class AuthProvider extends ChangeNotifier {
   int? get userId => _userId;
   String? get loginId => _loginId;
   String? get nickname => _nickname;
+  String? get profileImageUrl => _profileImageUrl;
   String? get errorMessage => _errorMessage;
   bool? get isLoginIdAvailable => _isLoginIdAvailable;
   String? get checkedLoginId => _checkedLoginId;
@@ -154,6 +156,7 @@ class AuthProvider extends ChangeNotifier {
     _userId = user.id;
     _loginId = user.loginId;
     _nickname = user.nickname;
+    _profileImageUrl = user.profileImageUrl;
     _isAuthenticated = true;
   }
 
@@ -172,6 +175,38 @@ class AuthProvider extends ChangeNotifier {
       },
       logPrefix: '닉네임 변경 실패',
       fallbackErrorMessage: '닉네임 변경 중 오류가 발생했습니다.',
+    );
+  }
+
+  /// 현재 로그인 사용자의 프로필 이미지를 변경한다.
+  ///
+  /// 서버에서 반환한 최신 사용자 정보를 Provider 상태에 반영한다.
+  Future<bool> updateProfileImage({required String filePath}) {
+    return _runGuardedAction(
+      canRun: _isAuthenticated,
+      action: () async {
+        final user = await _authRepository.updateProfileImage(
+          filePath: filePath,
+        );
+
+        _setCurrentUser(user);
+      },
+      logPrefix: '프로필 이미지 변경 실패',
+      fallbackErrorMessage: '프로필 이미지 변경 중 오류가 발생했습니다.',
+    );
+  }
+
+  /// 현재 로그인 사용자의 프로필 이미지를 삭제한다.
+  Future<bool> deleteProfileImage() {
+    return _runGuardedAction(
+      canRun: _isAuthenticated,
+      action: () async {
+        await _authRepository.deleteProfileImage();
+
+        _profileImageUrl = null;
+      },
+      logPrefix: '프로필 이미지 삭제 실패',
+      fallbackErrorMessage: '프로필 이미지 삭제 중 오류가 발생했습니다.',
     );
   }
 
@@ -391,6 +426,7 @@ class AuthProvider extends ChangeNotifier {
     _userId = null;
     _loginId = null;
     _nickname = null;
+    _profileImageUrl = null;
     _googleLinked = null;
   }
   /// 로딩 상태를 변경하고 ChangeNotifier에 알린다.

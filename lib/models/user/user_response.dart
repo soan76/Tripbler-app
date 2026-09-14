@@ -2,11 +2,13 @@ class UserResponse {
   final int id;
   final String loginId;
   final String? nickname;
+  final String? profileImageUrl;
 
   const UserResponse({
     required this.id,
     required this.loginId,
     required this.nickname,
+    required this.profileImageUrl,
   });
 
   factory UserResponse.fromJson(Map<String, dynamic> json) {
@@ -14,6 +16,7 @@ class UserResponse {
       id: _parseInt(json['id']),
       loginId: _parseRequiredString(json['loginId'], 'loginId'),
       nickname: _parseOptionalString(json['nickname']),
+      profileImageUrl: _parseOptionalString(json['profileImageUrl']),
     );
   }
 

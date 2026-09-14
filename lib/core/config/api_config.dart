@@ -51,6 +51,9 @@ class ApiConfig {
   static const String usersMePath = '/api/v1/users/me';
 
   static const String usersMeNicknamePath = '/api/v1/users/me/nickname';
+
+  static const String usersMeProfileImagePath =
+      '/api/v1/users/me/profile-image';
   
   static const String usersMeGoogleLinkPath =
       '/api/v1/users/me/social-accounts/google';
@@ -101,6 +104,10 @@ class ApiConfig {
 
   static Uri get usersMeNicknameUri {
     return Uri.parse(baseUrl).replace(path: usersMeNicknamePath);
+  }
+
+  static Uri get usersMeProfileImageUri {
+    return Uri.parse(baseUrl).replace(path: usersMeProfileImagePath);
   }
 
   static Uri get usersMeSocialAccountsUri {

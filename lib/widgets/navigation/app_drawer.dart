@@ -102,11 +102,7 @@ class AppDrawer extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.account_circle_outlined,
-                      size: 40,
-                      color: colorScheme.onSurface,
-                    ),
+                    _buildUserAvatar(context, authProvider),
 
                     const SizedBox(width: 8),
 
@@ -158,6 +154,37 @@ class AppDrawer extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUserAvatar(BuildContext context, AuthProvider authProvider) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final profileImageUrl = authProvider.profileImageUrl?.trim();
+
+    if (profileImageUrl == null || profileImageUrl.isEmpty) {
+      return Icon(
+        Icons.account_circle_outlined,
+        size: 60,
+        color: colorScheme.onSurface,
+      );
+    }
+
+    return ClipOval(
+      child: SizedBox(
+        width: 60,
+        height: 60,
+        child: Image.network(
+          profileImageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Icon(
+              Icons.account_circle_outlined,
+              size: 40,
+              color: colorScheme.onSurface,
+            );
+          },
+        ),
       ),
     );
   }

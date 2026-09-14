@@ -51,6 +51,10 @@ class _TestAuthApiMessages extends AuthApiMessages {
       'INVALID_UPDATE_NICKNAME_RESPONSE';
 
   @override
+  String get invalidUpdateProfileImageResponse =>
+      'INVALID_UPDATE_PROFILE_IMAGE_RESPONSE';
+
+  @override
   String get invalidSocialAccountStatusResponse =>
       'INVALID_SOCIAL_ACCOUNT_STATUS_RESPONSE';
 

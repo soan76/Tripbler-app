@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
+import 'profile_image_action_sheet.dart';
+
 class UserInfoSection extends StatelessWidget {
   const UserInfoSection({
     super.key,
     required this.displayName,
     required this.loginId,
     required this.onEditNickname,
+    required this.onChangeProfileImage,
+    required this.onDeleteProfileImage,
     this.isLoading = false,
     this.profileImage,
   });
@@ -13,8 +17,32 @@ class UserInfoSection extends StatelessWidget {
   final String displayName;
   final String loginId;
   final VoidCallback onEditNickname;
+  final VoidCallback onChangeProfileImage;
+  final VoidCallback onDeleteProfileImage;
   final bool isLoading;
   final ImageProvider<Object>? profileImage;
+
+  /// 프로필 이미지 변경/삭제 메뉴를 연다.
+  Future<void> _openProfileImageActions(BuildContext context) async {
+    final action = await ProfileImageActionSheet.show(
+      context,
+      hasProfileImage: profileImage != null,
+    );
+
+    if (action == null) {
+      return;
+    }
+
+    switch (action) {
+      case ProfileImageAction.change:
+        onChangeProfileImage();
+        break;
+
+      case ProfileImageAction.delete:
+        onDeleteProfileImage();
+        break;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,17 +52,44 @@ class UserInfoSection extends StatelessWidget {
     return Center(
       child: Column(
         children: [
-          CircleAvatar(
-            radius: 48,
-            backgroundColor: colorScheme.surfaceContainerHighest,
-            backgroundImage: profileImage,
-            child: profileImage == null
-                ? Icon(
-                    Icons.person,
-                    size: 52,
-                    color: colorScheme.onSurfaceVariant,
-                  )
-                : null,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                radius: 48,
+                backgroundColor: colorScheme.surfaceContainerHighest,
+                backgroundImage: profileImage,
+                child: profileImage == null
+                    ? Icon(
+                        Icons.person,
+                        size: 52,
+                        color: colorScheme.onSurfaceVariant,
+                      )
+                    : null,
+              ),
+
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Material(
+                  color: colorScheme.primaryContainer,
+                  shape: const CircleBorder(),
+                  child: IconButton(
+                    tooltip: '프로필 이미지 변경',
+                    onPressed: canEdit
+                        ? () {
+                            _openProfileImageActions(context);
+                          }
+                        : null,
+                    icon: Icon(
+                      Icons.camera_alt_outlined,
+                      size: 18,
+                      color: colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           Row(

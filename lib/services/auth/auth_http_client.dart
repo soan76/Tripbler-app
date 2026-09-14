@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../../core/network/api_exception.dart';
 import 'auth_api_messages.dart';
@@ -66,6 +67,76 @@ class AuthHttpClient {
       uri: uri,
       authorizationHeader: authorizationHeader,
     );
+  }
+
+  /// 인증된 multipart PUT 요청으로 파일을 전송한다.
+  Future<http.Response> putMultipart({
+    required Uri uri,
+    required String authorizationHeader,
+    required String fieldName,
+    required String filePath,
+  }) async {
+    final contentType = _resolveImageMediaType(filePath);
+
+    try {
+      final request = http.MultipartRequest('PUT', uri);
+
+      request.headers['Accept'] = 'application/json';
+
+      final trimmedAuthorizationHeader = authorizationHeader.trim();
+
+      if (trimmedAuthorizationHeader.isNotEmpty) {
+        request.headers['Authorization'] = trimmedAuthorizationHeader;
+      }
+
+      request.files.add(
+        await http.MultipartFile.fromPath(
+          fieldName,
+          filePath,
+          contentType: contentType,
+        ),
+      );
+
+      final response = await _client
+          .send(request)
+          .then(http.Response.fromStream)
+          .timeout(_timeout);
+
+      return response;
+    } on TimeoutException {
+      throw ApiException(message: _messages.requestTimeout);
+    } catch (error, stackTrace) {
+      _debugLog(
+        'multipart API 연결 실패 '
+        '[PUT $uri]: $error',
+        stackTrace,
+      );
+
+      throw ApiException(message: _messages.connectionFailed);
+    }
+  }
+
+  /// 이미지 파일 확장자에 맞는 MIME 타입을 반환한다.
+  MediaType _resolveImageMediaType(String filePath) {
+    final normalizedPath = filePath.toLowerCase();
+
+    if (normalizedPath.endsWith('.jpg') || normalizedPath.endsWith('.jpeg')) {
+      return MediaType('image', 'jpeg');
+    }
+
+    if (normalizedPath.endsWith('.png')) {
+      return MediaType('image', 'png');
+    }
+
+    if (normalizedPath.endsWith('.webp')) {
+      return MediaType('image', 'webp');
+    }
+
+    if (normalizedPath.endsWith('.gif')) {
+      return MediaType('image', 'gif');
+    }
+
+    throw const ApiException(message: '지원하지 않는 이미지 파일 형식입니다.');
   }
 
   /// 공통 HTTP 요청을 실행한다.

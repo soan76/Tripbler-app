@@ -39,7 +39,12 @@ class FakeNicknameAuthApiService extends AuthApiService {
       throw error;
     }
 
-    return UserResponse(id: 1, loginId: 'testuser01', nickname: nickname);
+    return UserResponse(
+      id: 1,
+      loginId: 'testuser01',
+      nickname: nickname,
+      profileImageUrl: 'https://example.com/profile.png',
+    );
   }
 
   @override
@@ -125,6 +130,7 @@ class FakeNicknameTokenStorageService extends TokenStorageService {
 
         expect(response.loginId, 'testuser01');
         expect(response.nickname, '새닉네임');
+        expect(response.profileImageUrl, 'https://example.com/profile.png');
 
         expect(apiService.refreshCallCount, 0);
       });
@@ -144,6 +150,7 @@ class FakeNicknameTokenStorageService extends TokenStorageService {
         ]);
 
         expect(response.nickname, '변경닉네임');
+        expect(response.profileImageUrl, 'https://example.com/profile.png');
       });
 
       test('저장된 Access Token이 없으면 닉네임 변경 API를 호출하지 않는다', () async {

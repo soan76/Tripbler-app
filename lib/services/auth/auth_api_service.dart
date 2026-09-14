@@ -208,6 +208,37 @@ class AuthApiService {
     );
   }
 
+  /// 현재 로그인 사용자의 프로필 이미지를 변경한다.
+  Future<UserResponse> updateProfileImage({
+    required String authorizationHeader,
+    required String filePath,
+  }) async {
+    final response = await _httpClient.putMultipart(
+      uri: ApiConfig.usersMeProfileImageUri,
+      authorizationHeader: authorizationHeader,
+      fieldName: 'file',
+      filePath: filePath,
+    );
+
+    return _responseParser.parseJsonResponse<UserResponse>(
+      response: response,
+      successStatusCode: 200,
+      parser: UserResponse.fromJson,
+      parseErrorLog: '프로필 이미지 변경 응답 파싱 실패',
+      invalidResponseMessage: _messages.invalidUpdateProfileImageResponse,
+    );
+  }
+
+  /// 현재 로그인 사용자의 프로필 이미지를 삭제한다.
+  Future<void> deleteProfileImage({required String authorizationHeader}) async {
+    final response = await _httpClient.delete(
+      uri: ApiConfig.usersMeProfileImageUri,
+      authorizationHeader: authorizationHeader,
+    );  
+
+    _responseParser.ensureNoContentResponse(response);
+  }
+
   /// 현재 사용자의 소셜 계정 연동 상태를 조회한다.
   Future<SocialAccountStatusResponse> getLinkedSocialAccounts({
     required String authorizationHeader,
