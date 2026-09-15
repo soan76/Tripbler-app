@@ -44,6 +44,41 @@ class UserInfoSection extends StatelessWidget {
     }
   }
 
+  /// 프로필 이미지를 표시하고 로딩 실패 시 기본 아이콘을 표시한다.
+  Widget _buildProfileAvatar(BuildContext context) {
+    return ClipOval(
+      child: SizedBox(
+        width: 96,
+        height: 96,
+        child: profileImage == null
+            ? _buildDefaultProfileIcon(context)
+            : Image(
+                image: profileImage!,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return _buildDefaultProfileIcon(context);
+                },
+              ),
+      ),
+    );
+  }
+
+  /// 프로필 이미지가 없거나 로딩에 실패했을 때 기본 아이콘을 표시한다.
+  Widget _buildDefaultProfileIcon(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return ColoredBox(
+      color: colorScheme.surfaceContainerHighest,
+      child: Center(
+        child: Icon(
+          Icons.person,
+          size: 52,
+          color: colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -55,18 +90,7 @@ class UserInfoSection extends StatelessWidget {
           Stack(
             clipBehavior: Clip.none,
             children: [
-              CircleAvatar(
-                radius: 48,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                backgroundImage: profileImage,
-                child: profileImage == null
-                    ? Icon(
-                        Icons.person,
-                        size: 52,
-                        color: colorScheme.onSurfaceVariant,
-                      )
-                    : null,
-              ),
+              _buildProfileAvatar(context),
 
               Positioned(
                 right: -2,

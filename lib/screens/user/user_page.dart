@@ -108,6 +108,12 @@ class _UserPageState extends State<UserPage> {
       }
 
       _showMessage(authProvider.errorMessage ?? '프로필 이미지 변경에 실패했습니다.');
+    } on ProfileImageException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      _showMessage(error.message);
     } catch (error) {
       debugPrint('프로필 이미지 선택 실패: $error');
 
@@ -301,7 +307,7 @@ class _UserPageState extends State<UserPage> {
                 onDeleteProfileImage: () {
                   _handleProfileImageDelete(authProvider);
                 },
-                
+
                 onEditNickname: () {
                   _handleNicknameEdit(authProvider);
                 },
