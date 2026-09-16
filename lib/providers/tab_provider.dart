@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 class TabProvider extends ChangeNotifier {
   static const int homeIndex = -1; // 홈 탭의 인덱스. -1로 설정됨.
   static const int firstTabIndex = 0; // 첫 번째 탭의 인덱스. 0으로 설정됨.
-  static const int tabCount = 3;  // 총 탭의 개수. 3으로 설정됨.
+  static const int tabCount = 3; // 총 탭의 개수. 3으로 설정됨.
 
   // 현재 선택된 탭의 인덱스를 나타내는 변수. 초기값은 homeIndex로 설정됨.
   int _selectedIndex = homeIndex;
@@ -28,7 +28,17 @@ class TabProvider extends ChangeNotifier {
     _selectedIndex = nextIndex;
     notifyListeners();
   }
-  
+
+  /// AI/Home 화면으로 직접 이동한다.
+  void selectHome() {
+    if (_selectedIndex == homeIndex) {
+      return;
+    }
+
+    _selectedIndex = homeIndex;
+    notifyListeners();
+  }
+
   bool isSelected(int index) {
     if (!_isValidTabIndex(index)) {
       return false;

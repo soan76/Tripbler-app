@@ -61,31 +61,37 @@ class MainScreen extends StatelessWidget {
       drawer: const AppDrawer(),
 
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // 모든 화면에 표시되는 90px 공통 상단 영역
-            AppTopBar(
-              title: screenTitle,
+            Column(
+              children: [
+                AppTopBar(title: screenTitle),
+
+                Expanded(
+                  child: IndexedStack(
+                    index: stackIndex,
+                    children: const [
+                      ExchangeScreen(),
+                      MapScreen(),
+                      TranslationScreen(),
+                      AiChatScreen(),
+                    ],
+                  ),
+                ),
+              ],
             ),
 
-            // 현재 기능 화면
-            Expanded(
-              child: IndexedStack(
-                index: stackIndex,
-                children: const [
-                  ExchangeScreen(),
-                  MapScreen(),
-                  TranslationScreen(),
-                  AiChatScreen(),
-                ],
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: BottomTabBar(
+                tabs: tabs,
+                selectedIndex: selectedIndex,
+                isHomeSelected: tabProvider.isHomeSelected,
+                onTabTap: tabProvider.selectTab,
+                onHomeTap: tabProvider.selectHome,
               ),
-            ),
-
-            // 기존 하단 탭
-            BottomTabBar(
-              tabs: tabs,
-              selectedIndex: selectedIndex,
-              onTabTap: tabProvider.selectTab,
             ),
           ],
         ),
