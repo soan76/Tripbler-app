@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../models/currency_model.dart';
-import '../services/exchange_api_service.dart';
+import '../services/exchange_rate_api_service.dart';
 import '../models/exchange_rate_history_model.dart';
 import '../widgets/exchange_rate_line_chart.dart';
 
@@ -11,7 +11,7 @@ class ExchangeDetailScreen extends StatefulWidget {
   final CurrencyModel baseCurrency;
   final CurrencyModel targetCurrency;
   final double? currentRate;
-  final ExchangeApiService? apiService;
+  final ExchangeRateApiService? apiService;
 
   const ExchangeDetailScreen({
     super.key,
@@ -28,7 +28,8 @@ class ExchangeDetailScreen extends StatefulWidget {
 // 환율 상세 화면의 상태를 관리하는 State 클래스
 class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
 
-  late final ExchangeApiService _apiService;
+  late final ExchangeRateApiService _apiService;
+  late final bool _ownsApiService;
   final NumberFormat _numberFormat = NumberFormat('#,##0.####');
 
   bool _isLoading = true;
@@ -40,13 +41,21 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _apiService = widget.apiService ?? ExchangeApiService();
+
+    _ownsApiService = widget.apiService == null;
+    _apiService = widget.apiService ?? ExchangeRateApiService();
+
     _loadHistoricalRates();
   }
 
   @override
   void dispose() {
     _requestId++;
+
+    if (_ownsApiService) {
+      _apiService.dispose();
+    }
+
     super.dispose();
   }
 

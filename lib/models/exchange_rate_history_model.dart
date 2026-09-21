@@ -20,11 +20,6 @@ class ExchangeRateHistoryModel {
        );
 
   // 환율 기록 객체를 JSON 형태의 Map으로 변환.
-  //
-  // date는 백엔드의 LocalDate(예: "2026-07-01")에서 오는 시간 정보 없는
-  // 순수 달력 날짜이므로 UTC로 변환하지 않는다. 만약 여기서 .toUtc()를
-  // 적용하면 KST 등 UTC보다 빠른 시간대에서는 자정(00:00)이 전날 오후로
-  // 밀려 date.day를 다시 읽었을 때 하루가 어긋나는 버그가 생긴다.
   Map<String, dynamic> toJson() {
     return {
       'date': date.toIso8601String(),
@@ -62,15 +57,67 @@ class ExchangeRateHistoryModel {
   }
 
   // fromJson과 fromBackendJson이 공통으로 사용하는 date/rate 파싱 로직.
-  // 두 팩토리에 중복 작성되어 있던 부분을 한 곳으로 모아
-  // 필드가 늘어나거나 파싱 규칙이 바뀔 때 한쪽만 고치는 실수를 방지한다.
   static (DateTime, double) _parseDateAndRate(Map<String, dynamic> json) {
-    // 백엔드의 LocalDate("2026-07-01")를 그대로 순수 달력 날짜로 파싱한다.
-    // 시간 정보가 없으므로 시간대 변환은 하지 않는다.
-    final date = DateTime.parse(json['date'] as String);
-    final rate = (json['rate'] as num).toDouble();
+    final date = _parseRequiredLocalDate(json['date'], fieldName: 'date');
+
+    final rate = _parseRequiredRate(json['rate'], fieldName: 'rate');
 
     return (date, rate);
+  }
+
+  // 백엔드의 LocalDate 형식인 yyyy-MM-dd를 검증하고 파싱한다.
+  //
+  // 단순히 DateTime.parse()만 사용하면 잘못된 날짜가 자동 보정될 수 있으므로
+  // 먼저 형식을 확인한 뒤 실제 달력 날짜인지 다시 검증한다.
+  static DateTime _parseRequiredLocalDate(
+    dynamic value, {
+    required String fieldName,
+  }) {
+    if (value is! String || value.trim().isEmpty) {
+      throw FormatException('$fieldName 값이 올바르지 않습니다.');
+    }
+
+    final normalizedValue = value.trim();
+
+    final datePattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
+
+    if (!datePattern.hasMatch(normalizedValue)) {
+      throw FormatException('$fieldName 날짜 형식이 올바르지 않습니다.');
+    }
+
+    final parsedDate = DateTime.tryParse(normalizedValue);
+
+    if (parsedDate == null) {
+      throw FormatException('$fieldName 날짜 형식이 올바르지 않습니다.');
+    }
+
+    // DateTime이 비정상 날짜를 다른 날짜로 자동 보정했는지 확인한다.
+    final normalizedParsedDate =
+        '${parsedDate.year.toString().padLeft(4, '0')}-'
+        '${parsedDate.month.toString().padLeft(2, '0')}-'
+        '${parsedDate.day.toString().padLeft(2, '0')}';
+
+    if (normalizedParsedDate != normalizedValue) {
+      throw FormatException('$fieldName 날짜가 실제 달력에 존재하지 않습니다.');
+    }
+
+    return parsedDate;
+  }
+
+  // 환율 값이 숫자이며,
+  // 0보다 큰 유한한 값인지 검증한다.
+  static double _parseRequiredRate(dynamic value, {required String fieldName}) {
+    if (value is! num) {
+      throw FormatException('$fieldName 값이 숫자가 아닙니다.');
+    }
+
+    final rate = value.toDouble();
+
+    if (!rate.isFinite || rate <= 0) {
+      throw FormatException('$fieldName 값은 0보다 큰 유한한 숫자여야 합니다.');
+    }
+
+    return rate;
   }
 
   @override
@@ -78,11 +125,12 @@ class ExchangeRateHistoryModel {
       identical(this, other) ||
       (other is ExchangeRateHistoryModel &&
           other.date == date &&
+          other.rate == rate &&
           other.baseCurrencyCode == baseCurrencyCode &&
           other.targetCurrencyCode == targetCurrencyCode);
 
   @override
-  int get hashCode => Object.hash(date, baseCurrencyCode, targetCurrencyCode);
+  int get hashCode => Object.hash(date, rate, baseCurrencyCode, targetCurrencyCode);
 
   @override
   String toString() =>
@@ -102,10 +150,6 @@ enum ChartPeriod {
 }
 
 // ChartPeriod별 표시 라벨과 X축 간격을 한 곳에 모아둔 메타데이터.
-// 기존에는 label / shortLabel / xAxisLabelInterval이 각각 별도의 switch문으로
-// 흩어져 있어서, 새 기간을 추가할 때 하나라도 빠뜨리면 컴파일 에러 없이
-// 조용히 값이 누락될 위험이 있었다. 이제는 새 ChartPeriod를 추가할 때
-// 이 맵 한 곳만 채우면 되므로 실수 여지가 줄어든다.
 class _ChartPeriodMeta {
   final String label;
   final String shortLabel;
@@ -175,11 +219,6 @@ extension ChartPeriodExtension on ChartPeriod {
   int get xAxisLabelInterval => _chartPeriodMeta[this]!.xAxisLabelInterval;
 
   // 특정 기간의 시작 날짜를 계산하는 메서드 - 수정 예정
-  //
-  // 월/연 단위 계산 시, 대상 월에 endDate.day에 해당하는 날짜가 없으면
-  // (예: 5/31의 1개월 전은 4/31이 아니라 4/30) 자동으로 다음 달로 넘어가
-  // 버리는 DateTime 생성자의 오버플로우 문제를 막기 위해
-  // 대상 월의 마지막 날짜로 clamp 처리한다.
   DateTime startDateFrom(DateTime endDate) {
     if (this == ChartPeriod.sevenDays) {
       return endDate.subtract(const Duration(days: 7));
