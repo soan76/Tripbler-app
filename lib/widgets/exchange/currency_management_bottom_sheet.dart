@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/currency_model.dart';
+import '../../models/currency_model.dart';
 
 // 하단 통화 관리 바텀 시트 위젯
 class CurrencyManagementBottomSheet extends StatefulWidget {

@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../providers/exchange_provider.dart';
 import '../providers/settings_provider.dart';
-import '../widgets/currency_management_bottom_sheet.dart';
+import '../widgets/exchange/currency_management_bottom_sheet.dart';
 import '../widgets/navigation/app_top_bar.dart';
 
 class SettingsScreen extends StatelessWidget {

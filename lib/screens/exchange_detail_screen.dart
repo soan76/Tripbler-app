@@ -4,7 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/currency_model.dart';
 import '../services/exchange_rate_api_service.dart';
 import '../models/exchange_rate_history_model.dart';
-import '../widgets/exchange_rate_line_chart.dart';
+import '../widgets/exchange/exchange_rate_line_chart.dart';
 
 // 환율 상세 화면을 구성하는 StatefulWidget
 class ExchangeDetailScreen extends StatefulWidget {
@@ -203,7 +203,7 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 16),
-        ExchangeRateLineChart(history: historyList),
+        ExchangeRateLineChart(history: historyList, period: ChartPeriod.oneMonth),
       ],
     );
   }

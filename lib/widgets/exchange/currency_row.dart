@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/currency_model.dart';
-import '../providers/settings_provider.dart';
+import '../../models/currency_model.dart';
+import '../../providers/settings_provider.dart';
 import 'amount_input_field.dart';
 
 // 통화 행 위젯

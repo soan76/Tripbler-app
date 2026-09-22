@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/exchange_provider.dart';
-import '../widgets/currency_management_bottom_sheet.dart';
-import '../widgets/currency_row.dart';
-import '../widgets/currency_selection_sheet.dart';
-import '../widgets/exchange_chart_carousel.dart';
+import '../widgets/exchange/currency_management_bottom_sheet.dart';
+import '../widgets/exchange/currency_row.dart';
+import '../widgets/exchange/currency_selection_sheet.dart';
+import '../widgets/exchange/exchange_chart_carousel.dart';
 // 환율 화면을 구성하는 StatefulWidget
 class ExchangeScreen extends StatefulWidget {
   const ExchangeScreen({super.key});
@@ -162,26 +162,23 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               // 차트 영역을 표시하는 ExchangeChartCarousel 위젯
               if (visibleCurrencies.isNotEmpty) ...[
                 const SizedBox(height: 64),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        '차트',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      ExchangeChartCarousel(
-                        baseCurrency: baseCurrency,
-                        targetCurrencies: visibleCurrencies,
-                      ),
-                    ],
+                
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    '차트',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
                   ),
                 ),
+
+                const SizedBox(height: 16),
+
+                ExchangeChartCarousel(
+                  baseCurrency: baseCurrency,
+                  targetCurrencies: visibleCurrencies,
+                ),
+
+                const SizedBox(height: 24),
               ],
             ],
           ),

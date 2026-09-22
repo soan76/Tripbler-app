@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../models/currency_model.dart';
+import '../../models/currency_model.dart';
 
 // 통화 선택 시트 위젯
 class CurrencySelectionSheet extends StatefulWidget {
