@@ -1,18 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../models/currency_model.dart';
+import '../../presentation/exchange/display_currency.dart';
 import '../../providers/settings_provider.dart';
 import 'amount_input_field.dart';
+import 'currency_icon.dart';
 
 // 통화 행 위젯
 class CurrencyRow extends StatelessWidget {
-  final CurrencyModel currency;
+  final DisplayCurrency currency;
   final bool isBase;
-  final double amount;
+  final double? amount;
   final double? rate;
   final VoidCallback onCurrencyTap;
-  final VoidCallback onGraphTap;
+  final VoidCallback? onGraphTap;
+  final String? status;
   final ValueChanged<double>? onAmountChanged;
   final VoidCallback? onAmountTap;
 
@@ -23,7 +25,8 @@ class CurrencyRow extends StatelessWidget {
     required this.amount,
     required this.rate,
     required this.onCurrencyTap,
-    required this.onGraphTap,
+    this.onGraphTap,
+    this.status,
     this.onAmountChanged,
     this.onAmountTap,
   });
@@ -56,7 +59,7 @@ class CurrencyRow extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             child: Row(
               children: [
-                Text(currency.flagEmoji, style: const TextStyle(fontSize: 28)),
+                CurrencyIcon(currency: currency),
 
                 const SizedBox(width: 10),
 
@@ -90,30 +93,53 @@ class CurrencyRow extends StatelessWidget {
 
           // 환율 금액 영역
           Expanded(
-            child: AmountInputField(
-              amount: amount,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                AmountInputField(
+                  amount: amount ?? 0,
+                  unavailable: amount == null,
 
-              // 현재 선택된 통화 여부
-              isBase: isBase,
+                  // 현재 선택된 통화 여부
+                  isBase: isBase,
 
-              // SettingsProvider에서 가져온 자릿수 설정을 전달
-              decimalPlaces: decimalPlaces,
+                  // SettingsProvider에서 가져온 자릿수 설정을 전달
+                  decimalPlaces: decimalPlaces,
 
-              // 입력 영역을 터치하면 해당 통화를 선택
-              onTap: onAmountTap,
+                  // 입력 영역을 터치하면 해당 통화를 선택
+                  onTap: onAmountTap,
 
-              // 금액 변경 시 환율 재계산
-              onChanged: onAmountChanged ?? (_) {},
+                  // 금액 변경 시 환율 재계산
+                  onChanged: onAmountChanged ?? (_) {},
+                ),
+                if (status != null)
+                  Tooltip(
+                    message: status!,
+                    child: Text(
+                      status!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
 
           const SizedBox(width: 12),
 
           // 현재 테마의 대표 강조색 사용
-          IconButton(
-            onPressed: onGraphTap,
-            icon: Icon(Icons.show_chart, color: colorScheme.primary),
-          ),
+          if (onGraphTap != null)
+            IconButton(
+              onPressed: onGraphTap,
+              icon: Icon(Icons.show_chart, color: colorScheme.primary),
+            )
+          else
+            const SizedBox(width: 48),
         ],
       ),
     );

@@ -70,6 +70,13 @@ flutter:
   assets:
       - assets/images/camera_permission.png
       - assets/images/current_location_arrow.png
+      - assets/images/Bitcoin.png
+      - assets/images/Cardano_coin.png
+      - assets/images/Dash_coin.png
+      - assets/images/Dogecoin.png
+      - assets/images/ETH_coin.png
+      - assets/images/SOL_coin.png
+      - assets/images/XRP_coin.png
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

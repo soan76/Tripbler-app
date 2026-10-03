@@ -1,3 +1,4 @@
+import '../../models/chart_point.dart';
 import 'dart:async';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -10,11 +11,11 @@ import 'exchange_chart_data_calculator.dart';
 /// 포인터 수명과 선택/3초 유지 상태를 관리한다. 데이터 변경은 포인터를 초기화하지 않는다.
 class ExchangeChartTouchController extends ChangeNotifier {
   ExchangeChartTouchController({
-    required List<ExchangeRateHistoryModel> history,
+    required List<ChartPoint> history,
     required ChartPeriod period,
   }) : _history = List.of(history),
        _period = period;
-  List<ExchangeRateHistoryModel> _history;
+  List<ChartPoint> _history;
   ChartPeriod _period;
   LineBarSpot? _selectedSpot;
   Timer? _tooltipTimer;
@@ -28,7 +29,7 @@ class ExchangeChartTouchController extends ChangeNotifier {
   bool _isValidSpot(LineBarSpot spot) =>
       ExchangeChartDataCalculator.isValidSpot(spot, _history);
 
-  void updateData(List<ExchangeRateHistoryModel> history, ChartPeriod period) {
+  void updateData(List<ChartPoint> history, ChartPeriod period) {
     if (_disposed || (_period == period && listEquals(_history, history))) {
       return;
     }

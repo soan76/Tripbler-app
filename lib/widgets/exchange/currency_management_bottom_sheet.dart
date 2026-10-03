@@ -1,16 +1,29 @@
 import 'package:flutter/material.dart';
 
-import '../../models/currency_model.dart';
+import 'package:provider/provider.dart';
+import '../../presentation/exchange/display_currency.dart';
+import '../../presentation/exchange/exchange_display_provider.dart';
+import 'currency_icon.dart';
+
+enum CurrencyCategory { fiat, crypto }
 
 // 하단 통화 관리 바텀 시트 위젯
 class CurrencyManagementBottomSheet extends StatefulWidget {
-  final CurrencyModel baseCurrency;
-  final List<CurrencyModel> visibleCurrencies;
-  final ValueChanged<List<CurrencyModel>> onApply;
+  final DisplayCurrency baseCurrency;
+  final List<DisplayCurrency> availableCurrencies;
+  final bool loading;
+  final String? error;
+  final VoidCallback? onRetry;
+  final List<DisplayCurrency> visibleCurrencies;
+  final ValueChanged<List<DisplayCurrency>> onApply;
 
   const CurrencyManagementBottomSheet({
     super.key,
     required this.baseCurrency,
+    required this.availableCurrencies,
+    this.loading = false,
+    this.error,
+    this.onRetry,
     required this.visibleCurrencies,
     required this.onApply,
   });
@@ -22,8 +35,16 @@ class CurrencyManagementBottomSheet extends StatefulWidget {
 
 class _CurrencyManagementBottomSheetState
     extends State<CurrencyManagementBottomSheet> {
-  late List<CurrencyModel> editableCurrencies;
+  late List<DisplayCurrency> editableCurrencies;
   String query = '';
+  CurrencyCategory _category = CurrencyCategory.fiat;
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -37,21 +58,21 @@ class _CurrencyManagementBottomSheetState
 
     final displayedCurrencies = editableCurrencies;
 
-    final hiddenCurrencies = supportedCurrencies.where((currency) {
-      final isBaseCurrency = currency.code == widget.baseCurrency.code;
+    final hiddenCurrencies = widget.availableCurrencies.where((currency) {
+      final isBaseCurrency = currency.id == widget.baseCurrency.id;
 
       final isAlreadyDisplayed = editableCurrencies.any(
-        (item) => item.code == currency.code,
+        (item) => item.id == currency.id,
       );
 
-      final lowerQuery = query.toLowerCase();
+      final matchesQuery = currency.matches(query);
+      final matchesCategory =
+          currency.isCrypto == (_category == CurrencyCategory.crypto);
 
-      final matchesQuery =
-          currency.code.toLowerCase().contains(lowerQuery) ||
-          currency.countryName.toLowerCase().contains(lowerQuery) ||
-          currency.currencyName.toLowerCase().contains(lowerQuery);
-
-      return !isBaseCurrency && !isAlreadyDisplayed && matchesQuery;
+      return !isBaseCurrency &&
+          !isAlreadyDisplayed &&
+          matchesCategory &&
+          matchesQuery;
     }).toList();
 
     return Container(
@@ -101,9 +122,12 @@ class _CurrencyManagementBottomSheetState
 
               // 검색 입력 필드
               TextField(
+                controller: _searchController,
                 style: TextStyle(color: colorScheme.onSurface),
                 decoration: InputDecoration(
-                  hintText: '통화 코드, 국가명, 통화 이름 검색',
+                  hintText: _category == CurrencyCategory.fiat
+                      ? '통화 코드, 국가명, 통화 이름 검색'
+                      : '코인 심볼·이름 검색',
 
                   hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
 
@@ -164,7 +188,7 @@ class _CurrencyManagementBottomSheetState
                           final currency = displayedCurrencies[index];
 
                           return _buildDisplayedCurrencyTile(
-                            key: ValueKey(currency.code),
+                            key: ValueKey(currency.id),
                             currency: currency,
                             index: index,
                           );
@@ -178,6 +202,34 @@ class _CurrencyManagementBottomSheetState
                     const SizedBox(height: 12),
 
                     _buildSectionTitle('표시되지 않은 통화'),
+                    SegmentedButton<CurrencyCategory>(
+                      segments: const [
+                        ButtonSegment(
+                          value: CurrencyCategory.fiat,
+                          label: Text('통화'),
+                        ),
+                        ButtonSegment(
+                          value: CurrencyCategory.crypto,
+                          label: Text('암호'),
+                        ),
+                      ],
+                      selected: {_category},
+                      onSelectionChanged: (selection) {
+                        setState(() => _category = selection.single);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (_category == CurrencyCategory.crypto && widget.loading)
+                      const LinearProgressIndicator(),
+                    if (_category == CurrencyCategory.crypto &&
+                        widget.error != null)
+                      ListTile(
+                        title: Text(widget.error!),
+                        trailing: TextButton(
+                          onPressed: widget.onRetry,
+                          child: const Text('다시 시도'),
+                        ),
+                      ),
 
                     if (hiddenCurrencies.isEmpty)
                       _buildEmptyHiddenBox()
@@ -206,10 +258,7 @@ class _CurrencyManagementBottomSheetState
       ),
       child: Row(
         children: [
-          Text(
-            widget.baseCurrency.flagEmoji,
-            style: const TextStyle(fontSize: 28),
-          ),
+          CurrencyIcon(currency: widget.baseCurrency),
 
           const SizedBox(width: 12),
 
@@ -264,7 +313,7 @@ class _CurrencyManagementBottomSheetState
 
   Widget _buildDisplayedCurrencyTile({
     required Key key,
-    required CurrencyModel currency,
+    required DisplayCurrency currency,
     required int index,
   }) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -277,7 +326,7 @@ class _CurrencyManagementBottomSheetState
         border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: ListTile(
-        leading: Text(currency.flagEmoji, style: const TextStyle(fontSize: 28)),
+        leading: CurrencyIcon(currency: currency),
 
         title: Text(
           '${currency.code} · ${currency.countryName}',
@@ -321,7 +370,7 @@ class _CurrencyManagementBottomSheetState
     );
   }
 
-  Widget _buildHiddenCurrencyTile(CurrencyModel currency) {
+  Widget _buildHiddenCurrencyTile(DisplayCurrency currency) {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Container(
@@ -331,7 +380,7 @@ class _CurrencyManagementBottomSheetState
         border: Border.all(color: colorScheme.outlineVariant),
       ),
       child: ListTile(
-        leading: Text(currency.flagEmoji, style: const TextStyle(fontSize: 28)),
+        leading: CurrencyIcon(currency: currency),
 
         title: Text(
           '${currency.code} · ${currency.countryName}',
@@ -351,6 +400,7 @@ class _CurrencyManagementBottomSheetState
             setState(() {
               editableCurrencies.add(currency);
               query = '';
+              _searchController.clear();
             });
           },
           icon: Icon(Icons.add_circle, color: colorScheme.primary),
@@ -360,6 +410,7 @@ class _CurrencyManagementBottomSheetState
           setState(() {
             editableCurrencies.add(currency);
             query = '';
+            _searchController.clear();
           });
         },
       ),
@@ -401,31 +452,58 @@ class _CurrencyManagementBottomSheetState
   }
 }
 
-// CurrencyManagementBottomSheet를 보여주는 함수
+// 진입점에서만 두 도메인을 조합한다. 편집 중에는 로컬 초안을 유지한다.
 Future<void> showCurrencyManagementBottomSheet({
   required BuildContext context,
-  required CurrencyModel baseCurrency,
-  required List<CurrencyModel> visibleCurrencies,
-  required ValueChanged<List<CurrencyModel>> onApply,
 }) {
-  final colorScheme = Theme.of(context).colorScheme;
-
-  return showModalBottomSheet(
+  final display = context.read<ExchangeDisplayProvider>();
+  final initialization = display.initialize();
+  return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-
-    // 라이트 / 다크 테마에 맞춰 바텀시트 자체 배경 변경
-    backgroundColor: colorScheme.surface,
-
-    builder: (_) {
-      return SizedBox(
-        height: MediaQuery.of(context).size.height * 0.85,
-        child: CurrencyManagementBottomSheet(
-          baseCurrency: baseCurrency,
-          visibleCurrencies: visibleCurrencies,
-          onApply: onApply,
-        ),
-      );
-    },
+    backgroundColor: Theme.of(context).colorScheme.surface,
+    builder: (sheetContext) => FutureBuilder<void>(
+      future: initialization,
+      builder: (_, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const SizedBox(
+            height: 200,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return const SizedBox(
+            height: 200,
+            child: Center(child: Text('저장된 통화 목록을 불러오지 못했습니다. 창을 다시 열어 주세요.')),
+          );
+        }
+        return Consumer<ExchangeDisplayProvider>(
+          builder: (_, model, _) => SizedBox(
+            height: MediaQuery.of(sheetContext).size.height * 0.85,
+            child: CurrencyManagementBottomSheet(
+              baseCurrency: model.base,
+              visibleCurrencies: model.visible,
+              availableCurrencies: model.available,
+              loading: model.crypto.loading,
+              error: model.crypto.catalogError,
+              onRetry: model.crypto.refreshCatalog,
+              onApply: (rows) async {
+                try {
+                  await display.apply(rows);
+                } catch (_) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('통화 목록을 저장하지 못했습니다. 다시 시도해 주세요.'),
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ),
+        );
+      },
+    ),
   );
 }

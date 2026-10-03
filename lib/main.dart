@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'crypto/providers/crypto_provider.dart';
+import 'presentation/exchange/exchange_display_provider.dart';
 import 'providers/tab_provider.dart';
 import 'providers/exchange_provider.dart';
 import 'providers/translation_provider.dart';
@@ -19,6 +21,13 @@ void main() {
         ChangeNotifierProvider(create: (_) => AccountRecoveryProvider()),
         ChangeNotifierProvider(create: (_) => TabProvider()),
         ChangeNotifierProvider(create: (_) => ExchangeProvider()),
+        ChangeNotifierProvider(create: (_) => CryptoProvider()),
+        ChangeNotifierProvider(
+          create: (context) => ExchangeDisplayProvider(
+            context.read<ExchangeProvider>(),
+            context.read<CryptoProvider>(),
+          ),
+        ),
         ChangeNotifierProvider(create: (_) => TranslationProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
@@ -33,11 +42,10 @@ class TripblerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settingsProvider =
-      context.watch<SettingsProvider>();
+    final settingsProvider = context.watch<SettingsProvider>();
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Tripbler',      
+      title: 'Tripbler',
       theme: AppTheme.lightTheme,
 
       darkTheme: AppTheme.darkTheme,

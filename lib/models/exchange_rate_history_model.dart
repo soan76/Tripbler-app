@@ -1,8 +1,14 @@
 // 특정 날짜의 환율 기록을 저장하는 모델 클래스
-class ExchangeRateHistoryModel {
+import 'chart_point.dart';
+
+class ExchangeRateHistoryModel extends ChartPoint {
+  @override
   final DateTime date;
+  @override
   final double rate;
+  @override
   final String baseCurrencyCode;
+  @override
   final String targetCurrencyCode;
 
   const ExchangeRateHistoryModel({
@@ -130,7 +136,8 @@ class ExchangeRateHistoryModel {
           other.targetCurrencyCode == targetCurrencyCode);
 
   @override
-  int get hashCode => Object.hash(date, rate, baseCurrencyCode, targetCurrencyCode);
+  int get hashCode =>
+      Object.hash(date, rate, baseCurrencyCode, targetCurrencyCode);
 
   @override
   String toString() =>

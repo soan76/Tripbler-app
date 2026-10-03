@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/exchange_provider.dart';
+import '../presentation/exchange/exchange_display_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/exchange/currency_management_bottom_sheet.dart';
 import '../widgets/navigation/app_top_bar.dart';
@@ -13,14 +13,11 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final exchangeProvider = context.watch<ExchangeProvider>();
+    final display = context.watch<ExchangeDisplayProvider>();
     final settingsProvider = context.watch<SettingsProvider>();
 
     // 현재 환율 화면에 표시되고 있는 모든 통화
-    final displayedCurrencies = [
-      exchangeProvider.baseCurrency,
-      ...exchangeProvider.visibleCurrencies,
-    ];
+    final displayedCurrencies = [display.base, ...display.visible];
 
     final displayedCurrencyCodes = displayedCurrencies
         .map((currency) => currency.code)
@@ -48,12 +45,7 @@ class SettingsScreen extends StatelessWidget {
                     subtitle:
                         '${displayedCurrencies.length}개 · $displayedCurrencyCodes',
                     onTap: () {
-                      showCurrencyManagementBottomSheet(
-                        context: context,
-                        baseCurrency: exchangeProvider.baseCurrency,
-                        visibleCurrencies: exchangeProvider.visibleCurrencies,
-                        onApply: exchangeProvider.applyVisibleCurrencies,
-                      );
+                      showCurrencyManagementBottomSheet(context: context);
                     },
                   ),
 

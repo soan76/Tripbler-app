@@ -1,3 +1,4 @@
+import '../../models/chart_point.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
@@ -9,13 +10,15 @@ import 'exchange_chart_touch_controller.dart';
 
 // 환율 라인 차트 위젯
 class ExchangeRateLineChart extends StatefulWidget {
-  final List<ExchangeRateHistoryModel> history;
+  final List<ChartPoint> history;
   final ChartPeriod period;
+  final int? maxXAxisLabels;
 
   const ExchangeRateLineChart({
     super.key,
     required this.history,
     required this.period,
+    this.maxXAxisLabels,
   });
 
   @override
@@ -24,7 +27,7 @@ class ExchangeRateLineChart extends StatefulWidget {
 
 class _ExchangeRateLineChartState extends State<ExchangeRateLineChart> {
   late final ExchangeChartTouchController _touchController;
-  List<ExchangeRateHistoryModel> get history => widget.history;
+  List<ChartPoint> get history => widget.history;
   ChartPeriod get period => widget.period;
 
   @override
@@ -81,7 +84,11 @@ class _ExchangeRateLineChartState extends State<ExchangeRateLineChart> {
       );
     }
 
-    final data = ExchangeChartDataCalculator.calculate(history, period);
+    final data = ExchangeChartDataCalculator.calculate(
+      history,
+      period,
+      maxXAxisLabels: widget.maxXAxisLabels,
+    );
     final selectedSpot = _touchController.selectedSpot;
 
     return SizedBox(

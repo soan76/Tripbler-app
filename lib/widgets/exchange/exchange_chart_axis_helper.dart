@@ -1,3 +1,4 @@
+import '../../models/chart_point.dart';
 import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
@@ -115,13 +116,13 @@ class ExchangeChartAxisHelper {
     return value.toStringAsFixed(6).replaceAll(RegExp(r'\.?0+$'), '');
   }
 
-  static String formatTooltipDate(DateTime date) =>
-      DateFormat('yyyy.MM.dd').format(date);
+  static String formatTooltipDate(DateTime date, {bool includesTime = false}) =>
+      DateFormat(includesTime ? 'yyyy.MM.dd HH:mm' : 'yyyy.MM.dd').format(date);
 
   static int xLabelInterval(ChartPeriod period) => period.xAxisLabelInterval;
 
   static FlTitlesData buildTitles({
-    required List<ExchangeRateHistoryModel> history,
+    required List<ChartPoint> history,
     required ChartPeriod period,
     required Set<int> xLabelIndexes,
     required double yInterval,
@@ -147,12 +148,16 @@ class ExchangeChartAxisHelper {
               padding: const EdgeInsets.only(left: 2, right: 4),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  formatYAxisRate(value, yInterval),
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colorScheme.onSurfaceVariant,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    formatYAxisRate(value, yInterval),
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ),
               ),

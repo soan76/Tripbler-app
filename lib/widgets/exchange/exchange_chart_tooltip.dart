@@ -1,14 +1,14 @@
+import '../../models/chart_point.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
-import '../../models/exchange_rate_history_model.dart';
 import 'exchange_chart_axis_helper.dart';
 import 'exchange_chart_data_calculator.dart';
 
 /// 툴팁과 선택 점/세로 가이드선의 표시 스타일.
 class ExchangeChartTooltip {
   static LineTouchData buildTouchData({
-    required List<ExchangeRateHistoryModel> history,
+    required List<ChartPoint> history,
     required ColorScheme colorScheme,
     required void Function(FlTouchEvent, LineTouchResponse?) onTouch,
   }) {
@@ -32,6 +32,7 @@ class ExchangeChartTooltip {
 
             final dateText = ExchangeChartAxisHelper.formatTooltipDate(
               item.date,
+              includesTime: item.includesTime,
             );
 
             final rateText = ExchangeChartAxisHelper.formatRate(item.rate);

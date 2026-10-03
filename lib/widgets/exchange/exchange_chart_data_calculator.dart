@@ -1,3 +1,4 @@
+import '../../models/chart_point.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../../models/exchange_rate_history_model.dart';
@@ -25,9 +26,10 @@ class ExchangeChartData {
 
 class ExchangeChartDataCalculator {
   static ExchangeChartData calculate(
-    List<ExchangeRateHistoryModel> history,
-    ChartPeriod period,
-  ) {
+    List<ChartPoint> history,
+    ChartPeriod period, {
+    int? maxXAxisLabels,
+  }) {
     assert(history.isNotEmpty);
     final spots = <FlSpot>[
       for (var i = 0; i < history.length; i++)
@@ -43,8 +45,20 @@ class ExchangeChartDataCalculator {
       yInterval: interval,
       minY: (minRate / interval).floor() * interval - interval,
       maxY: (maxRate / interval).ceil() * interval + interval,
-      xLabelIndexes: buildXLabelIndexes(history.length, period),
+      xLabelIndexes: maxXAxisLabels == null
+          ? buildXLabelIndexes(history.length, period)
+          : buildLimitedXLabelIndexes(history.length, maxXAxisLabels),
     );
+  }
+
+  // 시간 단위로 촘촘한 데이터는 포인트 수에 맞춰 라벨 개수만 제한한다.
+  static Set<int> buildLimitedXLabelIndexes(int length, int maximum) {
+    if (length <= 0) return {};
+    if (length == 1 || maximum < 2) return {0};
+    final count = length < maximum ? length : maximum;
+    return {
+      for (var i = 0; i < count; i++) (i * (length - 1) / (count - 1)).round(),
+    };
   }
 
   // 현재 선택된 기간에 따라 X축에 표시할 날짜 인덱스를 계산한다.
@@ -78,10 +92,7 @@ class ExchangeChartDataCalculator {
     return indexes;
   }
 
-  static bool isValidSpot(
-    LineBarSpot spot,
-    List<ExchangeRateHistoryModel> history,
-  ) {
+  static bool isValidSpot(LineBarSpot spot, List<ChartPoint> history) {
     final index = spot.spotIndex;
     return spot.barIndex == 0 &&
         index >= 0 &&

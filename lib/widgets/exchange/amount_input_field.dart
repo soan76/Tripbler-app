@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 // 금액 입력 필드 위젯
 class AmountInputField extends StatefulWidget {
   final double amount;
+  final bool unavailable;
   final ValueChanged<double> onChanged;
 
   // 금액 입력 영역을 터치했을 때 호출
@@ -26,6 +27,7 @@ class AmountInputField extends StatefulWidget {
     required this.decimalPlaces,
     this.onTap,
     this.isBase = false,
+    this.unavailable = false,
   });
 
   @override
@@ -53,7 +55,8 @@ class _AmountInputFieldState extends State<AmountInputField> {
     super.didUpdateWidget(oldWidget);
 
     // 금액 또는 자릿수 설정이 바뀌면 표시값도 갱신
-    if (oldWidget.amount != widget.amount ||
+    if (oldWidget.unavailable != widget.unavailable ||
+        oldWidget.amount != widget.amount ||
         oldWidget.decimalPlaces != widget.decimalPlaces) {
       final newText = _formatAmount(widget.amount);
 
@@ -87,9 +90,11 @@ class _AmountInputFieldState extends State<AmountInputField> {
 
         return TextField(
           controller: _controller,
+          readOnly: widget.unavailable,
+          enableInteractiveSelection: !widget.unavailable,
 
           // 터치 즉시 해당 통화를 선택 상태로 변경
-          onTap: widget.onTap,
+          onTap: widget.unavailable ? null : widget.onTap,
 
           textAlign: TextAlign.right,
 
@@ -141,6 +146,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
 
   // 현재 설정된 자릿수 제한에 맞게 금액 문자열 생성
   String _formatAmount(double amount) {
+    if (widget.unavailable) return '—';
     // 자동
     if (widget.decimalPlaces == -1) {
       return NumberFormat('#,##0.########').format(amount);
