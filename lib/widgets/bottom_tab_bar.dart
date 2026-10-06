@@ -125,7 +125,7 @@ class _BottomTabBarState extends State<BottomTabBar> {
                 duration: _animationDuration,
                 curve: Curves.easeOutCubic,
                 left: centerX - 32,
-                bottom: _isExpanded ? 64 : 0,
+                bottom: _isExpanded ? 70 : 0,
                 child: IgnorePointer(
                   ignoring: !_isExpanded,
                   child: AnimatedOpacity(
@@ -203,46 +203,73 @@ class _BottomTabBarState extends State<BottomTabBar> {
         ? Colors.white
         : colorScheme.onSurfaceVariant;
 
+    final labelStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      color: colorScheme.onSurfaceVariant,
+    );
+    final labelPainter = TextPainter(
+      text: TextSpan(
+        text: widget.tabs[index].label,
+        style: DefaultTextStyle.of(context).style.merge(labelStyle),
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final borderGapWidth = labelPainter.width + 8;
+    labelPainter.dispose();
+
     return TapRegion(
       groupId: _menuTapGroup,
       child: GestureDetector(
         onTap: () => widget.onTabTap(index),
         onPanUpdate: _handlePanUpdate,
         onPanEnd: _handlePanEnd,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: _tabButtonSize,
-              height: _tabButtonSize,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: backgroundColor,
-                border: Border.all(
+        child: SizedBox(
+          width: _tabButtonSize,
+          // 레디얼 메뉴의 기존 버튼 영역을 유지한다.
+          height: _tabButtonSize + 20,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CustomPaint(
+                foregroundPainter: _TabBorderPainter(
                   color: isSelected
                       ? selectedColor
                       : colorScheme.outlineVariant,
-                  width: 1.5,
+                  gapWidth: borderGapWidth,
+                ),
+                child: Container(
+                  width: _tabButtonSize,
+                  height: _tabButtonSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: backgroundColor,
+                  ),
+                  child: Icon(
+                    widget.tabs[index].icon,
+                    size: 26,
+                    color: contentColor,
+                  ),
                 ),
               ),
-              child: Icon(
-                widget.tabs[index].icon,
-                size: 26,
-                color: contentColor,
+              Positioned(
+                top: _tabButtonSize,
+                left: 0,
+                right: 0,
+                child: FractionalTranslation(
+                  // 텍스트 높이의 절반을 올려 원의 하단 테두리에 걸친다.
+                  translation: const Offset(0, -0.5),
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Text(widget.tabs[index].label, style: labelStyle),
+                    ),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              widget.tabs[index].label,
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected
-                    ? selectedColor
-                    : colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -327,6 +354,37 @@ class _BottomTabBarState extends State<BottomTabBar> {
       ),
     );
   }
+}
+
+/// 배경은 Container에 맡기고, 6시 방향의 텍스트 자리만 비운 테두리를 그린다.
+class _TabBorderPainter extends CustomPainter {
+  const _TabBorderPainter({required this.color, required this.gapWidth});
+
+  final Color color;
+  final double gapWidth;
+  static const double _strokeWidth = 1.5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final radius = (math.min(size.width, size.height) - _strokeWidth) / 2;
+    if (radius <= 0) return;
+    final halfGapAngle = math.asin((gapWidth / (2 * radius)).clamp(0.0, 1.0));
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _strokeWidth;
+    canvas.drawArc(
+      Rect.fromCircle(center: size.center(Offset.zero), radius: radius),
+      math.pi / 2 + halfGapAngle,
+      2 * math.pi - 2 * halfGapAngle,
+      false,
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TabBorderPainter oldDelegate) =>
+      color != oldDelegate.color || gapWidth != oldDelegate.gapWidth;
 }
 
 class _RadialGestureClipper extends CustomClipper<Path> {
