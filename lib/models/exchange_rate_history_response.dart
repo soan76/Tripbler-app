@@ -7,6 +7,7 @@ class ExchangeRateHistoryResponse {
   final DateTime endDate;
   final List<ExchangeRateHistoryModel> rates;
   final DateTime fetchedAt;
+  final bool stale;
 
   const ExchangeRateHistoryResponse({
     required this.baseCurrency,
@@ -15,6 +16,7 @@ class ExchangeRateHistoryResponse {
     required this.endDate,
     required this.rates,
     required this.fetchedAt,
+    this.stale = false,
   });
 
   factory ExchangeRateHistoryResponse.fromJson(Map<String, dynamic> json) {
@@ -96,6 +98,7 @@ class ExchangeRateHistoryResponse {
       endDate: endDate,
       rates: historyRates,
       fetchedAt: fetchedAt,
+      stale: json['stale'] == true,
     );
   }
 

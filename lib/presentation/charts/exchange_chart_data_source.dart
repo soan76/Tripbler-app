@@ -1,3 +1,4 @@
+import '../../models/exchange_rate_response.dart';
 import '../../models/exchange_rate_history_model.dart';
 import '../../services/exchange_rate_api_service.dart';
 import 'chart_data_source.dart';
@@ -17,10 +18,15 @@ class ExchangeChartDataSource implements ChartDataSource {
 
   @override
   Future<ChartData> load(ChartPeriod period) async {
-    final latest = await _api.fetchLatestRatesResponse(
-      baseCurrency: base,
-      targetCurrencies: [target],
-    );
+    final latestFuture = _api
+        .fetchLatestRatesResponse(
+          baseCurrency: base,
+          targetCurrencies: [target],
+        )
+        .then<ExchangeRateResponse?>(
+          (value) => value,
+          onError: (Object _) => null,
+        );
     final end = DateTime.now();
     if (_disposed) throw StateError('Chart data source disposed');
     final history = await _api.fetchHistoricalRatesResponse(
@@ -29,9 +35,12 @@ class ExchangeChartDataSource implements ChartDataSource {
       startDate: period.startDateFrom(end),
       endDate: end,
     );
+    final latest = await latestFuture;
     return ChartData(
       history: history.rates,
-      currentRate: latest.rates[target],
+      currentRate: latest?.rates[target] ?? history.rates.lastOrNull?.rate,
+      historicalRate: latest?.rates[target] == null,
+      stale: history.stale || (latest?.stale ?? false),
       fetchedAt: history.fetchedAt,
     );
   }

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
@@ -42,6 +43,7 @@ class ExchangeProvider extends ChangeNotifier {
   String? _activeInputCurrencyCode;
 
   bool _hasInitialized = false;
+  bool _disposed = false;
   Future<void>? _initializationFuture;
 
   // 가장 최근에 시작된 환율 요청을 식별함.
@@ -107,8 +109,10 @@ class ExchangeProvider extends ChangeNotifier {
         // 저장된 상태를 못 불러와도 기본값(KRW, 빈 목록)으로 계속 진행함.
       }
 
-      await fetchRates();
+      if (_disposed) return;
       _hasInitialized = true;
+      notifyListeners();
+      unawaited(fetchRates());
     } finally {
       _initializationFuture = null;
     }
@@ -160,11 +164,13 @@ class ExchangeProvider extends ChangeNotifier {
       );
     }
 
-    if (savedRates != null) {
+    if (savedRates != null &&
+        savedLastUpdated != null &&
+        DateTime.now().difference(savedLastUpdated) < const Duration(days: 3)) {
       _rates = Map<String, double>.from(savedRates);
     }
 
-    _lastUpdated = savedLastUpdated;
+    _lastUpdated = _rates.isEmpty ? null : savedLastUpdated;
 
     if (savedAmount != null) {
       _inputAmount = savedAmount;
@@ -178,11 +184,33 @@ class ExchangeProvider extends ChangeNotifier {
 
     final baseCurrencyCode = _baseCurrency.code;
 
+    if (_disposed) return;
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
 
     try {
+      if (_rates.isEmpty) {
+        try {
+          final rates = await _localStorageService.loadCachedRates(
+            baseCurrency: baseCurrencyCode,
+          );
+          final updated = await _localStorageService.loadLastUpdated(
+            baseCurrency: baseCurrencyCode,
+          );
+          if (!_isCurrentFetch(requestId, baseCurrencyCode)) return;
+          if (rates != null &&
+              updated != null &&
+              DateTime.now().difference(updated) < const Duration(days: 3)) {
+            _rates = Map.from(rates);
+            _lastUpdated = updated;
+            notifyListeners();
+          }
+        } catch (_) {
+          // 기기 저장소 오류가 서버 재조회까지 막지 않게 한다.
+        }
+      }
+      if (!_isCurrentFetch(requestId, baseCurrencyCode)) return;
       final targetCodes = _visibleCurrencies
           .map((currency) => currency.code)
           .toSet()
@@ -206,7 +234,7 @@ class ExchangeProvider extends ChangeNotifier {
         baseCurrency: baseCurrencyCode,
         targetCurrencies: targetCodes,
       );
-  
+
       if (!_isCurrentFetch(requestId, baseCurrencyCode)) {
         return;
       }
@@ -217,6 +245,10 @@ class ExchangeProvider extends ChangeNotifier {
       // Flutter에서 DateTime.now()로 만든 시간이 아니라,
       // 백엔드가 환율을 가져온 시각인 fetchedAt을 마지막 업데이트 시각으로 사용함.
       _lastUpdated = latestRatesResponse.fetchedAt;
+      if (latestRatesResponse.stale) {
+        _errorMessage = '응답 지연으로 마지막 성공 환율을 표시합니다.';
+      }
+      notifyListeners();
 
       try {
         await _localStorageService.saveCachedRates(
@@ -276,6 +308,12 @@ class ExchangeProvider extends ChangeNotifier {
     required String baseCurrencyCode,
     required String fallbackMessage,
   }) async {
+    if (_rates.isNotEmpty &&
+        _lastUpdated != null &&
+        DateTime.now().difference(_lastUpdated!) < const Duration(days: 3)) {
+      _errorMessage = '$fallbackMessage 마지막 성공 데이터를 표시합니다.';
+      return;
+    }
     try {
       final cachedRatesFuture = _localStorageService.loadCachedRates(
         baseCurrency: baseCurrencyCode,
@@ -294,7 +332,11 @@ class ExchangeProvider extends ChangeNotifier {
         return;
       }
 
-      if (cachedRates != null && cachedRates.isNotEmpty) {
+      if (cachedRates != null &&
+          cachedRates.isNotEmpty &&
+          cachedLastUpdated != null &&
+          DateTime.now().difference(cachedLastUpdated) <
+              const Duration(days: 3)) {
         _rates = Map<String, double>.from(cachedRates);
         _lastUpdated = cachedLastUpdated;
 
@@ -596,7 +638,7 @@ class ExchangeProvider extends ChangeNotifier {
 
   // 현재 처리 중인 요청이 가장 최근 요청인지 확인하는 메서드.
   bool _isLatestRequest(int requestId) {
-    return requestId == _fetchRequestId;
+    return !_disposed && requestId == _fetchRequestId;
   }
 
   bool _isCurrentFetch(int requestId, String baseCurrencyCode) {
@@ -616,6 +658,8 @@ class ExchangeProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _fetchRequestId++;
     if (_ownsApiService) {
       _apiService.dispose();
     }

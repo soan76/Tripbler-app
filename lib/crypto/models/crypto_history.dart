@@ -24,6 +24,7 @@ class CryptoHistory {
     required this.days,
     required List<CryptoHistoryPoint> prices,
     required this.fetchedAt,
+    this.stale = false,
   }) : prices = List.unmodifiable(prices);
   final String symbol;
   final String currency;
@@ -31,6 +32,7 @@ class CryptoHistory {
   final int days;
   final List<CryptoHistoryPoint> prices;
   final DateTime fetchedAt;
+  final bool stale;
 
   static const supportedPeriods = {
     '7D': 7,
@@ -73,6 +75,7 @@ class CryptoHistory {
       days: days,
       prices: points,
       fetchedAt: fetchedAt.toUtc(),
+      stale: json['stale'] == true,
     );
   }
 }

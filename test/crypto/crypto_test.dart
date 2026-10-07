@@ -153,6 +153,7 @@ void main() {
       final api = makeApi();
       final provider = CryptoProvider(api: api);
       await provider.initialize();
+      await provider.refresh();
       await provider.select(['BTC', 'DOGE', 'DASH', 'INVALID', 'BTC']);
       expect(provider.selectedCoins.map((e) => e.symbol), [
         'BTC',
@@ -166,6 +167,7 @@ void main() {
       );
       final restored = CryptoProvider(api: offlineApi);
       await restored.initialize();
+      await restored.refresh();
       expect(restored.coins.length, 7);
       expect(restored.selectedCoins.first.name, 'Bitcoin');
       expect(restored.catalogError, isNotNull);
@@ -220,6 +222,7 @@ void main() {
         fiatApi: fiatApi,
       );
       await display.initialize();
+      await crypto.refresh();
       final btc = display.available.firstWhere((row) => row.code == 'BTC');
       final doge = display.available.firstWhere((row) => row.code == 'DOGE');
       final usd = DisplayCurrency.fromFiat(findCurrencyByCode('USD')!);

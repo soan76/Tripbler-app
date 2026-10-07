@@ -3,12 +3,14 @@ class ExchangeRateResponse {
   final Map<String, double> rates;
   final DateTime? rateDate;
   final DateTime fetchedAt;
+  final bool stale;
 
   const ExchangeRateResponse({
     required this.baseCurrency,
     required this.rates,
     required this.rateDate,
     required this.fetchedAt,
+    this.stale = false,
   });
 
   factory ExchangeRateResponse.fromJson(Map<String, dynamic> json) {
@@ -16,7 +18,7 @@ class ExchangeRateResponse {
       json['baseCurrency'],
       fieldName: 'baseCurrency',
     );
-    
+
     final ratesValue = json['rates'];
 
     if (ratesValue is! Map<String, dynamic>) {
@@ -49,8 +51,12 @@ class ExchangeRateResponse {
     return ExchangeRateResponse(
       baseCurrency: baseCurrency,
       rates: rates,
-      rateDate: _parseOptionalLocalDate(json['rateDate'], fieldName: 'rateDate'),
+      rateDate: _parseOptionalLocalDate(
+        json['rateDate'],
+        fieldName: 'rateDate',
+      ),
       fetchedAt: fetchedAt,
+      stale: json['stale'] == true,
     );
   }
 

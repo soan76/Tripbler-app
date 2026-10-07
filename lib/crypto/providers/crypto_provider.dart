@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../../services/market_snapshot_store.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,6 +15,8 @@ class CryptoProvider extends ChangeNotifier {
       _ownsApi = api == null;
   final CryptoApiService _api;
   final bool _ownsApi;
+  final _snapshots = MarketSnapshotStore();
+  final Set<String> _cachedPrices = {};
   List<CryptoCoin> _coins = [];
   List<String> _selected = [];
   final Map<String, CryptoPrice> _prices = {};
@@ -33,8 +37,11 @@ class CryptoProvider extends ChangeNotifier {
             CryptoCoin(symbol: symbol, name: symbol),
       )
       .toList();
-  CryptoPrice? priceFor(String symbol) =>
-      _errors.containsKey(symbol) ? null : _prices[symbol];
+  CryptoPrice? priceFor(String symbol) => _prices[symbol];
+  bool isStale(String symbol) =>
+      _cachedPrices.contains(symbol) ||
+      _errors.containsKey(symbol) ||
+      (_prices[symbol]?.stale ?? false);
   String? errorFor(String symbol) => _errors[symbol];
   bool isLoading(String symbol) => _pending.containsKey(symbol);
   void _notify() {
@@ -61,9 +68,11 @@ class CryptoProvider extends ChangeNotifier {
       } catch (_) {
         /* 손상된 목록 캐시는 서버에서 복구. */
       }
-      _notify();
-      await refresh();
+      await Future.wait(_selected.map(_restorePrice));
+      if (_disposed) return;
       _initialized = true;
+      _notify();
+      unawaited(refresh());
     } finally {
       _initialization = null;
     }
@@ -107,8 +116,25 @@ class CryptoProvider extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    await refreshCatalog();
-    if (!_disposed) await refreshPrices();
+    await Future.wait([refreshCatalog(), refreshPrices()]);
+  }
+
+  Future<void> _restorePrice(String symbol) async {
+    if (_prices.containsKey(symbol)) return;
+    final json = await _snapshots.read(
+      'crypto.price.$symbol.KRW',
+      const Duration(minutes: 15),
+    );
+    if (_disposed || json == null || _prices.containsKey(symbol)) return;
+    try {
+      final price = CryptoPrice.fromJson(json);
+      if (price.symbol != symbol) return;
+      _prices[symbol] = price;
+      _cachedPrices.add(symbol);
+      _notify();
+    } catch (_) {
+      /* 손상된 캐시는 무시한다. */
+    }
   }
 
   Future<void> refreshPrices() =>
@@ -125,10 +151,15 @@ class CryptoProvider extends ChangeNotifier {
 
   Future<void> _loadPrice(String symbol) async {
     try {
+      await _restorePrice(symbol);
+      if (_disposed) return;
       final price = await _api.fetchPrice(symbol);
       if (_disposed) return;
       _prices[symbol] = price;
       _errors.remove(symbol);
+      _cachedPrices.remove(symbol);
+      _notify();
+      await _snapshots.write('crypto.price.$symbol.KRW', price.toJson());
     } catch (error) {
       if (!_disposed) {
         _errors[symbol] = error is ApiException

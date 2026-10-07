@@ -1,3 +1,6 @@
+import '../models/crypto_price.dart';
+import '../models/crypto_history.dart';
+import '../../core/network/api_exception.dart';
 import '../../models/chart_point.dart';
 import '../../models/exchange_rate_history_model.dart';
 import '../../presentation/charts/chart_data_source.dart';
@@ -15,12 +18,20 @@ class CryptoChartDataSource implements ChartDataSource {
 
   @override
   Future<ChartData> load(ChartPeriod period) async {
+    if (!CryptoHistory.supportedPeriods.containsKey(
+      period.shortLabel.toUpperCase(),
+    )) {
+      throw const ApiException(message: '암호화폐 차트를 불러오지 못했습니다.');
+    }
+    final currentFuture = _api
+        .fetchPrice(symbol)
+        .then<CryptoPrice?>((value) => value, onError: (Object _) => null);
     final history = await _api.fetchHistory(
       symbol: symbol,
       period: period.shortLabel.toUpperCase(),
     );
     if (_disposed) throw StateError('Chart data source disposed');
-    final current = await _api.fetchPrice(symbol);
+    final current = await currentFuture;
     return ChartData(
       history: history.prices
           .map(
@@ -33,7 +44,9 @@ class CryptoChartDataSource implements ChartDataSource {
             ),
           )
           .toList(),
-      currentRate: current.price,
+      currentRate: current?.price ?? history.prices.lastOrNull?.price,
+      historicalRate: current == null,
+      stale: history.stale || (current?.stale ?? false),
       fetchedAt: history.fetchedAt,
     );
   }

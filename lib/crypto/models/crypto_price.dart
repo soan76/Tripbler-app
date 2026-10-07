@@ -3,11 +3,21 @@ class CryptoPrice {
     required this.symbol,
     required this.price,
     required this.fetchedAt,
+    this.stale = false,
   });
 
   final String symbol;
   final double price;
   final DateTime fetchedAt;
+  final bool stale;
+
+  Map<String, dynamic> toJson() => {
+    'symbol': symbol,
+    'currency': 'KRW',
+    'price': price,
+    'fetchedAt': fetchedAt.toUtc().toIso8601String(),
+    'stale': stale,
+  };
 
   factory CryptoPrice.fromJson(Map<String, dynamic> json) {
     final price = json['price'];
@@ -25,6 +35,7 @@ class CryptoPrice {
       symbol: symbol,
       price: price.toDouble(),
       fetchedAt: time.toUtc(),
+      stale: json['stale'] == true,
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../../presentation/charts/chart_snapshot_store.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -44,6 +46,9 @@ class _MarketChartCardState extends State<MarketChartCard>
     with AutomaticKeepAliveClientMixin {
   late ChartDataSource _dataSource;
   int _requestGeneration = 0;
+  final _snapshots = ChartSnapshotStore();
+  bool _stale = false;
+  bool _historicalRate = false;
 
   bool isLoading = false;
   bool hasLoaded = false;
@@ -111,21 +116,47 @@ class _MarketChartCardState extends State<MarketChartCard>
     });
 
     final generation = ++_requestGeneration;
+    final snapshotKey = '${widget.requestKey}/${widget.period.name}';
+    final unsupported =
+        widget.iconCurrency.isCrypto &&
+        (widget.period == ChartPeriod.twoYears ||
+            widget.period == ChartPeriod.fiveYears);
     try {
+      if (history.isEmpty && !unsupported) {
+        final cached = await _snapshots.read(
+          snapshotKey,
+          crypto: widget.iconCurrency.isCrypto,
+        );
+        if (!mounted || generation != _requestGeneration) return;
+        if (cached != null) {
+          setState(() {
+            history = cached.history;
+            currentRate = cached.currentRate;
+            historyFetchedAt = cached.fetchedAt;
+            hasLoaded = true;
+            _stale = true;
+            _historicalRate = cached.historicalRate;
+          });
+        }
+      }
       final data = await _dataSource.load(widget.period);
       if (!mounted || generation != _requestGeneration) return;
       setState(() {
         history = data.history;
+        _stale = data.stale;
+        _historicalRate = data.historicalRate;
         currentRate = data.currentRate;
         historyFetchedAt = data.fetchedAt;
         hasLoaded = true;
         isLoading = false;
       });
+      unawaited(_snapshots.write(snapshotKey, data));
     } catch (_) {
       if (!mounted || generation != _requestGeneration) return;
       setState(() {
         errorMessage = widget.errorText;
-        hasLoaded = false;
+        hasLoaded = history.isNotEmpty;
+        _stale = hasLoaded;
         isLoading = false;
       });
     }
@@ -207,6 +238,15 @@ class _MarketChartCardState extends State<MarketChartCard>
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
+              if (history.isNotEmpty &&
+                  (isLoading || _stale || errorMessage != null))
+                Text(
+                  isLoading ? '저장된 데이터 · 갱신 중' : '마지막 성공 데이터 · 갱신 지연',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
               if (historyFetchedAt != null) ...[
                 const SizedBox(height: 2),
                 Text(
@@ -225,7 +265,6 @@ class _MarketChartCardState extends State<MarketChartCard>
           onPressed: isLoading
               ? null
               : () {
-                  hasLoaded = false;
                   _loadChartData();
                 },
           icon: isLoading
@@ -260,7 +299,7 @@ class _MarketChartCardState extends State<MarketChartCard>
       children: [
         Expanded(
           child: Text(
-            '1 ${widget.baseCode}',
+            '${_historicalRate ? '최근 기록 · ' : ''}1 ${widget.baseCode}',
             style: TextStyle(
               fontSize: 15,
               color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -297,11 +336,11 @@ class _MarketChartCardState extends State<MarketChartCard>
       );
     }
 
-    if (isLoading) {
+    if (isLoading && history.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (errorMessage != null) {
+    if (errorMessage != null && history.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

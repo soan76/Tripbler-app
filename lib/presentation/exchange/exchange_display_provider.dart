@@ -1,3 +1,5 @@
+import 'dart:async';
+import '../../services/market_snapshot_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../crypto/providers/crypto_provider.dart';
@@ -26,6 +28,7 @@ class ExchangeDisplayProvider extends ChangeNotifier {
   String? activeCrypto;
   late String _base;
   double? _krwRate;
+  final _snapshots = MarketSnapshotStore();
   int _request = 0;
   bool _disposed = false;
   bool _initialized = false;
@@ -76,7 +79,7 @@ class ExchangeDisplayProvider extends ChangeNotifier {
       _order = prefs.getStringList('exchange.displayOrder.v1') ?? [];
       await Future.wait([exchange.initialize(), crypto.initialize()]);
       if (_disposed) return;
-      await refreshConversion();
+      unawaited(refreshConversion());
       _initialized = true;
       _notify();
     } finally {
@@ -119,19 +122,39 @@ class ExchangeDisplayProvider extends ChangeNotifier {
       return;
     }
     try {
-      final rates = await _fiatApi.fetchLatestRates(
+      if (_krwRate == null) {
+        final cached = await _snapshots.read(
+          'conversion.$baseCode.KRW',
+          const Duration(days: 3),
+        );
+        if (_disposed || request != _request) return;
+        final rate = (cached?['rate'] as num?)?.toDouble();
+        if (rate != null && rate.isFinite && rate > 0) {
+          _krwRate = rate;
+          _notify();
+        }
+      }
+      final response = await _fiatApi.fetchLatestRatesResponse(
         baseCurrency: baseCode,
         targetCurrencies: ['KRW'],
       );
-      final rate = rates['KRW'];
+      final rate = response.rates['KRW'];
       if (rate == null || !rate.isFinite || rate <= 0) {
         throw const FormatException();
       }
-      if (!_disposed && request == _request) _krwRate = rate;
+      if (!_disposed && request == _request) {
+        _krwRate = rate;
+        if (response.stale) conversionError = '마지막 성공 KRW 환율로 환산하고 있습니다.';
+        await _snapshots.write('conversion.$baseCode.KRW', {
+          'rate': rate,
+          'fetchedAt': response.fetchedAt.toIso8601String(),
+        });
+      }
     } catch (_) {
       if (!_disposed && request == _request) {
-        _krwRate = null;
-        conversionError = '암호화폐 환산에 필요한 KRW 환율을 불러오지 못했습니다.';
+        conversionError = _krwRate == null
+            ? '암호화폐 환산에 필요한 KRW 환율을 불러오지 못했습니다.'
+            : '갱신 지연으로 마지막 성공 KRW 환율로 환산합니다.';
       }
     }
     _notify();

@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -34,6 +35,7 @@ Widget app(
 );
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets(
     'shared chart keeps all period buttons; 2Y/5Y show failure and valid periods recover',
     (tester) async {

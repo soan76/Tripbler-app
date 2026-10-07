@@ -101,11 +101,9 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 final time = quote?.fetchedAt.toLocal();
                 final status = !row.isCrypto
                     ? null
-                    : priceError != null
-                    ? '조회 실패 · 아래로 당겨 재시도'
                     : quote == null
-                    ? '현재가 조회 중'
-                    : '1 ${row.code} = ${NumberFormat('#,##0.########').format(quote.price)} KRW · ${DateFormat('MM.dd HH:mm').format(time!)}';
+                    ? (priceError != null ? '조회 실패 · 아래로 당겨 재시도' : '현재가 조회 중')
+                    : '${display.crypto.isStale(row.code) ? '저장값 · ' : ''}${display.crypto.isLoading(row.code) ? '갱신 중 · ' : ''}1 ${row.code} = ${NumberFormat('#,##0.########').format(quote.price)} KRW · ${DateFormat('MM.dd HH:mm').format(time!)}';
                 return CurrencyRow(
                   key: ValueKey(row.id),
                   currency: row,
