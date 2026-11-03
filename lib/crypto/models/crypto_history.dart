@@ -1,3 +1,5 @@
+import '../../models/exchange_rate_history_model.dart';
+
 class CryptoHistoryPoint {
   const CryptoHistoryPoint({required this.timestamp, required this.price});
   final DateTime timestamp;
@@ -34,6 +36,8 @@ class CryptoHistory {
   final DateTime fetchedAt;
   final bool stale;
 
+  /// 서버가 제공하는 기간 코드와 일수. 암호화폐 기간 지원 여부는 이 표 하나로
+  /// 판단한다(API 요청, 응답 검증, 차트 캐시 모두).
   static const supportedPeriods = {
     '7D': 7,
     '1M': 30,
@@ -41,6 +45,13 @@ class CryptoHistory {
     '6M': 180,
     '1Y': 365,
   };
+
+  /// 앱의 차트 기간을 서버 기간 코드로 바꾼다(예: [ChartPeriod.oneMonth] → '1M').
+  static String periodCode(ChartPeriod period) =>
+      period.shortLabel.toUpperCase();
+
+  static bool supports(ChartPeriod period) =>
+      supportedPeriods.containsKey(periodCode(period));
 
   factory CryptoHistory.fromJson(Map<String, dynamic> json) {
     final symbol = json['symbol'];

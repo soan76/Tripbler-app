@@ -7,7 +7,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:tripbler/crypto/models/crypto_coin.dart';
 import 'package:tripbler/crypto/services/crypto_api_service.dart';
-import 'package:tripbler/crypto/widgets/crypto_chart_carousel.dart';
+import 'package:tripbler/crypto/presentation/crypto_chart_data_source.dart';
+import 'package:tripbler/presentation/charts/chart_pair.dart';
+import 'package:tripbler/presentation/exchange/display_currency.dart';
+import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 import 'package:tripbler/widgets/exchange/exchange_rate_line_chart.dart';
 import '../../crypto/crypto_history_test.dart' show historyResponse;
 
@@ -30,7 +33,13 @@ Widget app(
   bool active = true,
 }) => MaterialApp(
   home: Scaffold(
-    body: CryptoChartCarousel(coins: coins, api: api, active: active),
+    body: ChartPairCarousel(
+      pairs: [for (final coin in coins) ChartPair.crypto(coin.symbol)],
+      currencies: coins.map(DisplayCurrency.fromCrypto).toList(),
+      active: active,
+      createDataSource: (pair) =>
+          CryptoChartDataSource(symbol: pair.baseCode, api: api),
+    ),
   ),
 );
 
@@ -54,7 +63,7 @@ void main() {
       await tester.pumpWidget(app(api, [btc]));
       await tester.pumpAndSettle();
       expect(find.byType(ExchangeRateLineChart), findsOneWidget);
-      expect(find.text('BTC / KRW'), findsOneWidget);
+      expect(find.text('BTC'), findsOneWidget);
       expect(find.text('1 BTC'), findsOneWidget);
       final initialCount = requests.length;
       for (final period in ['2Y', '5Y']) {
@@ -106,11 +115,11 @@ void main() {
       await tester.drag(find.byType(PageView), const Offset(-700, 0));
       await tester.pumpAndSettle();
       expect(symbols, ['BTC', 'DOGE']);
-      expect(find.text('DOGE / KRW').hitTestable(), findsOneWidget);
+      expect(find.text('DOGE').hitTestable(), findsOneWidget);
       await tester.pumpWidget(app(api, [btc]));
       await tester.pumpAndSettle();
-      expect(find.text('BTC / KRW').hitTestable(), findsOneWidget);
-      expect(find.text('DOGE / KRW'), findsNothing);
+      expect(find.text('BTC').hitTestable(), findsOneWidget);
+      expect(find.text('DOGE'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(app(api, []));
       await tester.pumpAndSettle();

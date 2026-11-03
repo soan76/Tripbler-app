@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'crypto/providers/crypto_provider.dart';
+import 'presentation/charts/chart_selection_provider.dart';
 import 'presentation/exchange/exchange_display_provider.dart';
 import 'providers/tab_provider.dart';
 import 'providers/exchange_provider.dart';
@@ -28,6 +29,7 @@ void main() {
             context.read<CryptoProvider>(),
           ),
         ),
+        ChangeNotifierProvider(create: (_) => ChartSelectionProvider()),
         ChangeNotifierProvider(create: (_) => TranslationProvider()),
         ChangeNotifierProvider(create: (_) => MapProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),

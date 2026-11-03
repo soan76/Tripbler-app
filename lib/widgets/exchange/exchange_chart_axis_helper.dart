@@ -78,10 +78,21 @@ class ExchangeChartAxisHelper {
   // Y축 눈금 간격에 맞춰 필요한 소수 자릿수를 자동으로 결정한다.
   // 서로 다른 눈금값이 반올림되어 같은 문자열로 표시되는 것을 방지한다.
   static String formatYAxisRate(double value, double interval) {
+    // NaN·무한대는 지수 계산(log().floor())에서 예외가 나므로 그대로 표시한다.
+    if (!value.isFinite) return value.toString();
+
     final absoluteInterval = interval.abs();
 
     if (absoluteInterval == 0) {
       return formatRate(value);
+    }
+
+    // 반전된 코인 환율처럼 눈금이 아주 작으면 축 폭을 넘지 않게 지수로 표시한다.
+    if (absoluteInterval < 1e-6) {
+      if (value == 0) return '0';
+      final digits = (_exponent(value.abs()) - _exponent(absoluteInterval))
+          .clamp(0, 6);
+      return value.toStringAsExponential(digits);
     }
 
     int decimalPlaces = 0;
@@ -101,6 +112,8 @@ class ExchangeChartAxisHelper {
 
   // Y축 레이블을 포맷하는 메서드
   static String formatRate(double value) {
+    if (!value.isFinite) return value.toString();
+
     if (value == 0) {
       return '0';
     }
@@ -113,8 +126,15 @@ class ExchangeChartAxisHelper {
       return value.toStringAsFixed(2).replaceAll(RegExp(r'\.?0+$'), '');
     }
 
-    return value.toStringAsFixed(6).replaceAll(RegExp(r'\.?0+$'), '');
+    // 1 미만은 소수 6자리 이상, 유효숫자 4자리 이상으로 표시한다(최대 20자리).
+    // 반전된 코인 환율(예: 4.1e-6)이 6자리 고정으로 뭉개지지 않게 한다.
+    final decimals = math.max(6, 3 - _exponent(value.abs()));
+    return value
+        .toStringAsFixed(math.min(decimals, 20))
+        .replaceAll(RegExp(r'\.?0+$'), '');
   }
+
+  static int _exponent(double value) => (math.log(value) / math.ln10).floor();
 
   static String formatTooltipDate(DateTime date, {bool includesTime = false}) =>
       DateFormat(includesTime ? 'yyyy.MM.dd HH:mm' : 'yyyy.MM.dd').format(date);

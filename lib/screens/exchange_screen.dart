@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../crypto/widgets/crypto_chart_carousel.dart';
+import '../presentation/charts/chart_selection_provider.dart';
 import '../presentation/exchange/exchange_display_provider.dart';
 import '../providers/exchange_provider.dart';
+import '../widgets/charts/chart_pair_carousel.dart';
+import '../widgets/exchange/chart_currency_picker_sheet.dart';
 import '../widgets/exchange/currency_management_bottom_sheet.dart';
 import '../widgets/exchange/currency_row.dart';
 import '../widgets/exchange/currency_selection_sheet.dart';
-import '../widgets/exchange/exchange_chart_carousel.dart';
-
-enum ChartCategory { fiat, crypto }
 
 // 환율 화면을 구성하는 StatefulWidget
 class ExchangeScreen extends StatefulWidget {
@@ -24,8 +23,6 @@ class ExchangeScreen extends StatefulWidget {
 class _ExchangeScreenState extends State<ExchangeScreen> {
   // State 내부에서만 사용하는 초기화 여부 값이므로 private 필드로 변경.
   bool _hasInitialized = false;
-  ChartCategory _chartCategory = ChartCategory.fiat;
-  bool _hasOpenedCryptoCharts = false;
 
   @override
   void didChangeDependencies() {
@@ -41,6 +38,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
         }
 
         context.read<ExchangeDisplayProvider>().initialize();
+        context.read<ChartSelectionProvider>().initialize();
       });
     }
   }
@@ -50,9 +48,9 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<ExchangeProvider>();
     final display = context.watch<ExchangeDisplayProvider>();
+    final charts = context.watch<ChartSelectionProvider>();
 
     // 한 번의 build 안에서 동일한 Provider 상태 snapshot을 사용하도록 지역 변수로 정리.
-    final baseCurrency = provider.baseCurrency;
     final visibleCurrencies = provider.visibleCurrencies;
     final isLoading = provider.isLoading;
     final errorMessage = provider.errorMessage;
@@ -159,86 +157,73 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 ),
               ),
 
-              // 차트 영역을 표시하는 ExchangeChartCarousel 위젯
-              if (visibleCurrencies.isNotEmpty ||
-                  display.crypto.selectedCoins.isNotEmpty) ...[
-                const SizedBox(height: 64),
+              // 차트는 위쪽 환산 통화와 따로 고른 통화쌍을 보여 준다.
+              const SizedBox(height: 64),
 
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    '차트',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                  ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  '차트',
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              if (charts.loaded)
+                ChartPairCarousel(
+                  pairs: charts.pairs,
+                  currencies: display.available,
+                  onPick: (index, {required base, required swapped}) =>
+                      _pickChartCurrency(index, base: base, swapped: swapped),
+                  onAdd: charts.canAdd ? charts.add : null,
+                  onRemove: charts.canRemove ? charts.remove : null,
+                  swappedAfterReplace: charts.swappedAfterReplace,
+                )
+              else
+                const SizedBox(
+                  height: 120,
+                  child: Center(child: CircularProgressIndicator()),
                 ),
 
-                const SizedBox(height: 16),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SegmentedButton<ChartCategory>(
-                    segments: const [
-                      ButtonSegment(
-                        value: ChartCategory.fiat,
-                        label: Text('통화'),
-                      ),
-                      ButtonSegment(
-                        value: ChartCategory.crypto,
-                        label: Text('암호'),
-                      ),
-                    ],
-                    selected: {_chartCategory},
-                    onSelectionChanged: (selection) {
-                      setState(() {
-                        _chartCategory = selection.single;
-                        if (_chartCategory == ChartCategory.crypto) {
-                          _hasOpenedCryptoCharts = true;
-                        }
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Offstage(
-                  offstage: _chartCategory != ChartCategory.fiat,
-                  child: TickerMode(
-                    enabled: _chartCategory == ChartCategory.fiat,
-                    child: visibleCurrencies.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Text('통화 관리에서 통화를 추가해 주세요.'),
-                          )
-                        : ExchangeChartCarousel(
-                            baseCurrency: baseCurrency,
-                            targetCurrencies: visibleCurrencies,
-                            active: _chartCategory == ChartCategory.fiat,
-                          ),
-                  ),
-                ),
-                if (_hasOpenedCryptoCharts)
-                  Offstage(
-                    offstage: _chartCategory != ChartCategory.crypto,
-                    child: TickerMode(
-                      enabled: _chartCategory == ChartCategory.crypto,
-                      child: display.crypto.selectedCoins.isEmpty
-                          ? const Padding(
-                              padding: EdgeInsets.all(20),
-                              child: Text('통화 관리에서 암호화폐를 추가해 주세요.'),
-                            )
-                          : CryptoChartCarousel(
-                              coins: display.crypto.selectedCoins,
-                              active: _chartCategory == ChartCategory.crypto,
-                            ),
-                    ),
-                  ),
-
-                const SizedBox(height: 24),
-              ],
+              const SizedBox(height: 24),
             ],
           ),
         ),
       ),
     );
+  }
+
+  // 차트 카드 한쪽 통화를 검색 선택창에서 바꾼다. 위쪽 환산 통화에는 영향을 주지 않는다.
+  // 쌍 계산·중복 판정·선택창이 열린 사이의 변경 확인은 Provider가 맡는다.
+  Future<void> _pickChartCurrency(
+    int index, {
+    required bool base,
+    required bool swapped,
+  }) async {
+    final charts = context.read<ChartSelectionProvider>();
+    final display = context.read<ExchangeDisplayProvider>();
+    final pair = charts.pairs[index];
+    final picked = await showChartCurrencyPicker(
+      context: context,
+      title: '차트 통화 선택',
+      current: pair.currencyOf(base: base, currencies: display.available),
+      optionsOf: (available) => pair.options(base: base, currencies: available),
+      note: pair.isCrypto && !base ? '코인 차트는 KRW 기준만 지원합니다.' : null,
+    );
+    if (picked == null || !mounted) return;
+    final result = charts.replaceSide(
+      index,
+      expected: pair,
+      base: base,
+      swapped: swapped,
+      currency: picked,
+    );
+    if (result == ChartPairChange.duplicate) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('이미 같은 통화쌍의 차트가 있습니다.')));
+    }
   }
 
   // 기준 통화와 상대 통화의 그래프 안내 SnackBar 중복 코드를 하나의 메서드로 분리.

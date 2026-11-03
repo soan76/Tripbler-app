@@ -18,9 +18,7 @@ class CryptoChartDataSource implements ChartDataSource {
 
   @override
   Future<ChartData> load(ChartPeriod period) async {
-    if (!CryptoHistory.supportedPeriods.containsKey(
-      period.shortLabel.toUpperCase(),
-    )) {
+    if (!CryptoHistory.supports(period)) {
       throw const ApiException(message: '암호화폐 차트를 불러오지 못했습니다.');
     }
     final currentFuture = _api
@@ -28,7 +26,7 @@ class CryptoChartDataSource implements ChartDataSource {
         .then<CryptoPrice?>((value) => value, onError: (Object _) => null);
     final history = await _api.fetchHistory(
       symbol: symbol,
-      period: period.shortLabel.toUpperCase(),
+      period: CryptoHistory.periodCode(period),
     );
     if (_disposed) throw StateError('Chart data source disposed');
     final current = await currentFuture;

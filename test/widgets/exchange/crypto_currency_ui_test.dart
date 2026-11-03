@@ -4,13 +4,14 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/crypto/models/crypto_coin.dart';
 import 'package:tripbler/crypto/providers/crypto_provider.dart';
-import 'package:tripbler/crypto/widgets/crypto_chart_carousel.dart';
 import 'package:tripbler/models/currency_model.dart';
+import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/providers/exchange_provider.dart';
 import 'package:tripbler/providers/settings_provider.dart';
 import 'package:tripbler/screens/exchange_screen.dart';
+import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 import 'package:tripbler/widgets/exchange/amount_input_field.dart';
 import 'package:tripbler/widgets/exchange/currency_management_bottom_sheet.dart';
 import 'package:tripbler/widgets/exchange/currency_row.dart';
@@ -23,7 +24,7 @@ void main() {
   final base = DisplayCurrency.fromFiat(findCurrencyByCode('KRW')!);
 
   testWidgets(
-    'main screen defaults to fiat charts and adds/removes selected crypto',
+    'main screen adds/removes crypto without touching the chart selection',
     (tester) async {
       SharedPreferences.setMockInitialValues({});
       final api = makeApi();
@@ -36,18 +37,27 @@ void main() {
         fiatApi: fiatApi,
       );
       await display.initialize();
+      final charts = ChartSelectionProvider();
       await tester.pumpWidget(
         MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: crypto),
             ChangeNotifierProvider.value(value: exchange),
             ChangeNotifierProvider.value(value: display),
+            ChangeNotifierProvider.value(value: charts),
             ChangeNotifierProvider(create: (_) => SettingsProvider()),
           ],
           child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
         ),
       );
       await tester.pumpAndSettle();
+      // 차트는 위쪽 목록과 상관없이 기본 통화쌍으로 시작하고 통화/암호 전환이 없다.
+      expect(find.byType(ChartPairCarousel), findsOneWidget);
+      expect(charts.pairs, ChartSelectionProvider.defaults);
+      expect(
+        find.byWidgetPredicate((widget) => widget is SegmentedButton),
+        findsNothing,
+      );
       await tester.tap(find.text('통화 추가 / 편집'));
       await tester.pumpAndSettle();
       final search = find.descendant(
@@ -68,15 +78,7 @@ void main() {
       expect(find.byType(CurrencyRow), findsNWidgets(2));
       expect(find.byKey(const ValueKey('crypto:BTC')), findsOneWidget);
       expect(find.text('차트'), findsOneWidget);
-      expect(find.byType(CryptoChartCarousel), findsNothing);
-      expect(
-        tester
-            .widget<SegmentedButton<ChartCategory>>(
-              find.byType(SegmentedButton<ChartCategory>),
-            )
-            .selected,
-        {ChartCategory.fiat},
-      );
+      expect(charts.pairs, ChartSelectionProvider.defaults);
       expect(exchange.visibleCurrencies, isEmpty);
       await tester.tap(find.text('통화 추가 / 편집'));
       await tester.pumpAndSettle();
@@ -86,8 +88,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CurrencyRow), findsOneWidget);
       expect(crypto.selectedCoins, isEmpty);
+      expect(charts.pairs, ChartSelectionProvider.defaults);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
+      charts.dispose();
       display.dispose();
       exchange.dispose();
       crypto.dispose();

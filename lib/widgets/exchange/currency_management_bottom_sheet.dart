@@ -4,8 +4,7 @@ import 'package:provider/provider.dart';
 import '../../presentation/exchange/display_currency.dart';
 import '../../presentation/exchange/exchange_display_provider.dart';
 import 'currency_icon.dart';
-
-enum CurrencyCategory { fiat, crypto }
+import 'currency_search_parts.dart';
 
 // 하단 통화 관리 바텀 시트 위젯
 class CurrencyManagementBottomSheet extends StatefulWidget {
@@ -121,30 +120,9 @@ class _CurrencyManagementBottomSheetState
               const SizedBox(height: 12),
 
               // 검색 입력 필드
-              TextField(
+              CurrencySearchField(
                 controller: _searchController,
-                style: TextStyle(color: colorScheme.onSurface),
-                decoration: InputDecoration(
-                  hintText: _category == CurrencyCategory.fiat
-                      ? '통화 코드, 국가명, 통화 이름 검색'
-                      : '코인 심볼·이름 검색',
-
-                  hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
-
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-
-                  filled: true,
-
-                  fillColor: colorScheme.surfaceContainerHighest,
-
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
+                category: _category,
                 onChanged: (value) {
                   setState(() {
                     query = value;
@@ -202,33 +180,18 @@ class _CurrencyManagementBottomSheetState
                     const SizedBox(height: 12),
 
                     _buildSectionTitle('표시되지 않은 통화'),
-                    SegmentedButton<CurrencyCategory>(
-                      segments: const [
-                        ButtonSegment(
-                          value: CurrencyCategory.fiat,
-                          label: Text('통화'),
-                        ),
-                        ButtonSegment(
-                          value: CurrencyCategory.crypto,
-                          label: Text('암호'),
-                        ),
-                      ],
-                      selected: {_category},
-                      onSelectionChanged: (selection) {
-                        setState(() => _category = selection.single);
+                    CurrencyCategoryFilter(
+                      selected: _category,
+                      onChanged: (category) {
+                        setState(() => _category = category);
                       },
                     ),
                     const SizedBox(height: 12),
-                    if (_category == CurrencyCategory.crypto && widget.loading)
-                      const LinearProgressIndicator(),
-                    if (_category == CurrencyCategory.crypto &&
-                        widget.error != null)
-                      ListTile(
-                        title: Text(widget.error!),
-                        trailing: TextButton(
-                          onPressed: widget.onRetry,
-                          child: const Text('다시 시도'),
-                        ),
+                    if (_category == CurrencyCategory.crypto)
+                      CurrencyCatalogStatus(
+                        loading: widget.loading,
+                        error: widget.error,
+                        onRetry: widget.onRetry,
                       ),
 
                     if (hiddenCurrencies.isEmpty)
@@ -373,46 +336,20 @@ class _CurrencyManagementBottomSheetState
   Widget _buildHiddenCurrencyTile(DisplayCurrency currency) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: ListTile(
-        leading: CurrencyIcon(currency: currency),
+    void add() {
+      setState(() {
+        editableCurrencies.add(currency);
+        query = '';
+        _searchController.clear();
+      });
+    }
 
-        title: Text(
-          '${currency.code} · ${currency.countryName}',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: colorScheme.onSurface,
-          ),
-        ),
-
-        subtitle: Text(
-          currency.currencyName,
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-
-        trailing: IconButton(
-          onPressed: () {
-            setState(() {
-              editableCurrencies.add(currency);
-              query = '';
-              _searchController.clear();
-            });
-          },
-          icon: Icon(Icons.add_circle, color: colorScheme.primary),
-        ),
-
-        onTap: () {
-          setState(() {
-            editableCurrencies.add(currency);
-            query = '';
-            _searchController.clear();
-          });
-        },
+    return CurrencyOptionTile(
+      currency: currency,
+      onTap: add,
+      trailing: IconButton(
+        onPressed: add,
+        icon: Icon(Icons.add_circle, color: colorScheme.primary),
       ),
     );
   }
