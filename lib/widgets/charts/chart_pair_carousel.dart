@@ -24,6 +24,7 @@ class ChartPairCarousel extends StatelessWidget {
     this.createDataSource,
     this.snapshotStore,
     this.swappedAfterReplace,
+    this.swappedAfterExchange,
   });
 
   /// 지원하지 않는 코인 카드의 안내. 앞 문장은 현재 시세 자리, 뒤 문장은 차트 자리에 둔다.
@@ -55,6 +56,10 @@ class ChartPairCarousel extends StatelessWidget {
   /// 통화를 바꾼 카드를 보여 줄 방향([MarketChartCarousel.swappedAfterReplace]).
   final bool? Function(String oldId, String newId)? swappedAfterReplace;
 
+  /// 위치를 바꿔 옮겨 온 카드를 보여 줄 방향([MarketChartCarousel.swappedAfterExchange]).
+  final ({String id, bool swapped})? Function(String firstId, String secondId)?
+  swappedAfterExchange;
+
   static ChartDataSource _defaultSource(ChartPair pair) => pair.isCrypto
       ? CryptoChartDataSource(symbol: pair.baseCode)
       : ExchangeChartDataSource(base: pair.baseCode, target: pair.targetCode);
@@ -64,6 +69,7 @@ class ChartPairCarousel extends StatelessWidget {
     itemIds: [for (final pair in pairs) pair.id],
     active: active,
     swappedAfterReplace: swappedAfterReplace,
+    swappedAfterExchange: swappedAfterExchange,
     trailing: onAdd == null
         ? null
         : _AddChartPage(

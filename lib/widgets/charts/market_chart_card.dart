@@ -8,8 +8,10 @@ import '../../presentation/charts/chart_load_state.dart';
 import '../../presentation/charts/chart_snapshot_store.dart';
 import '../../presentation/charts/market_chart_provider.dart';
 import '../../presentation/exchange/display_currency.dart';
-import '../exchange/exchange_rate_line_chart.dart';
+import 'chart_amount_converter.dart';
 import 'currency_swap_pair.dart';
+import 'market_chart_body.dart';
+import 'market_chart_delete_mode.dart';
 import 'market_chart_header.dart';
 
 /// 하나의 기준 통화/대상 통화 조합에 대한
@@ -74,9 +76,10 @@ class MarketChartCard extends StatefulWidget {
 
 class _MarketChartCardState extends State<MarketChartCard>
     with AutomaticKeepAliveClientMixin, SingleTickerProviderStateMixin {
-  // 그래프는 1초에 걸쳐 서서히 나타나게 해, 이동이 끝난 뒤에도 새 그래프가
-  // 천천히 자리 잡는 것처럼 보이게 한다.
-  static const _chartFadeDuration = Duration(seconds: 1);
+  // 그래프는 0.5초에 걸쳐 서서히 나타나게 해, 이동이 끝난 뒤에도 새 그래프가
+  // 잠시 더 자리 잡는 것처럼 보이게 한다.
+  static const _chartFadeDuration = Duration(milliseconds: 500);
+  static const _cardRadius = 22.0;
 
   late final AnimationController _chartFade;
   late final Animation<double> _chartOpacity;
@@ -84,6 +87,9 @@ class _MarketChartCardState extends State<MarketChartCard>
 
   // 로딩·실패 화면에서 그래프로 바뀌는 순간을 알기 위해 직전 상태를 기억한다.
   bool _hadHistory = false;
+
+  final _refreshFocus = FocusNode(debugLabel: 'market-chart-refresh');
+  final _retryFocus = FocusNode(debugLabel: 'market-chart-retry');
 
   @override
   bool get wantKeepAlive => true;
@@ -121,7 +127,7 @@ class _MarketChartCardState extends State<MarketChartCard>
       duration: _chartFadeDuration,
       value: 1,
     );
-    // 양 끝만 부드럽고 가운데는 거의 일정하게 밝아지는 곡선이라 1초 내내
+    // 양 끝만 부드럽고 가운데는 거의 일정하게 밝아지는 곡선이라 0.5초 내내
     // 고르게 서서히 나타난다(easeOut처럼 앞에서 거의 다 보이지 않는다).
     _chartOpacity = CurvedAnimation(
       parent: _chartFade,
@@ -177,6 +183,13 @@ class _MarketChartCardState extends State<MarketChartCard>
     }
   }
 
+  // '다시 시도'는 누르면 로딩 표시로 바뀌어 사라진다. 초점이 전에 쓴 입력칸으로 돌아가지 않게
+  // 카드에 남는 새로고침 버튼으로 옮긴다. 입력칸에 초점을 둔 채 터치했으면 그대로 둔다.
+  void _retry() {
+    if (_retryFocus.hasPrimaryFocus) _refreshFocus.requestFocus();
+    _chart.reload();
+  }
+
   void _onChartChanged() {
     final hasHistory = _chart.state.history.isNotEmpty;
     // 로딩 표시나 실패 화면에서 그래프로 바뀔 때만 서서히 보여 준다.
@@ -196,8 +209,21 @@ class _MarketChartCardState extends State<MarketChartCard>
   Widget build(BuildContext context) {
     super.build(context);
 
+    return MarketChartDeleteMode(
+      onRemove: widget.onRemove,
+      shouldLoad: widget.shouldLoad,
+      borderRadius: _cardRadius,
+      builder: (context, controls) =>
+          _buildCard(context, _chart.state, controls),
+    );
+  }
+
+  Widget _buildCard(
+    BuildContext context,
+    ChartLoadState state,
+    ChartDeleteControls controls,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
-    final state = _chart.state;
     final onPick = widget.onPickCurrency;
     final unavailable = widget.unavailableText != null;
 
@@ -205,7 +231,7 @@ class _MarketChartCardState extends State<MarketChartCard>
       decoration: BoxDecoration(
         color: colorScheme.surface,
         border: Border.all(color: colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(_cardRadius),
         boxShadow: [
           BoxShadow(
             color: colorScheme.shadow.withValues(alpha: 0.04),
@@ -218,7 +244,14 @@ class _MarketChartCardState extends State<MarketChartCard>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
+            // 제목 줄 버튼(48dp)이 위·오른쪽 여백을 품고 있어 그만큼 줄인다.
+            // 아이콘의 위·오른쪽 끝은 카드 안쪽 여백 18에 맞는다.
+            padding: const EdgeInsetsDirectional.fromSTEB(
+              18,
+              6,
+              18 - MarketChartHeader.contentEndInset,
+              0,
+            ),
             child: MarketChartHeader(
               title: widget.title,
               pair: CurrencySwapPair(
@@ -234,7 +267,22 @@ class _MarketChartCardState extends State<MarketChartCard>
                     ? null
                     : () => onPick(base: widget.swapped),
               ),
-              onRemove: widget.onRemove,
+              converter: ChartAmountConverter(
+                rate: widget.swapped
+                    ? ChartInversion.rate(state.currentRate)
+                    : state.currentRate,
+                baseCode: _shownBase.code,
+                targetCode: _shownTarget.code,
+                historicalRate: state.historicalRate,
+                message:
+                    widget.unavailableText ??
+                    (!widget.shouldLoad && !state.hasLoaded
+                        ? '차트를 넘기면 데이터를 불러옵니다.'
+                        : null),
+              ),
+              onMore: controls.open,
+              moreFocusNode: controls.moreFocusNode,
+              refreshFocusNode: _refreshFocus,
               isLoading: !unavailable && state.isLoading,
               showsOldData: !unavailable && state.showsOldData,
               fetchedAt: unavailable ? null : state.fetchedAt,
@@ -242,32 +290,25 @@ class _MarketChartCardState extends State<MarketChartCard>
             ),
           ),
 
-          // 헤더 끝 줄의 버튼(48dp)이 위아래 여백을 품고 있어 간격을 줄인다.
-          const SizedBox(height: 4),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: MarketChartCurrentRate(
-              rate: widget.swapped
-                  ? ChartInversion.rate(state.currentRate)
-                  : state.currentRate,
-              baseCode: _shownBase.code,
-              targetCode: _shownTarget.code,
-              historicalRate: state.historicalRate,
-              message:
-                  widget.unavailableText ??
-                  (!widget.shouldLoad && !state.hasLoaded
-                      ? '차트를 넘기면 데이터를 불러옵니다.'
-                      : null),
-            ),
-          ),
-
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
 
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(right: 20),
-              child: _buildChartArea(state),
+              child: MarketChartBody(
+                state: state,
+                shownHistory: _shownHistory(state.history),
+                unavailable: unavailable,
+                unavailableHint: widget.unavailableHint,
+                shouldLoad: widget.shouldLoad,
+                errorText: widget.errorText,
+                retryFocusNode: _retryFocus,
+                onRetry: _retry,
+                chartOpacity: _chartOpacity,
+                period: widget.period,
+                maxXAxisLabels: widget.maxXAxisLabels,
+                interactive: !controls.active,
+              ),
             ),
           ),
 
@@ -277,86 +318,13 @@ class _MarketChartCardState extends State<MarketChartCard>
     );
   }
 
-  Widget _buildChartArea(ChartLoadState state) {
-    final mutedStyle = TextStyle(
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
-    );
-
-    if (widget.unavailableText != null) {
-      final hint = widget.unavailableHint;
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ExcludeSemantics(
-              child: Icon(
-                Icons.info_outline,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            if (hint != null) ...[
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Text(
-                  hint,
-                  textAlign: TextAlign.center,
-                  style: mutedStyle,
-                ),
-              ),
-            ],
-          ],
-        ),
-      );
-    }
-
-    if (!widget.shouldLoad && !state.hasLoaded) {
-      return Center(child: Text('이 차트는 아직 불러오지 않았습니다.', style: mutedStyle));
-    }
-
-    if (state.isLoading && state.history.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    if (state.failed && state.history.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(widget.errorText, style: mutedStyle),
-            const SizedBox(height: 10),
-            OutlinedButton(
-              onPressed: _chart.reload,
-              child: const Text('다시 시도'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    final shownHistory = _shownHistory(state.history);
-    if (shownHistory.isEmpty) {
-      return Center(child: Text('표시할 차트 데이터가 없습니다.', style: mutedStyle));
-    }
-
-    // 방향을 바꾸거나 처음 그려질 때 새 그래프를 서서히 보여 준다.
-    // 투명도만 바뀌므로 터치 선택·툴팁·축 계산은 그대로 동작한다.
-    return FadeTransition(
-      key: const ValueKey('market-chart-fade'),
-      opacity: _chartOpacity,
-      child: ExchangeRateLineChart(
-        history: shownHistory,
-        period: widget.period,
-        maxXAxisLabels: widget.maxXAxisLabels,
-      ),
-    );
-  }
-
   @override
   void dispose() {
     _chart
       ..removeListener(_onChartChanged)
       ..dispose();
+    _refreshFocus.dispose();
+    _retryFocus.dispose();
     _chartFade.dispose();
     super.dispose();
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../presentation/exchange/display_currency.dart';
+import '../focus_history.dart';
 import 'currency_icon.dart';
 
 /// 통화 목록을 국가 통화/암호화폐로 나눠 보여 줄 때의 종류.
@@ -95,7 +96,14 @@ class CurrencyCatalogStatus extends StatelessWidget {
           ListTile(
             title: Text(error),
             trailing: TextButton(
-              onPressed: onRetry,
+              // 오류가 사라지면 이 버튼도 사라져 초점이 전에 쓴 검색칸으로 돌아가므로 먼저 푼다.
+              // 검색칸에 초점을 둔 채 터치했으면 그대로 둔다.
+              onPressed: onRetry == null
+                  ? null
+                  : () {
+                      if (!primaryFocusInTextField) releaseFocusHistory();
+                      onRetry!();
+                    },
               child: const Text('다시 시도'),
             ),
           ),

@@ -263,7 +263,302 @@ void main() {
     charts.dispose();
   });
 
-  test('replaceSide ignores stale, impossible and duplicate picks', () async {
+  test(
+    'replaceSide exchanges positions when the chart already exists',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      final charts = ChartSelectionProvider();
+      await charts.initialize();
+      var notified = 0;
+      charts.addListener(() => notified++);
+
+      expect(
+        charts.replaceSide(
+          0,
+          expected: const ChartPair.fiat('USD', 'KRW'),
+          base: true,
+          swapped: false,
+          currency: fiat('JPY'),
+        ),
+        ChartPairChange.swappedPositions,
+      );
+      expect(notified, 1);
+      expect(charts.pairs.map((p) => p.id), [
+        'fiat:JPY/KRW',
+        'fiat:USD/KRW',
+        'crypto:BTC/KRW',
+      ]);
+      // 교환 결과는 같은 자리 변경(swappedAfterReplace)으로 알려 주지 않고,
+      // 바뀐 순서를 저장한다.
+      expect(
+        charts.swappedAfterReplace('fiat:USD/KRW', 'fiat:JPY/KRW'),
+        isNull,
+      );
+      await pumpEventQueue();
+      expect(await stored(), [
+        'fiat:JPY/KRW',
+        'fiat:USD/KRW',
+        'crypto:BTC/KRW',
+      ]);
+
+      // 코인을 고른 경우도 같다.
+      expect(
+        charts.replaceSide(
+          1,
+          expected: const ChartPair.fiat('USD', 'KRW'),
+          base: false,
+          swapped: false,
+          currency: coin('BTC'),
+        ),
+        ChartPairChange.swappedPositions,
+      );
+      expect(charts.pairs.map((p) => p.id), [
+        'fiat:JPY/KRW',
+        'crypto:BTC/KRW',
+        'fiat:USD/KRW',
+      ]);
+
+      // 방향만 다른 쌍도 같은 차트이며, 있던 카드의 ID는 그대로 옮긴다.
+      charts.replace(2, const ChartPair.fiat('KRW', 'USD'));
+      expect(
+        charts.replaceSide(
+          0,
+          expected: const ChartPair.fiat('JPY', 'KRW'),
+          base: true,
+          swapped: false,
+          currency: fiat('USD'),
+        ),
+        ChartPairChange.swappedPositions,
+      );
+      expect(charts.pairs.map((p) => p.id), [
+        'fiat:KRW/USD',
+        'crypto:BTC/KRW',
+        'fiat:JPY/KRW',
+      ]);
+      charts.dispose();
+    },
+  );
+
+  group('exchanging positions shows the pick on the pressed side', () {
+    /// 카드의 화면 표시(왼쪽, 오른쪽).
+    (String, String) shown(ChartPair pair, bool swapped) => swapped
+        ? (pair.targetCode, pair.baseCode)
+        : (pair.baseCode, pair.targetCode);
+
+    const usdKrw = ChartPair.fiat('USD', 'KRW');
+    const eth = ChartPair.crypto('ETH');
+    const btc = ChartPair.crypto('BTC');
+
+    // (제목, 누른 카드, 누른 카드 뒤집힘, 왼쪽을 눌렀는지, 고른 통화, 있던 카드, 기대 표시)
+    final cases =
+        <
+          (
+            String,
+            ChartPair,
+            bool,
+            bool,
+            DisplayCurrency,
+            ChartPair,
+            (String, String),
+          )
+        >[
+          for (final existing in const [
+            ChartPair.fiat('JPY', 'KRW'),
+            ChartPair.fiat('KRW', 'JPY'),
+          ]) ...[
+            // 정방향 "USD ⇄ KRW"의 왼쪽 USD를 JPY로.
+            (
+              'forward left fiat',
+              usdKrw,
+              false,
+              true,
+              fiat('JPY'),
+              existing,
+              ('JPY', 'KRW'),
+            ),
+            // 뒤집힌 "KRW ⇄ USD"의 오른쪽 USD를 JPY로.
+            (
+              'flipped right fiat',
+              usdKrw,
+              true,
+              false,
+              fiat('JPY'),
+              existing,
+              ('KRW', 'JPY'),
+            ),
+          ],
+          for (final existing in const [
+            ChartPair.fiat('USD', 'JPY'),
+            ChartPair.fiat('JPY', 'USD'),
+          ]) ...[
+            // 정방향 "USD ⇄ KRW"의 오른쪽 KRW를 JPY로.
+            (
+              'forward right fiat',
+              usdKrw,
+              false,
+              false,
+              fiat('JPY'),
+              existing,
+              ('USD', 'JPY'),
+            ),
+            // 뒤집힌 "KRW ⇄ USD"의 왼쪽 KRW를 JPY로.
+            (
+              'flipped left fiat',
+              usdKrw,
+              true,
+              true,
+              fiat('JPY'),
+              existing,
+              ('JPY', 'USD'),
+            ),
+          ],
+          // 국가 통화 카드에서 코인을 고르면 고른 쪽에 코인이 보인다.
+          for (final swapped in const [false, true]) ...[
+            (
+              'swapped $swapped left coin',
+              usdKrw,
+              swapped,
+              true,
+              coin('BTC'),
+              btc,
+              ('BTC', 'KRW'),
+            ),
+            (
+              'swapped $swapped right coin',
+              usdKrw,
+              swapped,
+              false,
+              coin('BTC'),
+              btc,
+              ('KRW', 'BTC'),
+            ),
+          ],
+          // 코인 카드에서 다른 코인을 고르는 경우(KRW 쪽은 KRW만 고를 수 있다).
+          (
+            'coin card forward left coin',
+            eth,
+            false,
+            true,
+            coin('BTC'),
+            btc,
+            ('BTC', 'KRW'),
+          ),
+          (
+            'coin card flipped right coin',
+            eth,
+            true,
+            false,
+            coin('BTC'),
+            btc,
+            ('KRW', 'BTC'),
+          ),
+          // 코인 카드에서 국가 통화를 고르면 코인 자리에 그 통화가 온다.
+          for (final existing in const [
+            ChartPair.fiat('USD', 'KRW'),
+            ChartPair.fiat('KRW', 'USD'),
+          ]) ...[
+            (
+              'coin card forward left fiat',
+              eth,
+              false,
+              true,
+              fiat('USD'),
+              existing,
+              ('USD', 'KRW'),
+            ),
+            (
+              'coin card flipped right fiat',
+              eth,
+              true,
+              false,
+              fiat('USD'),
+              existing,
+              ('KRW', 'USD'),
+            ),
+          ],
+        ];
+
+    for (final (title, pressed, swapped, left, picked, existing, want)
+        in cases) {
+      test(
+        '$title: ${pressed.id} picks ${picked.code}, has ${existing.id}',
+        () async {
+          SharedPreferences.setMockInitialValues({
+            key: [pressed.id, existing.id],
+          });
+          final charts = ChartSelectionProvider();
+          await charts.initialize();
+
+          expect(
+            charts.replaceSide(
+              0,
+              expected: pressed,
+              // ChartPair.replaceShown의 규칙: 왼쪽을 누른 것은 base != swapped.
+              base: left != swapped,
+              swapped: swapped,
+              currency: picked,
+            ),
+            ChartPairChange.swappedPositions,
+          );
+          expect(charts.pairs, [existing, pressed]);
+
+          final direction = charts.swappedAfterExchange(
+            pressed.id,
+            existing.id,
+          )!;
+          // 방향만 정하고 옮겨 온 카드의 ID는 그대로다.
+          expect(direction.id, existing.id);
+          expect(shown(existing, direction.swapped), want);
+          charts.dispose();
+        },
+      );
+    }
+
+    test('the answer is given once and only for the exchanged cards', () async {
+      SharedPreferences.setMockInitialValues({});
+      const usd = ChartPair.fiat('USD', 'KRW');
+      const jpy = ChartPair.fiat('JPY', 'KRW');
+      final charts = ChartSelectionProvider();
+      await charts.initialize();
+      void exchange(ChartPair pressed) => charts.replaceSide(
+        0,
+        expected: pressed,
+        base: true,
+        swapped: false,
+        currency: fiat(pressed == usd ? 'JPY' : 'USD'),
+      );
+
+      // 두 ID의 순서는 상관없고, 항상 옮겨 온 카드를 알려 준다.
+      exchange(usd);
+      expect(charts.swappedAfterExchange(usd.id, jpy.id)?.id, jpy.id);
+      expect(charts.swappedAfterExchange(usd.id, jpy.id), isNull);
+      exchange(jpy);
+      expect(charts.swappedAfterExchange(jpy.id, usd.id)?.id, usd.id);
+
+      // 다른 카드를 물으면 알려 주지 않고 비운다.
+      exchange(usd);
+      expect(charts.swappedAfterExchange(usd.id, 'crypto:BTC/KRW'), isNull);
+      expect(charts.swappedAfterExchange(usd.id, jpy.id), isNull);
+
+      // 다른 경로로 목록이 바뀌면 비운다.
+      exchange(jpy);
+      charts.add();
+      expect(charts.swappedAfterExchange(usd.id, jpy.id), isNull);
+
+      // 같은 자리 변경의 결과는 교환으로 알려 주지 않는다.
+      charts.replaceSide(
+        0,
+        expected: usd,
+        base: true,
+        swapped: false,
+        currency: coin('SOL'),
+      );
+      expect(charts.swappedAfterExchange(usd.id, 'crypto:SOL/KRW'), isNull);
+      charts.dispose();
+    });
+  });
+
+  test('replaceSide ignores stale and impossible picks', () async {
     SharedPreferences.setMockInitialValues({});
     final charts = ChartSelectionProvider();
     await charts.initialize();
@@ -305,17 +600,6 @@ void main() {
     charts.replace(0, const ChartPair.fiat('KRW', 'USD'));
     var notified = 0;
     charts.addListener(() => notified++);
-    // JPY/KRW 카드가 있으므로 KRW/JPY도 만들 수 없다.
-    expect(
-      charts.replaceSide(
-        0,
-        expected: const ChartPair.fiat('KRW', 'USD'),
-        base: false,
-        swapped: false,
-        currency: fiat('JPY'),
-      ),
-      ChartPairChange.duplicate,
-    );
     expect(
       charts.replaceSide(
         2,

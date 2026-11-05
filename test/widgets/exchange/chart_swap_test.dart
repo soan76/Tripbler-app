@@ -415,16 +415,21 @@ void main() {
       await tester.pumpWidget(carousel(source));
       await tester.pumpAndSettle();
 
-      expect(find.text('1 BTC'), findsOneWidget);
-      expect(find.text('100 KRW'), findsOneWidget);
+      expect(find.text('BTC 금액'), findsOneWidget);
+      await tester.enterText(
+        find.byKey(const ValueKey('market-chart-amount')),
+        '2',
+      );
+      await tester.pump();
+      expect(find.text('200 KRW'), findsOneWidget);
       expect(shownHistory(tester).first.rate, 100);
       expect(source.loads, hasLength(1));
 
       await tester.tap(find.byKey(swapKey));
       await tester.pumpAndSettle();
 
-      expect(find.text('1 KRW'), findsOneWidget);
-      expect(find.text('0.01 BTC'), findsOneWidget);
+      expect(find.text('KRW 금액'), findsOneWidget);
+      expect(find.text('0.02 BTC'), findsOneWidget);
       final history = shownHistory(tester);
       expect(history.first.rate, 0.01);
       expect(history.first.baseCurrencyCode, 'KRW');
@@ -436,17 +441,17 @@ void main() {
       await tester.tap(find.text('3M'));
       await tester.pumpAndSettle();
       expect(source.loads.last, ChartPeriod.threeMonths);
-      expect(find.text('1 KRW'), findsOneWidget);
+      expect(find.text('KRW 금액'), findsOneWidget);
 
       // 화면을 다시 만들어도(앱 재시작) 저장된 방향을 복원한다.
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(carousel(Source()));
       await tester.pumpAndSettle();
-      expect(find.text('1 KRW'), findsOneWidget);
+      expect(find.text('KRW 금액'), findsOneWidget);
 
       await tester.tap(find.byKey(swapKey));
       await tester.pumpAndSettle();
-      expect(find.text('1 BTC'), findsOneWidget);
+      expect(find.text('BTC 금액'), findsOneWidget);
       expect(await stored(), isEmpty);
       await tester.pumpWidget(const SizedBox());
     },
@@ -625,7 +630,7 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('currencies move in 300ms while the chart fades over 1s', (
+  testWidgets('currencies move in 300ms while the chart fades over 500ms', (
     tester,
   ) async {
     SharedPreferences.setMockInitialValues({});
@@ -635,19 +640,18 @@ void main() {
 
     await tester.tap(find.byKey(swapKey));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 250));
+    // 0.5초의 한가운데에서 절반쯤 보인다.
+    expect(chartOpacity(tester), closeTo(0.5, 0.01));
+
+    await tester.pump(const Duration(milliseconds: 50));
     // 통화 이동과 아이콘 회전은 300ms에 끝난다.
     expect(turns(tester), 0.5);
     expect(codeX(tester, 'KRW'), closeTo(btcStart, 0.01));
-    // 그래프는 아직 절반도 나타나지 않았다.
-    final at300 = chartOpacity(tester);
-    expect(at300, inExclusiveRange(0, 0.5));
+    // 그래프는 아직 나타나는 중이다.
+    expect(chartOpacity(tester), inExclusiveRange(0.5, 1));
 
-    await tester.pump(const Duration(milliseconds: 200));
-    // 1초의 한가운데에서 절반쯤 보인다.
-    expect(chartOpacity(tester), closeTo(0.5, 0.01));
-
-    await tester.pump(const Duration(milliseconds: 490));
+    await tester.pump(const Duration(milliseconds: 190));
     expect(chartOpacity(tester), inExclusiveRange(0.9, 1));
     await tester.pump(const Duration(milliseconds: 10));
     expect(chartOpacity(tester), 1);
@@ -665,14 +669,14 @@ void main() {
     await tester.tap(find.byKey(swapKey));
     await tester.pump();
     // 통화 이동은 끝났지만 그래프는 아직 나타나는 중이다.
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(turns(tester), 0.5);
     final before = chartOpacity(tester);
     expect(before, inExclusiveRange(0.5, 1));
 
     await tester.tap(find.byKey(swapKey));
     await tester.pump();
-    expect(find.text('1 BTC'), findsOneWidget);
+    expect(find.text('BTC 금액'), findsOneWidget);
     // 되돌아간 그래프도 투명해지지 않고 지금 투명도에서 이어서 나타난다.
     expect(chartOpacity(tester), greaterThanOrEqualTo(before));
     await tester.pump(const Duration(milliseconds: 150));
@@ -796,7 +800,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
     expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
     expect(sideRect(tester, 'KRW').right, closeTo(pairRight, 0.01));
     expect(codeX(tester, 'BTC'), lessThan(codeX(tester, 'KRW')));
     await tester.pumpWidget(const SizedBox());
@@ -824,7 +828,7 @@ void main() {
     expect(chartOpacity(tester), greaterThanOrEqualTo(midOpacity));
     await tester.pumpAndSettle();
     expect(chartOpacity(tester), 1);
-    expect(find.text('1 BTC'), findsOneWidget);
+    expect(find.text('BTC 금액'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -846,7 +850,7 @@ void main() {
           // 통화 묶음이 버튼 위를 지나가는 중이어도 버튼이 눌린다.
           await tester.tap(find.byKey(swapKey));
           await tester.pumpAndSettle();
-          expect(find.text('1 BTC'), findsOneWidget);
+          expect(find.text('BTC 금액'), findsOneWidget);
           expect(turns(tester), 0);
           await tester.pumpWidget(const SizedBox());
         },
@@ -873,7 +877,7 @@ void main() {
 
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
     final krwAfter = sideRect(tester, 'KRW');
     final dogeAfter = sideRect(tester, 'DOGE');
     button = tester.getRect(find.byKey(swapKey));
@@ -885,7 +889,7 @@ void main() {
     // 옮겨진 버튼 자리를 눌러도 판정된다.
     await tester.tapAt(button.center);
     await tester.pumpAndSettle();
-    expect(find.text('1 DOGE'), findsOneWidget);
+    expect(find.text('DOGE 금액'), findsOneWidget);
     expect(sideRect(tester, 'DOGE').left, closeTo(start, 0.01));
     await tester.pumpWidget(const SizedBox());
   });
@@ -924,8 +928,8 @@ void main() {
     }
     await tester.pump(const Duration(milliseconds: 100));
     expect(chartOpacity(tester), inExclusiveRange(0, 1));
-    // 처음 나타날 때도 1초에 걸쳐 나타난다.
-    await tester.pump(const Duration(milliseconds: 800));
+    // 처음 나타날 때도 0.5초에 걸쳐 나타난다.
+    await tester.pump(const Duration(milliseconds: 300));
     expect(chartOpacity(tester), inExclusiveRange(0, 1));
     await tester.pumpAndSettle();
     expect(chartOpacity(tester), 1);
@@ -959,7 +963,7 @@ void main() {
     expect(turns(tester), 0.5);
     expect(chartOpacity(tester), 1);
     expect(codeX(tester, 'KRW'), closeTo(btcStart, 0.01));
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
   });
@@ -982,7 +986,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -998,13 +1002,13 @@ void main() {
       await tester.tap(find.byKey(swapKey));
     }
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
     expect(await stored(), [id]);
 
     await tester.tap(find.byKey(swapKey));
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
     expect(await stored(), [id]);
     expect(source.loads, hasLength(1));
     await tester.pumpWidget(const SizedBox());
@@ -1020,7 +1024,7 @@ void main() {
 
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
     expect(find.text('마지막 성공 데이터 · 갱신 지연'), findsOneWidget);
     expect(find.text('업데이트: 2026.01.02 03:04'), findsOneWidget);
     expect(source.loads, hasLength(1));
@@ -1037,6 +1041,11 @@ void main() {
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
 
+    await tester.enterText(
+      find.byKey(const ValueKey('market-chart-amount')),
+      '1',
+    );
+    await tester.pump();
     expect(find.text('0.000004115 SOL'), findsOneWidget);
 
     final history = shownHistory(tester);
@@ -1085,19 +1094,32 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
 
     await tester.drag(find.byType(PageView), const Offset(-600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('1 ETH'), findsOneWidget);
+    expect(find.text('ETH 금액'), findsOneWidget);
     await tester.drag(find.byType(PageView), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
 
-    // 순서가 바뀌어도 ID를 따라 방향을 유지한다.
+    // 두 카드의 위치가 서로 바뀌면 페이지는 그대로이고, 방향은 ID를 따라간다.
     await tester.pumpWidget(coinCarousel(const ['ETH', 'BTC'], sourceFor));
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(
+      find
+          .ancestor(of: find.text('ETH 금액'), matching: find.byType(TextField))
+          .hitTestable(),
+      findsOneWidget,
+    );
+    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(
+      find
+          .ancestor(of: find.text('KRW 금액'), matching: find.byType(TextField))
+          .hitTestable(),
+      findsOneWidget,
+    );
     expect(await stored(), [coinId('BTC')]);
 
     // 삭제한 코인의 ID는 메모리와 저장값에서 모두 지운다.
@@ -1107,11 +1129,11 @@ void main() {
     await tester.pumpWidget(coinCarousel(const ['BTC', 'ETH'], sourceFor));
     await tester.pumpAndSettle();
     // 보고 있던 ETH(2번째 페이지)를 유지하므로 BTC로 돌아가 확인한다.
-    expect(find.text('1 ETH'), findsOneWidget);
+    expect(find.text('ETH 금액'), findsOneWidget);
     await tester.drag(find.byType(PageView), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('1 BTC'), findsOneWidget);
-    expect(find.text('1 KRW'), findsNothing);
+    expect(find.text('BTC 금액'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -1124,7 +1146,7 @@ void main() {
     });
     await tester.pumpWidget(carousel(Source()));
     await tester.pumpAndSettle();
-    expect(find.text('1 KRW'), findsOneWidget);
+    expect(find.text('KRW 금액'), findsOneWidget);
     expect(await stored(), [id]);
     await tester.pumpWidget(const SizedBox());
   });
@@ -1377,6 +1399,56 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  testWidgets('exchanging two cards keeps the page, data and directions', (
+    tester,
+  ) async {
+    const usd = ChartPair.fiat('USD', 'KRW');
+    const jpy = ChartPair.fiat('JPY', 'KRW');
+    SharedPreferences.setMockInitialValues({
+      storeKey: [usd.id],
+    });
+    final sources = {
+      usd.id: Source(symbol: 'USD'),
+      jpy.id: Source(symbol: 'JPY'),
+    };
+    final snapshots = MemorySnapshots();
+    Widget app(List<ChartPair> pairs) => MaterialApp(
+      home: Scaffold(
+        body: ChartPairCarousel(
+          pairs: pairs,
+          currencies: const [],
+          snapshotStore: snapshots,
+          createDataSource: (pair) => sources[pair.id]!,
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(app(const [usd, jpy]));
+    await tester.pumpAndSettle();
+    expect(sources[usd.id]!.loads, hasLength(1));
+    expect(sources[jpy.id]!.loads, isEmpty);
+
+    // Provider 콜백이 없으면 교환해도 두 카드의 방향이 그대로다.
+    // 첫 페이지에 그대로 머물러 자리를 바꾼 JPY 카드가 보이고 조회를 시작한다.
+    await tester.pumpWidget(app(const [jpy, usd]));
+    await tester.pumpAndSettle();
+    expect(find.text('JPY').hitTestable(), findsOneWidget);
+    expect(find.text('USD').hitTestable(), findsNothing);
+    expect(sources[jpy.id]!.loads, hasLength(1));
+    expect(await stored(), [usd.id]);
+
+    // 옮겨 간 USD 카드는 받아 둔 데이터와 뒤집힌 방향을 그대로 쓴다.
+    await tester.drag(find.byType(PageView), const Offset(-700, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('USD').hitTestable(), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('KRW').hitTestable()).dx,
+      lessThan(tester.getTopLeft(find.text('USD').hitTestable()).dx),
+    );
+    expect(sources[usd.id]!.loads, hasLength(1));
+    await tester.pumpWidget(const SizedBox());
+  });
+
   group('with ChartSelectionProvider', () {
     late ChartSelectionProvider charts;
 
@@ -1397,6 +1469,7 @@ void main() {
                   active: false,
                   snapshotStore: MemorySnapshots(),
                   swappedAfterReplace: charts.swappedAfterReplace,
+                  swappedAfterExchange: charts.swappedAfterExchange,
                 ),
               ),
             ),
@@ -1406,10 +1479,254 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    // 지금 페이지에 "[left] ⇄ [right]" 순서로 보이는지.
+    void expectShown(WidgetTester tester, String left, String right) {
+      double x(String code) =>
+          tester.getTopLeft(find.text(code).hitTestable()).dx;
+      expect(x(left), lessThan(x(right)), reason: '"$left ⇄ $right"');
+    }
+
     DisplayCurrency fiat(String code) =>
         DisplayCurrency.fromFiat(findCurrencyByCode(code)!);
     DisplayCurrency coin(String symbol) =>
         DisplayCurrency.fromCrypto(CryptoCoin(symbol: symbol, name: symbol));
+
+    testWidgets('an exchange shows the pick on the pressed side and keeps it', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:JPY/USD'],
+      });
+      await pumpCharts(tester);
+      expectShown(tester, 'USD', 'KRW');
+
+      // "USD ⇄ KRW"의 오른쪽 KRW를 JPY로. USD가 원래 자리에 남고 JPY가 오른쪽이다.
+      expect(
+        charts.replaceSide(
+          0,
+          expected: const ChartPair.fiat('USD', 'KRW'),
+          base: false,
+          swapped: false,
+          currency: fiat('JPY'),
+        ),
+        ChartPairChange.swappedPositions,
+      );
+      await tester.pumpAndSettle();
+      expect(charts.pairs[0].id, 'fiat:JPY/USD');
+      expectShown(tester, 'USD', 'JPY');
+      expect(await stored(), ['fiat:JPY/USD']);
+
+      // 재시작해도 그대로다.
+      await tester.pumpWidget(const SizedBox());
+      await pumpCharts(tester);
+      expectShown(tester, 'USD', 'JPY');
+
+      // 밀려난 카드는 자기 방향(정방향)을 유지한다.
+      await tester.drag(find.byType(PageView), const Offset(-700, 0));
+      await tester.pumpAndSettle();
+      expectShown(tester, 'USD', 'KRW');
+    });
+
+    testWidgets('a flipped card sends the pick to the pressed left side', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:USD/JPY'],
+        storeKey: ['fiat:USD/KRW'],
+      });
+      await pumpCharts(tester);
+      expectShown(tester, 'KRW', 'USD');
+
+      charts.replaceSide(
+        0,
+        expected: const ChartPair.fiat('USD', 'KRW'),
+        base: false,
+        swapped: true,
+        currency: fiat('JPY'),
+      );
+      await tester.pumpAndSettle();
+      expectShown(tester, 'JPY', 'USD');
+      // 밀려난 카드의 뒤집힘과 옮겨 온 카드의 뒤집힘을 함께 저장한다.
+      expect((await stored())!.toSet(), {'fiat:USD/KRW', 'fiat:USD/JPY'});
+
+      await tester.drag(find.byType(PageView), const Offset(-700, 0));
+      await tester.pumpAndSettle();
+      expectShown(tester, 'KRW', 'USD');
+    });
+
+    testWidgets('a coin picked on the right stays on the right', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', coinId('BTC')],
+      });
+      await pumpCharts(tester);
+
+      charts.replaceSide(
+        0,
+        expected: const ChartPair.fiat('USD', 'KRW'),
+        base: false,
+        swapped: false,
+        currency: coin('BTC'),
+      );
+      await tester.pumpAndSettle();
+      expectShown(tester, 'KRW', 'BTC');
+      expect(await stored(), [coinId('BTC')]);
+    });
+
+    testWidgets('a stored direction is overwritten when forward is needed', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:JPY/KRW'],
+        storeKey: ['fiat:JPY/KRW'],
+      });
+      await pumpCharts(tester);
+
+      // JPY/KRW는 뒤집혀 저장돼 있지만, 왼쪽 USD를 JPY로 골랐으니 "JPY ⇄ KRW"다.
+      charts.replaceSide(
+        0,
+        expected: const ChartPair.fiat('USD', 'KRW'),
+        base: true,
+        swapped: false,
+        currency: fiat('JPY'),
+      );
+      await tester.pumpAndSettle();
+      expectShown(tester, 'JPY', 'KRW');
+      expect(await stored(), isEmpty);
+
+      await tester.pumpWidget(const SizedBox());
+      await pumpCharts(tester);
+      expectShown(tester, 'JPY', 'KRW');
+    });
+
+    testWidgets('an exchange before the directions are read is applied after', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        ChartSelectionProvider.storageKey: [
+          'fiat:USD/KRW',
+          'fiat:JPY/KRW',
+          'fiat:EUR/KRW',
+        ],
+        storeKey: ['fiat:JPY/KRW', 'fiat:EUR/KRW'],
+      });
+      charts = ChartSelectionProvider();
+      addTearDown(charts.dispose);
+      await charts.initialize();
+      final show = ValueNotifier(false);
+      addTearDown(show.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: ListenableBuilder(
+                listenable: Listenable.merge([charts, show]),
+                builder: (context, _) => !show.value
+                    ? const SizedBox()
+                    : ChartPairCarousel(
+                        pairs: charts.pairs,
+                        currencies: const [],
+                        active: false,
+                        snapshotStore: MemorySnapshots(),
+                        swappedAfterReplace: charts.swappedAfterReplace,
+                        swappedAfterExchange: charts.swappedAfterExchange,
+                      ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      // 비동기 작업이 끼어들지 못하게 동기로 빌드해, 방향 읽기가 끝나기 전에 교환한다.
+      void build() =>
+          tester.binding.buildOwner!.buildScope(tester.binding.rootElement!);
+      show.value = true;
+      build();
+      charts.replaceSide(
+        0,
+        expected: const ChartPair.fiat('USD', 'KRW'),
+        base: true,
+        swapped: false,
+        currency: fiat('JPY'),
+      );
+      build();
+      await tester.pumpAndSettle();
+
+      expect(charts.pairs[0].id, 'fiat:JPY/KRW');
+      expectShown(tester, 'JPY', 'KRW');
+      // 옮겨 온 카드의 옛 저장값만 지우고, 다른 카드의 저장값은 남는다.
+      expect(await stored(), ['fiat:EUR/KRW']);
+    });
+
+    testWidgets('a moved card shows its direction at once, without motion', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:KRW/JPY'],
+      });
+      charts = ChartSelectionProvider();
+      addTearDown(charts.dispose);
+      await charts.initialize();
+      final usd = Source(symbol: 'USD');
+      final jpy = Source(symbol: 'KRW');
+      final snapshots = MemorySnapshots();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: charts,
+              builder: (context, _) => ChartPairCarousel(
+                pairs: charts.pairs,
+                currencies: const [],
+                snapshotStore: snapshots,
+                createDataSource: (pair) =>
+                    pair.id == 'fiat:USD/KRW' ? usd : jpy,
+                swappedAfterReplace: charts.swappedAfterReplace,
+                swappedAfterExchange: charts.swappedAfterExchange,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      // JPY 카드를 한 번 봐서 State가 살아 있게(keep-alive) 한 뒤 돌아온다.
+      await tester.drag(find.byType(PageView), const Offset(-700, 0));
+      await tester.pumpAndSettle();
+      expect(jpy.loads, hasLength(1));
+      await tester.drag(find.byType(PageView), const Offset(700, 0));
+      await tester.pumpAndSettle();
+
+      // 왼쪽 USD를 JPY로 고르면 KRW/JPY 카드가 뒤집혀 "JPY ⇄ KRW"로 온다.
+      charts.replaceSide(
+        0,
+        expected: const ChartPair.fiat('USD', 'KRW'),
+        base: true,
+        swapped: false,
+        currency: fiat('JPY'),
+      );
+      await tester.pump();
+      // 첫 프레임에 이미 끝난 배치이고, 진행 중인 움직임이 없다.
+      Duration dataChangeDuration() =>
+          tester.widget<LineChart>(find.byType(LineChart)).duration;
+      expect(dataChangeDuration(), Duration.zero);
+      expect(turns(tester), 0.5);
+      expect(chartOpacity(tester), 1);
+      expectShown(tester, 'JPY', 'KRW');
+      // 받아 둔 데이터를 다시 조회하지 않는다.
+      expect(jpy.loads, hasLength(1));
+
+      // 이후 사용자가 스왑을 누르면 평소처럼 움직인다.
+      await tester.tap(find.byKey(swapKey).hitTestable());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(turns(tester), inExclusiveRange(0, 0.5));
+      expect(chartOpacity(tester), lessThan(1));
+      expect(dataChangeDuration(), greaterThan(Duration.zero));
+      await tester.pumpAndSettle();
+      expectShown(tester, 'KRW', 'JPY');
+      await tester.pumpWidget(const SizedBox());
+    });
 
     testWidgets('a coin changed to a fiat pair does not leave its direction', (
       tester,
@@ -1547,7 +1864,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(ChartPairCarousel.unsupportedCoinText), findsNothing);
     expect(sources['OLD']!.loads, hasLength(1));
-    expect(find.text('1 OLD'), findsOneWidget);
+    expect(find.text('OLD 금액'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

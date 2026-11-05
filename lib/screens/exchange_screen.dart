@@ -10,6 +10,7 @@ import '../widgets/exchange/chart_currency_picker_sheet.dart';
 import '../widgets/exchange/currency_management_bottom_sheet.dart';
 import '../widgets/exchange/currency_row.dart';
 import '../widgets/exchange/currency_selection_sheet.dart';
+import '../widgets/focus_history.dart';
 
 // 환율 화면을 구성하는 StatefulWidget
 class ExchangeScreen extends StatefulWidget {
@@ -112,6 +113,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                   onAmountTap: () => display.selectInput(row),
                   onAmountChanged: (value) => display.changeAmount(row, value),
                   onCurrencyTap: () {
+                    _leaveAmountField();
                     if (row.isCrypto) {
                       showCurrencyManagementBottomSheet(context: context);
                       return;
@@ -142,6 +144,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
                 child: OutlinedButton.icon(
                   onPressed: () {
+                    _leaveAmountField();
                     showCurrencyManagementBottomSheet(context: context);
                   },
                   icon: const Icon(Icons.tune),
@@ -179,6 +182,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                   onAdd: charts.canAdd ? charts.add : null,
                   onRemove: charts.canRemove ? charts.remove : null,
                   swappedAfterReplace: charts.swappedAfterReplace,
+                  swappedAfterExchange: charts.swappedAfterExchange,
                 )
               else
                 const SizedBox(
@@ -194,6 +198,14 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     );
   }
 
+  // 창을 열기 전에 부른다. 터치로는 버튼이 초점을 가져가지 않아 전에 쓴 입력칸이 초점을 쥐고
+  // 있다. 그대로 열면 창이 닫힐 때 입력칸으로 돌아가 키보드가 뜨고 화면이 올라간다. 값은 입력할
+  // 때마다 반영되어 초점을 풀어도 잃지 않는다. 키보드로 연 경우 초점은 누른 버튼에 있어 닫으면
+  // 그리로 돌아온다.
+  void _leaveAmountField() {
+    if (primaryFocusInTextField) releaseFocusHistory();
+  }
+
   // 차트 카드 한쪽 통화를 검색 선택창에서 바꾼다. 위쪽 환산 통화에는 영향을 주지 않는다.
   // 쌍 계산·중복 판정·선택창이 열린 사이의 변경 확인은 Provider가 맡는다.
   Future<void> _pickChartCurrency(
@@ -204,6 +216,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     final charts = context.read<ChartSelectionProvider>();
     final display = context.read<ExchangeDisplayProvider>();
     final pair = charts.pairs[index];
+    _leaveAmountField();
     final picked = await showChartCurrencyPicker(
       context: context,
       title: '차트 통화 선택',
@@ -219,10 +232,10 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
       swapped: swapped,
       currency: picked,
     );
-    if (result == ChartPairChange.duplicate) {
+    if (result == ChartPairChange.swappedPositions) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('이미 같은 통화쌍의 차트가 있습니다.')));
+      ).showSnackBar(const SnackBar(content: Text('이미 있던 차트와 위치를 바꿨습니다.')));
     }
   }
 
@@ -292,6 +305,9 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
           ),
           TextButton(
             onPressed: () {
+              // 누르면 이 박스가 사라져 버튼의 초점이 전에 쓴 입력칸으로 돌아가므로 먼저 푼다.
+              // 입력칸에 초점을 둔 채 터치했으면 그대로 둔다.
+              if (!primaryFocusInTextField) releaseFocusHistory();
               // Future를 직접 await하지 않고 재시도만 트리거함.
               onRetry();
             },

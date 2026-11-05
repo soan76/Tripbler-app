@@ -7,10 +7,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 @AGENTS.md
 
 ## 서브에이전트 사용
-- 코드 점검(버그, 규칙 위반, 성능 개선)은 `code-inspector` 서브에이전트에게 맡긴다. 기능 구현이나 수정이 끝나면 점검을 요청받지 않아도 `code-inspector`로 점검한다.
-- `code-inspector`가 보고한 버그와 규칙 위반은 사용자에게 알리고, 수정은 사용자가 요청할 때 진행한다.
+- 코드 점검(버그, 규칙 위반, 성능 문제)은 `code-inspector` 서브에이전트에게 맡긴다. 기능 구현이나 수정이 끝나면 점검을 요청받지 않아도 `code-inspector`로 점검한다.
+- `code-inspector`가 보고한 버그, 규칙 위반, 성능 문제는 사용자에게 알리고, 수정은 사용자가 요청할 때 진행한다.
 - 버그 수정, 문제 해결, 속도·효율 개선은 `code-fixer` 서브에이전트에게 맡긴다. `code-inspector` 보고서를 바탕으로 수정할 때는 보고서 내용을 그대로 `code-fixer`에게 전달한다.
-- `code-fixer`가 끝나면 그 처리 결과를 `code-inspector`에게 전달해 다시 점검한다.
+- `code-fixer`에게는 보고서와 함께 사용자가 고른 항목을 지정해서 전달한다.
+- `code-fixer`가 끝나도 바로 재점검하지 않는다. 사용자가 요청한 수정을 모두 마친 뒤 처리 결과를 모아 `code-inspector`에게 한 번에 전달해 재점검한다.
+- 파일 한두 곳의 몇 줄짜리 수정과 주석·문구 수정은 메인 Claude가 직접 고치고, 관련 테스트와 정적 분석만 실행한다. 이때는 `code-fixer`와 `code-inspector`를 쓰지 않으며, 이 항목이 위의 맡기기·점검 규칙보다 우선한다.
+- `code-inspector`는 Sonnet 모델로 실행한다. 에이전트 정의를 불러오지 못해 범용 에이전트로 대신 실행할 때도 `model: sonnet`을 지정한다.
 - 화면·위젯의 디자인과 사용성 개선은 `design-improver` 서브에이전트에게 맡긴다. 디자인 작업이 끝나면 `code-inspector`로 점검한다.
 - 화면이나 위젯이 새로 생기거나 바뀌는 구현은 다음 순서로 진행한다.
   1. 메인 Claude가 기능(상태·로직·API 연결)과 기본 화면을 구현한다.

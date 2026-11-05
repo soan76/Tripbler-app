@@ -14,11 +14,19 @@ class ExchangeRateLineChart extends StatefulWidget {
   final ChartPeriod period;
   final int? maxXAxisLabels;
 
+  /// false이면 데이터가 바뀔 때 기본 전환 없이 새 그래프를 바로 그린다.
+  final bool animateDataChange;
+
+  /// false이면 터치와 툴팁을 끄고, 떠 있던 선택도 지운다.
+  final bool interactive;
+
   const ExchangeRateLineChart({
     super.key,
     required this.history,
     required this.period,
     this.maxXAxisLabels,
+    this.animateDataChange = true,
+    this.interactive = true,
   });
 
   @override
@@ -48,6 +56,9 @@ class _ExchangeRateLineChartState extends State<ExchangeRateLineChart> {
   void didUpdateWidget(covariant ExchangeRateLineChart oldWidget) {
     super.didUpdateWidget(oldWidget);
     _touchController.updateData(history, period);
+    if (oldWidget.interactive && !widget.interactive) {
+      _touchController.clearSelection();
+    }
   }
 
   @override
@@ -129,7 +140,7 @@ class _ExchangeRateLineChartState extends State<ExchangeRateLineChart> {
             history: history,
             colorScheme: colorScheme,
             onTouch: _touchController.handleTouch,
-          ),
+          ).copyWith(enabled: widget.interactive),
 
           // 차트 데이터 라인
           showingTooltipIndicators: ExchangeChartTooltip.showingTooltips(
@@ -168,6 +179,10 @@ class _ExchangeRateLineChartState extends State<ExchangeRateLineChart> {
             ),
           ],
         ),
+        // fl_chart 기본값과 같은 시간이다.
+        duration: widget.animateDataChange
+            ? const Duration(milliseconds: 150)
+            : Duration.zero,
       ),
     );
   }

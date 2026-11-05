@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import '../../models/exchange_rate_history_model.dart';
 import '../../presentation/charts/chart_swap_store.dart';
 import '../exchange/exchange_chart_period_selector.dart';
+import 'chart_amount_converter.dart';
+import 'currency_swap_pair.dart';
 
 /// 환율 차트 캐러셀 위젯
 /// 이 위젯은 기본 통화와 대상 통화 목록을 받아서, 각 대상 통화에 대한 환율 차트를 페이지 뷰 형태로 보여줌.
@@ -35,6 +37,12 @@ class MarketChartCarousel extends StatefulWidget {
   /// 방향을 옮기지 않고 새 카드를 정방향으로 둔다.
   final bool? Function(String oldId, String newId)? swappedAfterReplace;
 
+  /// 두 카드의 위치만 서로 바뀌었을 때 방향을 새로 정할 카드와 그 방향.
+  /// 이 변경을 만든 쪽(선택창의 위치 교환)만 알려 주며, 비우거나 null을 돌려주면
+  /// 두 카드 모두 자기 방향을 유지한다.
+  final ({String id, bool swapped})? Function(String firstId, String secondId)?
+  swappedAfterExchange;
+
   const MarketChartCarousel({
     super.key,
     required this.itemIds,
@@ -42,6 +50,7 @@ class MarketChartCarousel extends StatefulWidget {
     this.active = true,
     this.trailing,
     this.swappedAfterReplace,
+    this.swappedAfterExchange,
   });
 
   @override
@@ -63,6 +72,28 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
 
   // 저장값을 읽기 전에 통화가 바뀐 카드의 방향(새 ID → 뒤집힘). 읽은 뒤 반영한다.
   final Map<String, bool> _pendingSwaps = {};
+
+  // 위치 교환으로 방향이 정해져 이번 프레임에 움직임 없이 표시할 카드.
+  String? _instantSwapId;
+
+  // 통화나 기간을 바꾸면 카드가 새로 만들어지므로 입력한 금액도 캐러셀이 카드별로 보관한다.
+  final Map<String, String> _amounts = {};
+
+  // 초점이 페이지(카드, 추가 페이지) 안에 있는지 알아내는 데만 쓴다. 스스로 초점을 받지 않고
+  // Tab 순서에도 들지 않는다.
+  final _pagesFocus = FocusNode(
+    debugLabel: 'market-chart-pages',
+    canRequestFocus: false,
+    skipTraversal: true,
+  );
+
+  // 초점이 있던 페이지가 숨겨지거나 사라지면 Flutter는 초점 기록의 바로 앞 항목으로 돌려보낸다.
+  // 그 항목이 전에 쓴 입력칸이면 키보드가 뜨고 화면이 입력칸으로 올라가므로, 그 전에 기록째 푼다.
+  // 페이지 밖 입력칸에 초점이 있을 때는 건드리지 않아, 키보드를 띄운 채로 카드를 넘길 수 있다.
+  // 카드 안 금액 입력칸은 페이지에 속하므로 초점이 풀리고 키보드도 닫힌다.
+  void _releasePageFocus() {
+    if (_pagesFocus.hasFocus) FocusManager.instance.primaryFocus?.unfocus();
+  }
 
   @override
   void initState() {
@@ -107,6 +138,40 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
     return replaced;
   }
 
+  // 두 카드의 위치만 서로 바뀌었으면 그 두 ID를 돌려준다.
+  static (String, String)? _exchangedPositions(
+    List<String> oldIds,
+    List<String> newIds,
+  ) {
+    if (oldIds.length != newIds.length) return null;
+    final changed = [
+      for (var i = 0; i < oldIds.length; i++)
+        if (oldIds[i] != newIds[i]) i,
+    ];
+    if (changed.length != 2 ||
+        oldIds[changed[0]] != newIds[changed[1]] ||
+        oldIds[changed[1]] != newIds[changed[0]]) {
+      return null;
+    }
+    return (oldIds[changed[0]], oldIds[changed[1]]);
+  }
+
+  // 위치 교환으로 옮겨 온 카드의 방향을 알려 준 대로 정한다. 다른 차트로 바뀌어 보이는
+  // 것이라 스왑을 눌렀을 때의 움직임 없이 바로 표시한다.
+  void _applyExchangedDirection(String firstId, String secondId) {
+    final direction = widget.swappedAfterExchange?.call(firstId, secondId);
+    if (direction == null) return;
+    if (!_swapLoaded) {
+      _pendingSwaps[direction.id] = direction.swapped;
+      return;
+    }
+    _setSwap(direction.id, direction.swapped);
+    _instantSwapId = direction.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _instantSwapId = null);
+    });
+  }
+
   void _toggleSwap(String id) {
     final swapped = !_swappedIds.contains(id);
     setState(() {
@@ -120,12 +185,17 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
   void didUpdateWidget(covariant MarketChartCarousel oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    if (!listEquals(oldWidget.itemIds, widget.itemIds)) _releasePageFocus();
+
     // 선택창에서 카드의 통화를 바꾸면 화면에 보이던 좌우가 유지되도록 알려 준
     // 방향을 새 ID에 쓴다. 알려 준 방향이 없으면 다른 쌍으로 바뀐 것이므로
     // 옛 카드의 방향을 옮기지 않고 정방향으로 둔다.
     final replaced = _replacedInPlace(oldWidget.itemIds, widget.itemIds);
     if (replaced != null) {
       final (oldId, newId) = replaced;
+      // 같은 자리에서 통화만 바꾼 것이므로 입력한 금액은 새 환율로 다시 계산되게 넘긴다.
+      final amount = _amounts.remove(oldId);
+      if (amount != null) _amounts[newId] = amount;
       if (!_swapLoaded) _pendingSwaps.remove(oldId);
       final swapped = widget.swappedAfterReplace?.call(oldId, newId) ?? false;
       if (_swapLoaded) {
@@ -134,6 +204,9 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
         _pendingSwaps[newId] = swapped;
       }
     }
+    final exchanged = _exchangedPositions(oldWidget.itemIds, widget.itemIds);
+    if (exchanged != null) _applyExchangedDirection(exchanged.$1, exchanged.$2);
+    _amounts.removeWhere((id, _) => !widget.itemIds.contains(id));
 
     // 삭제된 통화나 바뀐 기준 통화의 옛 조합은 방향 저장값에서 지운다.
     // 목록이 비어 있으면 retain이 아무것도 지우지 않는다.
@@ -144,11 +217,14 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
 
     // 삭제/재정렬 후에도 보고 있던 카드를 가능한 한 유지한다. 그 카드의 통화만
     // 바뀌었거나 지워졌으면 같은 자리(없으면 마지막 카드)에 머문다. 추가 페이지에서
-    // 카드를 더했으면 새 카드로 간다.
+    // 카드를 더했으면 새 카드로 간다. 두 카드의 위치만 바뀌었으면 페이지를 그대로 두어
+    // 지금 자리에서 고른 차트를 보여 준다.
     final oldIds = oldWidget.itemIds;
     final newIds = widget.itemIds;
     int nextPage;
-    if (currentPage < oldIds.length) {
+    if (exchanged != null) {
+      nextPage = currentPage;
+    } else if (currentPage < oldIds.length) {
       final index = newIds.indexOf(oldIds[currentPage]);
       nextPage = index >= 0 ? index : math.min(currentPage, newIds.length - 1);
     } else {
@@ -184,6 +260,8 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
         ExchangeChartPeriodSelector(
           selectedPeriod: _selectedPeriod,
           onPeriodChanged: (period) {
+            // 기간을 바꾸면 카드가 새로 만들어져 안에 있던 초점이 사라진다.
+            _releasePageFocus();
             setState(() {
               _selectedPeriod = period;
             });
@@ -193,34 +271,60 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
 
         SizedBox(
           height: 430,
-          child: PageView.builder(
-            controller: _pageController,
-            itemCount: _pageCount,
-            onPageChanged: (index) {
-              setState(() {
-                currentPage = index;
-              });
-            },
-            itemBuilder: (context, index) {
-              if (index >= widget.itemIds.length) {
+          child: Focus(
+            focusNode: _pagesFocus,
+            includeSemantics: false,
+            child: PageView.builder(
+              controller: _pageController,
+              itemCount: _pageCount,
+              // 카드가 자리를 옮겨도 받아 둔 데이터와 상태를 그대로 쓰게 한다.
+              findChildIndexCallback: (key) {
+                if (key is! ValueKey<String>) return null;
+                final index = widget.itemIds.indexOf(key.value);
+                return index < 0 ? null : index;
+              },
+              onPageChanged: (index) {
+                _releasePageFocus();
+                setState(() {
+                  currentPage = index;
+                });
+              },
+              itemBuilder: (context, index) {
+                if (index >= widget.itemIds.length) {
+                  return KeyedSubtree(
+                    key: const ValueKey('market-chart-trailing'),
+                    child: widget.trailing!,
+                  );
+                }
+                final id = widget.itemIds[index];
                 return KeyedSubtree(
-                  key: const ValueKey('market-chart-trailing'),
-                  child: widget.trailing!,
+                  key: ValueKey(id),
+                  // 항상 두어 값이 바뀌어도 카드의 위치(상태)가 그대로다.
+                  // 넘겨 둔 카드는 상태를 유지한 채 화면 밖에 남으므로, 키보드로 조작되지 않게
+                  // 초점에서 뺀다. 조회 여부(shouldLoad)와 달리 active에 묶지 않아, 조회만
+                  // 꺼 둔 캐러셀에서도 지금 보이는 카드는 초점을 받는다.
+                  child: ExcludeFocus(
+                    excluding: index != currentPage,
+                    child: InstantSwapScope(
+                      instant: id == _instantSwapId,
+                      child: ChartAmountScope(
+                        text: _amounts[id] ?? '',
+                        onChanged: (text) => _amounts[id] = text,
+                        child: widget.cardBuilder(
+                          context,
+                          index,
+                          _selectedPeriod,
+                          widget.active && currentPage == index,
+                          _swappedIds.contains(id) ||
+                              (_pendingSwaps[id] ?? false),
+                          _swapLoaded ? () => _toggleSwap(id) : null,
+                        ),
+                      ),
+                    ),
+                  ),
                 );
-              }
-              final id = widget.itemIds[index];
-              return KeyedSubtree(
-                key: ValueKey(id),
-                child: widget.cardBuilder(
-                  context,
-                  index,
-                  _selectedPeriod,
-                  widget.active && currentPage == index,
-                  _swappedIds.contains(id) || (_pendingSwaps[id] ?? false),
-                  _swapLoaded ? () => _toggleSwap(id) : null,
-                ),
-              );
-            },
+              },
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -261,6 +365,7 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
   @override
   void dispose() {
     _pageController.dispose();
+    _pagesFocus.dispose();
     super.dispose();
   }
 }

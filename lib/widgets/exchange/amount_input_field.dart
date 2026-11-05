@@ -103,7 +103,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
 
-            _ThousandsSeparatorInputFormatter(
+            ThousandsSeparatorInputFormatter(
               decimalPlaces: widget.decimalPlaces,
             ),
           ],
@@ -208,10 +208,10 @@ class _AmountInputFieldState extends State<AmountInputField> {
 
 // 입력값에 천 단위 구분자를 적용하고
 // 설정된 소수점 자릿수만큼 입력을 제한하는 formatter
-class _ThousandsSeparatorInputFormatter extends TextInputFormatter {
+class ThousandsSeparatorInputFormatter extends TextInputFormatter {
   final int decimalPlaces;
 
-  _ThousandsSeparatorInputFormatter({required this.decimalPlaces});
+  ThousandsSeparatorInputFormatter({required this.decimalPlaces});
 
   @override
   TextEditingValue formatEditUpdate(

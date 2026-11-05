@@ -64,7 +64,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ExchangeRateLineChart), findsOneWidget);
       expect(find.text('BTC'), findsOneWidget);
-      expect(find.text('1 BTC'), findsOneWidget);
+      expect(find.text('BTC 금액'), findsOneWidget);
       final initialCount = requests.length;
       for (final period in ['2Y', '5Y']) {
         await tester.tap(find.text(period));

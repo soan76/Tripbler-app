@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,10 +7,12 @@ import 'package:tripbler/crypto/providers/crypto_provider.dart';
 import 'package:tripbler/models/currency_model.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
 import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
+import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/providers/exchange_provider.dart';
 import 'package:tripbler/providers/settings_provider.dart';
 import 'package:tripbler/screens/exchange_screen.dart';
+import 'package:tripbler/widgets/charts/currency_swap_pair.dart';
 import 'package:tripbler/widgets/exchange/chart_currency_picker_sheet.dart';
 import 'package:tripbler/widgets/exchange/currency_search_parts.dart';
 import '../../crypto/crypto_test.dart' show makeApi, FiatApi;
@@ -120,19 +123,229 @@ void main() {
         ['fiat:EUR/KRW', 'fiat:JPY/KRW', 'crypto:BTC/KRW'],
       );
 
-      // 다른 카드에 이미 있는 쌍은 만들지 않고 알려 준다.
+      // 다른 카드에 이미 있는 차트를 고르면 두 카드의 위치를 바꾸고, 페이지는
+      // 그대로라 지금 자리에서 고른 차트가 보인다.
       await tapVisible(tester, pick('fiat:EUR'));
       await tester.enterText(find.byType(TextField).last, 'jpy');
       await tester.pumpAndSettle();
       await tester.tap(option('fiat:JPY'));
       await tester.pumpAndSettle();
-      expect(find.text('이미 같은 통화쌍의 차트가 있습니다.'), findsOneWidget);
-      expect(charts.pairs.first, const ChartPair.fiat('EUR', 'KRW'));
+      expect(find.text('이미 있던 차트와 위치를 바꿨습니다.'), findsOneWidget);
+      expect(charts.pairs.map((p) => p.id), [
+        'fiat:JPY/KRW',
+        'fiat:EUR/KRW',
+        'crypto:BTC/KRW',
+      ]);
+      expect(pick('fiat:JPY').hitTestable(), findsOneWidget);
+      expect(
+        (await SharedPreferences.getInstance()).getStringList(
+          ChartSelectionProvider.storageKey,
+        ),
+        ['fiat:JPY/KRW', 'fiat:EUR/KRW', 'crypto:BTC/KRW'],
+      );
 
       // 위쪽 기준 통화를 바꿔도 차트 선택은 그대로다.
       await exchange.changeBaseCurrency(findCurrencyByCode('USD')!);
       await tester.pumpAndSettle();
-      expect(charts.pairs.first, const ChartPair.fiat('EUR', 'KRW'));
+      expect(charts.pairs.first, const ChartPair.fiat('JPY', 'KRW'));
+    },
+  );
+
+  for (final reduceMotion in const [false, true]) {
+    testWidgets('currency pick has no background and dims only while pressed '
+        '(reduceMotion: $reduceMotion)', (tester) async {
+      var picks = 0;
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(
+        MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(disableAnimations: reduceMotion),
+            child: child!,
+          ),
+          home: Scaffold(
+            body: CurrencySwapPair(
+              baseCurrency: DisplayCurrency.fromFiat(
+                findCurrencyByCode('USD')!,
+              ),
+              targetCurrency: DisplayCurrency.fromFiat(
+                findCurrencyByCode('KRW')!,
+              ),
+              swapped: false,
+              onSwap: () {},
+              onPickShownBase: () => picks++,
+              onPickShownTarget: () {},
+            ),
+          ),
+        ),
+      );
+      final button = pick('fiat:USD');
+      final context = tester.element(button);
+      final colors = Theme.of(context).colorScheme;
+
+      // 평소에는 통화 뒤에 칠해지는 면과 둥근 모서리가 없다.
+      expect(
+        tester
+            .widget<Material>(
+              find.ancestor(of: button, matching: find.byType(Material)).first,
+            )
+            .type,
+        MaterialType.transparency,
+      );
+      final ink = tester.widget<InkWell>(button);
+      expect(ink.borderRadius, isNull);
+      expect(ink.customBorder, isNull);
+      // 눌러도 물결과 강조가 보이지 않는다.
+      expect(ink.splashFactory, NoSplash.splashFactory);
+      expect(ink.highlightColor!.a, 0);
+
+      // 터치 영역, 화면 낭독 라벨, ▾ 표시는 유지한다.
+      expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
+      expect(find.bySemanticsLabel('USD 다른 통화로 바꾸기'), findsOneWidget);
+      expect(
+        tester
+            .widget<Icon>(
+              find.descendant(
+                of: button,
+                matching: find.byIcon(Icons.arrow_drop_down),
+              ),
+            )
+            .color,
+        colors.onSurface,
+      );
+
+      AnimatedOpacity dimming() => tester.widget<AnimatedOpacity>(
+        find.descendant(of: button, matching: find.byType(AnimatedOpacity)),
+      );
+      expect(dimming().opacity, 1);
+
+      // 누르는 동안만 흐려지고, 손을 떼지 않고 취소하면 선택되지 않고 돌아온다.
+      final gesture = await tester.startGesture(tester.getCenter(button));
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(dimming().opacity, lessThan(1));
+      expect(
+        dimming().duration,
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 100),
+      );
+      await gesture.cancel();
+      await tester.pumpAndSettle();
+      expect(dimming().opacity, 1);
+      expect(picks, 0);
+
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(picks, 1);
+      expect(dimming().opacity, 1);
+      semantics.dispose();
+    });
+  }
+
+  group('screen reader tap on a currency', () {
+    bool hasTap(WidgetTester tester, Finder finder) => tester
+        .getSemantics(finder)
+        .getSemanticsData()
+        .hasAction(SemanticsAction.tap);
+
+    void semanticsTap(WidgetTester tester, Finder finder) {
+      final node = tester.getSemantics(finder);
+      node.owner!.performAction(node.id, SemanticsAction.tap);
+    }
+
+    Widget pair({VoidCallback? onLeft, VoidCallback? onRight}) => MaterialApp(
+      home: Scaffold(
+        body: CurrencySwapPair(
+          baseCurrency: DisplayCurrency.fromFiat(findCurrencyByCode('USD')!),
+          targetCurrency: DisplayCurrency.fromFiat(findCurrencyByCode('KRW')!),
+          // 뒤집혀 있어 왼쪽이 KRW, 오른쪽이 USD다.
+          swapped: true,
+          onSwap: () {},
+          onPickShownBase: onLeft,
+          onPickShownTarget: onRight,
+        ),
+      ),
+    );
+
+    testWidgets('opens the real picker for the tapped card', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpScreen(tester);
+      await tester.ensureVisible(pick('fiat:USD'));
+      await tester.pumpAndSettle();
+
+      final label = find.bySemanticsLabel('USD 다른 통화로 바꾸기');
+      expect(hasTap(tester, label), isTrue);
+      semanticsTap(tester, label);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(ChartCurrencyPicker), findsOneWidget);
+      // USD 쪽 선택창이라 현재 통화 USD에 표시가 있다.
+      expect(
+        find.descendant(
+          of: option('fiat:USD'),
+          matching: find.byIcon(Icons.check),
+        ),
+        findsOneWidget,
+      );
+      semantics.dispose();
+    });
+
+    testWidgets('calls the callback of the side it names', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final picks = <String>[];
+      await tester.pumpWidget(
+        pair(
+          onLeft: () => picks.add('left'),
+          onRight: () => picks.add('right'),
+        ),
+      );
+
+      semanticsTap(tester, find.bySemanticsLabel('KRW 다른 통화로 바꾸기'));
+      expect(picks, ['left']);
+      semanticsTap(tester, find.bySemanticsLabel('USD 다른 통화로 바꾸기'));
+      expect(picks, ['left', 'right']);
+      semantics.dispose();
+    });
+
+    testWidgets('a side that cannot be picked has no tap action', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(pair(onRight: () {}));
+
+      expect(find.bySemanticsLabel('KRW 다른 통화로 바꾸기'), findsNothing);
+      expect(hasTap(tester, find.text('KRW')), isFalse);
+      // 같은 위젯의 다른 쪽은 그대로 누를 수 있다.
+      expect(hasTap(tester, find.bySemanticsLabel('USD 다른 통화로 바꾸기')), isTrue);
+      semantics.dispose();
+    });
+  });
+
+  testWidgets(
+    'an exchange from the screen shows the pick on the pressed side',
+    (tester) async {
+      SharedPreferences.setMockInitialValues({
+        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:JPY/USD'],
+      });
+      await pumpScreen(tester);
+
+      // "USD ⇄ KRW"의 오른쪽 KRW를 JPY로 고르면 JPY/USD 카드가 "USD ⇄ JPY"로 보인다.
+      await tapVisible(tester, pick('fiat:KRW'));
+      await tester.enterText(find.byType(TextField).last, 'jpy');
+      await tester.pumpAndSettle();
+      await tester.tap(option('fiat:JPY'));
+      await tester.pumpAndSettle();
+
+      expect(charts.pairs.map((p) => p.id), ['fiat:JPY/USD', 'fiat:USD/KRW']);
+      expect(
+        tester.getTopLeft(pick('fiat:USD').hitTestable()).dx,
+        lessThan(tester.getTopLeft(pick('fiat:JPY').hitTestable()).dx),
+      );
+      expect(
+        (await SharedPreferences.getInstance()).getStringList(
+          'chart.swapped.v1',
+        ),
+        ['fiat:JPY/USD'],
+      );
     },
   );
 
@@ -187,7 +400,7 @@ void main() {
     await goToLastPage();
     expect(addButton, findsNothing);
 
-    // 삭제는 실수로 누르지 않도록 더보기 메뉴 안에 있다.
+    // 삭제는 실수로 누르지 않도록 더보기로 삭제 모드를 연 뒤에만 할 수 있다.
     final menu = find.byKey(const ValueKey('market-chart-menu'));
     final remove = find.byKey(const ValueKey('market-chart-remove'));
     expect(remove, findsNothing);
@@ -266,7 +479,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ChartCurrencyPicker), findsNothing);
       expect(charts.pairs.first, const ChartPair.fiat('EUR', 'KRW'));
-      expect(find.text('이미 같은 통화쌍의 차트가 있습니다.'), findsNothing);
+      expect(find.text('이미 있던 차트와 위치를 바꿨습니다.'), findsNothing);
     },
   );
 }

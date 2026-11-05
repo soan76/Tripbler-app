@@ -15,6 +15,9 @@ enum ChartPairChange {
   /// 다른 카드에 같은 차트(방향만 다른 쌍 포함)가 있어 바꾸지 않았다.
   duplicate,
 
+  /// 고른 차트가 다른 카드에 있어 두 카드의 위치를 서로 바꿨다.
+  swappedPositions,
+
   /// 선택창이 열린 사이 카드가 지워지거나 바뀌어 반영하지 않았다.
   stale,
 
@@ -41,9 +44,10 @@ class ChartSelectionProvider extends ChangeNotifier {
   bool _disposed = false;
   Future<void>? _initialization;
 
-  // 마지막 [replaceSide]로 바뀐 카드와 그 카드를 보여 줄 방향. 한 번 알려 주거나
+  // 마지막 [replaceSide]로 자리를 차지한 카드([to])와 그 카드를 보여 줄 방향.
+  // [exchanged]이면 [from] 카드와 위치를 바꿔 옮겨 온 카드다. 한 번 알려 주거나
   // 카드 목록이 다른 경로로 바뀌면 비운다.
-  ({String from, String to, bool swapped})? _lastSideEdit;
+  ({String from, String to, bool swapped, bool exchanged})? _lastSideEdit;
 
   /// 카드 순서대로의 통화쌍. 같은 차트(방향만 다른 쌍 포함)는 두 번 들어가지 않는다.
   List<ChartPair> get pairs => List.unmodifiable(_pairs);
@@ -96,6 +100,9 @@ class ChartSelectionProvider extends ChangeNotifier {
   /// [base]는 원래 방향 기준의 쪽, [swapped]는 고를 때 카드가 뒤집혀 보였는지다.
   /// 선택창이 열린 사이 카드가 [expected]에서 바뀌었거나 지워졌으면 반영하지 않는다.
   /// 바뀐 카드를 보여 줄 방향은 [swappedAfterReplace]로 알려 준다.
+  /// 고른 결과와 같은 차트(방향만 다른 쌍 포함)가 다른 카드에 있으면 새로 만들지
+  /// 않고 두 카드의 위치를 서로 바꾼다. 옮겨 온 카드는 고른 통화가 누른 쪽에 보이는
+  /// 방향으로 표시하고([swappedAfterExchange]), 밀려난 카드는 자기 방향을 유지한다.
   ChartPairChange replaceSide(
     int index, {
     required ChartPair expected,
@@ -113,12 +120,30 @@ class ChartSelectionProvider extends ChangeNotifier {
       currency: currency,
     );
     if (next == null) return ChartPairChange.invalid;
+    for (var other = 0; other < _pairs.length; other++) {
+      if (other != index && _pairs[other].isSameChart(next.pair)) {
+        final moved = _pairs[other];
+        _pairs = [..._pairs]
+          ..[index] = moved
+          ..[other] = expected;
+        _changed();
+        // 있던 카드가 계산한 쌍과 반대 방향으로 저장돼 있으면 뒤집어 보여야 같은 배치다.
+        _lastSideEdit = (
+          from: expected.id,
+          to: moved.id,
+          swapped: moved == next.pair ? next.swapped : !next.swapped,
+          exchanged: true,
+        );
+        return ChartPairChange.swappedPositions;
+      }
+    }
     final result = replace(index, next.pair);
     if (result == ChartPairChange.changed) {
       _lastSideEdit = (
         from: expected.id,
         to: next.pair.id,
         swapped: next.swapped,
+        exchanged: false,
       );
     }
     return result;
@@ -130,8 +155,25 @@ class ChartSelectionProvider extends ChangeNotifier {
   bool? swappedAfterReplace(String fromId, String toId) {
     final edit = _lastSideEdit;
     _lastSideEdit = null;
-    if (edit == null || edit.from != fromId || edit.to != toId) return null;
+    if (edit == null || edit.exchanged) return null;
+    if (edit.from != fromId || edit.to != toId) return null;
     return edit.swapped;
+  }
+
+  /// [firstId]와 [secondId] 두 카드의 위치가 서로 바뀌었을 때 고른 자리로 옮겨 온
+  /// 카드의 ID와 표시 방향. 두 ID의 순서는 상관없다. 마지막 [replaceSide]의 위치
+  /// 교환이 아니면 null(두 카드 모두 방향 유지)이다. 한 번 물으면 결과와 상관없이 비운다.
+  ({String id, bool swapped})? swappedAfterExchange(
+    String firstId,
+    String secondId,
+  ) {
+    final edit = _lastSideEdit;
+    _lastSideEdit = null;
+    if (edit == null || !edit.exchanged) return null;
+    final sameCards =
+        (edit.from == firstId && edit.to == secondId) ||
+        (edit.from == secondId && edit.to == firstId);
+    return sameCards ? (id: edit.to, swapped: edit.swapped) : null;
   }
 
   /// 카드를 끝에 하나 더한다. 아직 없는 `통화/KRW` 쌍으로 시작하며, 추가한 쌍을 돌려준다.

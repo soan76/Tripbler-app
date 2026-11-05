@@ -154,8 +154,8 @@ void main() {
       await tester.pump();
     }
     expect(find.text('저장된 데이터 · 갱신 중'), findsOneWidget);
-    // 저장값이 처음 나타날 때의 페이드(1초)가 끝날 때까지 기다린다.
-    await tester.pump(const Duration(seconds: 1));
+    // 저장값이 처음 나타날 때의 페이드(0.5초)가 끝날 때까지 기다린다.
+    await tester.pump(const Duration(milliseconds: 500));
     expect(chartOpacity(tester), 1);
 
     source.requests.single.complete(data(200));
