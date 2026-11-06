@@ -130,7 +130,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(option('fiat:JPY'));
       await tester.pumpAndSettle();
-      expect(find.text('이미 있던 차트와 위치를 바꿨습니다.'), findsOneWidget);
+      expect(find.text('이미 있던 차트와 위치를 바꿨습니다'), findsOneWidget);
       expect(charts.pairs.map((p) => p.id), [
         'fiat:JPY/KRW',
         'fiat:EUR/KRW',
@@ -361,7 +361,7 @@ void main() {
 
     // 코인 차트의 KRW 쪽은 KRW만 보이고 통화/암호 전환도 없다.
     await tapVisible(tester, pick('fiat:KRW').first);
-    expect(find.text('코인 차트는 KRW 기준만 지원합니다.'), findsOneWidget);
+    expect(find.text('코인 차트는 KRW 기준만 지원합니다'), findsOneWidget);
     expect(find.byType(CurrencyCategoryFilter), findsNothing);
     expect(option('fiat:KRW'), findsOneWidget);
     expect(option('fiat:USD'), findsNothing);
@@ -479,7 +479,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ChartCurrencyPicker), findsNothing);
       expect(charts.pairs.first, const ChartPair.fiat('EUR', 'KRW'));
-      expect(find.text('이미 있던 차트와 위치를 바꿨습니다.'), findsNothing);
+      expect(find.text('이미 있던 차트와 위치를 바꿨습니다'), findsNothing);
     },
   );
 }

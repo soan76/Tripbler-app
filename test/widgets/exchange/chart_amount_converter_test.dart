@@ -8,6 +8,7 @@ import 'package:tripbler/presentation/charts/chart_pair.dart';
 import 'package:tripbler/widgets/charts/chart_amount_converter.dart';
 import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 
+import '../../helpers/chart_amount_finder.dart';
 import '../../helpers/memory_chart_snapshots.dart';
 
 const usd = ChartPair.fiat('USD', 'KRW');
@@ -90,8 +91,27 @@ void main() {
     testWidgets('shows nothing until an amount is entered', (tester) async {
       await tester.pumpWidget(charts(const [usd]));
       await tester.pumpAndSettle();
-      expect(find.text('USD 금액'), findsOneWidget);
+      expect(amountField('USD'), findsOneWidget);
       expect(converted, findsNothing);
+    });
+
+    testWidgets('an empty field shows no text but is still named aloud', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await tester.pumpWidget(charts(const [usd]));
+      await tester.pumpAndSettle();
+      expect(find.text('USD 금액'), findsNothing);
+      // 카드의 글자 묶음이 아니라 입력칸 자체의 이름이어야 한다.
+      expect(
+        tester.getSemantics(find.byType(EditableText)),
+        containsSemantics(
+          label: 'USD 금액',
+          isTextField: true,
+          hasTapAction: true,
+        ),
+      );
+      semantics.dispose();
     });
 
     testWidgets('converts at once and clears when emptied', (tester) async {
@@ -197,7 +217,7 @@ void main() {
       // 보고 있던 JPY 페이지를 유지하므로 다시 추가한 USD로 넘겨서 확인한다.
       await tester.drag(find.byType(PageView), const Offset(700, 0));
       await tester.pumpAndSettle();
-      expect(find.text('USD 금액'), findsOneWidget);
+      expect(amountField('USD'), findsOneWidget);
       expect(tester.widget<TextField>(amount).controller!.text, isEmpty);
       expect(converted, findsNothing);
     });

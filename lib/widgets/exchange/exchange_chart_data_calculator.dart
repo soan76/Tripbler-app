@@ -92,6 +92,20 @@ class ExchangeChartDataCalculator {
     return indexes;
   }
 
+  /// [date]에 가장 가까운 기록의 위치. 기록이 없으면 null이다.
+  static int? nearestIndex(List<ChartPoint> history, DateTime date) {
+    int? nearest;
+    Duration? nearestGap;
+    for (var i = 0; i < history.length; i++) {
+      final gap = history[i].date.difference(date).abs();
+      if (nearestGap == null || gap < nearestGap) {
+        nearest = i;
+        nearestGap = gap;
+      }
+    }
+    return nearest;
+  }
+
   static bool isValidSpot(LineBarSpot spot, List<ChartPoint> history) {
     final index = spot.spotIndex;
     return spot.barIndex == 0 &&

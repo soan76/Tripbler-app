@@ -257,20 +257,23 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ExchangeChartPeriodSelector(
-          selectedPeriod: _selectedPeriod,
-          onPeriodChanged: (period) {
-            // 기간을 바꾸면 카드가 새로 만들어져 안에 있던 초점이 사라진다.
-            _releasePageFocus();
-            setState(() {
-              _selectedPeriod = period;
-            });
-          },
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: ExchangeChartPeriodSelector(
+            selectedPeriod: _selectedPeriod,
+            onPeriodChanged: (period) {
+              // 기간을 바꾸면 카드가 새로 만들어져 안에 있던 초점이 사라진다.
+              _releasePageFocus();
+              setState(() {
+                _selectedPeriod = period;
+              });
+            },
+          ),
         ),
         const SizedBox(height: 12),
 
         SizedBox(
-          height: 430,
+          height: 450,
           child: Focus(
             focusNode: _pagesFocus,
             includeSemantics: false,

@@ -28,8 +28,8 @@ class ChartPairCarousel extends StatelessWidget {
   });
 
   /// 지원하지 않는 코인 카드의 안내. 앞 문장은 현재 시세 자리, 뒤 문장은 차트 자리에 둔다.
-  static const unsupportedCoinText = '지원하지 않는 코인입니다.';
-  static const unsupportedCoinHint = '통화명을 눌러 다른 코인을 골라 주세요.';
+  static const unsupportedCoinText = '지원하지 않는 코인입니다';
+  static const unsupportedCoinHint = '통화명을 눌러 다른 코인을 골라 주세요';
 
   final List<ChartPair> pairs;
 
@@ -88,9 +88,7 @@ class ChartPairCarousel extends StatelessWidget {
         swapped: swapped,
         onSwap: onSwap,
         title: pair.isCrypto ? '암호화폐 차트' : '환율 차트',
-        errorText: pair.isCrypto
-            ? '암호화폐 차트를 불러오지 못했습니다.'
-            : '환율 차트를 불러오지 못했습니다.',
+        errorText: pair.isCrypto ? '암호화폐 차트를 불러오지 못했습니다' : '환율 차트를 불러오지 못했습니다',
         requestKey: pair.id,
         createDataSource: () => (createDataSource ?? _defaultSource).call(pair),
         period: period,
@@ -123,12 +121,13 @@ class _AddChartPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Container(
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLow,
         border: Border.all(color: colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(4),
       ),
       // 글자를 크게 키워도 넘치지 않게 내용이 길면 스크롤한다.
       child: Center(
@@ -156,19 +155,15 @@ class _AddChartPage extends StatelessWidget {
               Text(
                 '다른 통화쌍도 함께 보기',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                style: theme.textTheme.titleMedium?.copyWith(
                   color: colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
-                '추가한 차트의 통화명을 눌러 원하는 통화나 코인으로 바꿀 수 있어요.',
+                '추가한 차트의 통화명을 눌러 원하는 통화나 코인으로 바꿀 수 있어요',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  height: 1.4,
+                style: theme.textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),
@@ -184,8 +179,7 @@ class _AddChartPage extends StatelessWidget {
               Text(
                 '최대 ${ChartSelectionProvider.maxCards}개 · $remaining개 더 추가할 수 있어요',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
+                style: theme.textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
               ),

@@ -23,6 +23,8 @@ class MarketChartBody extends StatelessWidget {
     required this.period,
     required this.maxXAxisLabels,
     required this.interactive,
+    this.onSelectionChanged,
+    this.selectionKey,
   });
 
   final ChartLoadState state;
@@ -43,6 +45,12 @@ class MarketChartBody extends StatelessWidget {
 
   /// 그래프를 터치로 조작할 수 있는지.
   final bool interactive;
+
+  /// 그래프에서 선택한 날짜가 바뀔 때.
+  final ValueChanged<DateTime?>? onSelectionChanged;
+
+  /// 이 값이 바뀌면 그래프의 선택 날짜를 유지한다(스왑).
+  final Object? selectionKey;
 
   @override
   Widget build(BuildContext context) {
@@ -79,7 +87,7 @@ class MarketChartBody extends StatelessWidget {
     }
 
     if (!shouldLoad && !state.hasLoaded) {
-      return Center(child: Text('이 차트는 아직 불러오지 않았습니다.', style: mutedStyle));
+      return Center(child: Text('이 차트는 아직 불러오지 않았습니다', style: mutedStyle));
     }
 
     if (state.isLoading && state.history.isEmpty) {
@@ -92,10 +100,15 @@ class MarketChartBody extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(errorText, style: mutedStyle),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             OutlinedButton(
               focusNode: retryFocusNode,
               onPressed: onRetry,
+              style: OutlinedButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
               child: const Text('다시 시도'),
             ),
           ],
@@ -104,7 +117,7 @@ class MarketChartBody extends StatelessWidget {
     }
 
     if (shownHistory.isEmpty) {
-      return Center(child: Text('표시할 차트 데이터가 없습니다.', style: mutedStyle));
+      return Center(child: Text('표시할 차트 데이터가 없습니다', style: mutedStyle));
     }
 
     // 방향을 바꾸거나 처음 그려질 때 새 그래프를 서서히 보여 준다.
@@ -118,6 +131,10 @@ class MarketChartBody extends StatelessWidget {
         maxXAxisLabels: maxXAxisLabels,
         animateDataChange: !InstantSwapScope.of(context),
         interactive: interactive,
+        // 툴팁이 그래프 위 비교 줄을 가리고, 날짜와 환율은 환산 줄이 이미 보여 준다.
+        showTooltip: false,
+        onSelectionChanged: onSelectionChanged,
+        selectionKey: selectionKey,
       ),
     );
   }

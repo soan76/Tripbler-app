@@ -80,6 +80,21 @@ void main() {
     });
   }
 
+  testWidgets('shows the tooltip by default', (tester) async {
+    await showChart(tester);
+    select(tester, 1);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    // 축 글자는 위젯이라 그래프 렌더 객체에 칠해지는 글자는 툴팁뿐이다.
+    final painter = tester.renderObject(
+      find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == 'LineChartLeaf',
+      ),
+    );
+    expect(painter, paints..circle());
+    expect(painter, paints..paragraph());
+  });
+
   testWidgets('new touch cancels old timer and release restarts it', (
     tester,
   ) async {
@@ -157,7 +172,7 @@ void main() {
 
   for (final sample in [
     (offset: -1300.0, step: 20.0, expected: ['0', '10', '20', '30', '40']),
-    (offset: 0.0, step: 20.0, expected: ['1300', '1310', '1320']),
+    (offset: 0.0, step: 20.0, expected: ['1,300', '1,310', '1,320']),
     (offset: -1298.8, step: 0.2, expected: ['1.2', '1.4', '1.6']),
   ]) {
     testWidgets('Y axis preserves numeric labels ${sample.expected}', (

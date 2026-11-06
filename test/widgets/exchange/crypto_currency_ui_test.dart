@@ -77,7 +77,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CurrencyRow), findsNWidgets(2));
       expect(find.byKey(const ValueKey('crypto:BTC')), findsOneWidget);
-      expect(find.text('차트'), findsOneWidget);
+      expect(find.text('환율 흐름'), findsOneWidget);
       expect(charts.pairs, ChartSelectionProvider.defaults);
       expect(exchange.visibleCurrencies, isEmpty);
       await tester.tap(find.text('통화 추가 / 편집'));

@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+/// 자릿수가 바뀌어도 숫자 자리가 흔들리지 않게 하는 고정폭 숫자.
+/// 금액과 환산 결과에 함께 쓴다.
+const amountFontFeatures = [FontFeature.tabularFigures()];
+
 // 금액 입력 필드 위젯
 class AmountInputField extends StatefulWidget {
   final double amount;
@@ -71,12 +75,21 @@ class _AmountInputFieldState extends State<AmountInputField> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     // 선택된 통화 행과 일반 통화 행의 글자색 구분
     final textColor = widget.isBase
         ? colorScheme.onPrimaryContainer
         : colorScheme.onSurface;
+
+    // 입력 중 글자 크기 계산과 실제 표시가 같은 스타일을 쓰도록 한 곳에서 정한다.
+    // 밝은 야외에서도 읽히도록 테마 기본 굵기(w400)보다 올린다. 금지 목록의 예외로 사용자가 정했다.
+    final baseStyle = theme.textTheme.titleLarge!.copyWith(
+      color: textColor,
+      fontWeight: FontWeight.w500,
+      fontFeatures: amountFontFeatures,
+    );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -85,7 +98,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
         final fontSize = _calculateFontSize(
           text: _controller.text,
           maxWidth: constraints.maxWidth,
-          textColor: textColor,
+          style: baseStyle,
         );
 
         return TextField(
@@ -121,11 +134,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
             contentPadding: EdgeInsets.zero,
           ),
 
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w700,
-            color: textColor,
-          ),
+          style: baseStyle.copyWith(fontSize: fontSize),
 
           cursorColor: colorScheme.primary,
 
@@ -167,7 +176,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
   double _calculateFontSize({
     required String text,
     required double maxWidth,
-    required Color textColor,
+    required TextStyle style,
   }) {
     if (text.isEmpty || !maxWidth.isFinite || maxWidth <= 0) {
       return _defaultFontSize;
@@ -179,11 +188,7 @@ class _AmountInputFieldState extends State<AmountInputField> {
       final textPainter = TextPainter(
         text: TextSpan(
           text: text,
-          style: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w700,
-            color: textColor,
-          ),
+          style: style.copyWith(fontSize: fontSize),
         ),
         maxLines: 1,
         textDirection: ui.TextDirection.ltr,

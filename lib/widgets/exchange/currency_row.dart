@@ -34,13 +34,15 @@ class CurrencyRow extends StatelessWidget {
   // 통화 행 위젯을 빌드하는 메서드
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     // 설정 화면에서 선택한 자릿수 설정을 가져옴
     final decimalPlaces = context.watch<SettingsProvider>().decimalPlaces;
 
     return Container(
-      height: 72,
+      // 평소 높이는 72dp다. 코인 행의 상태 문구는 글자를 크게 키우면 72dp를 넘으므로 잘리지 않게 늘린다.
+      constraints: const BoxConstraints(minHeight: 72),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
         // 현재 선택된 통화는 강조 배경,
@@ -56,26 +58,24 @@ class CurrencyRow extends StatelessWidget {
         children: [
           InkWell(
             onTap: onCurrencyTap,
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(4),
             child: Row(
               children: [
                 CurrencyIcon(currency: currency),
 
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
 
                 // 통화 코드
                 Text(
                   currency.code,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
+                  style: theme.textTheme.titleMedium?.copyWith(
                     color: isBase
                         ? colorScheme.onPrimaryContainer
                         : colorScheme.onSurface,
                   ),
                 ),
 
-                const SizedBox(width: 2),
+                const SizedBox(width: 4),
 
                 // 통화 선택 화살표
                 Icon(
@@ -94,7 +94,7 @@ class CurrencyRow extends StatelessWidget {
           // 환율 금액 영역
           Expanded(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 AmountInputField(
@@ -120,8 +120,7 @@ class CurrencyRow extends StatelessWidget {
                       status!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 10,
+                      style: theme.textTheme.labelSmall?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
@@ -132,11 +131,11 @@ class CurrencyRow extends StatelessWidget {
 
           const SizedBox(width: 12),
 
-          // 현재 테마의 대표 강조색 사용
+          // 행마다 반복되는 보조 동작이라 강조색을 쓰지 않는다.
           if (onGraphTap != null)
             IconButton(
               onPressed: onGraphTap,
-              icon: Icon(Icons.show_chart, color: colorScheme.primary),
+              icon: Icon(Icons.show_chart, color: colorScheme.onSurfaceVariant),
             )
           else
             const SizedBox(width: 48),

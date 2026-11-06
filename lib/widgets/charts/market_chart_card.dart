@@ -79,7 +79,7 @@ class _MarketChartCardState extends State<MarketChartCard>
   // 그래프는 0.5초에 걸쳐 서서히 나타나게 해, 이동이 끝난 뒤에도 새 그래프가
   // 잠시 더 자리 잡는 것처럼 보이게 한다.
   static const _chartFadeDuration = Duration(milliseconds: 500);
-  static const _cardRadius = 22.0;
+  static const _cardRadius = 4.0;
 
   late final AnimationController _chartFade;
   late final Animation<double> _chartOpacity;
@@ -87,6 +87,10 @@ class _MarketChartCardState extends State<MarketChartCard>
 
   // 로딩·실패 화면에서 그래프로 바뀌는 순간을 알기 위해 직전 상태를 기억한다.
   bool _hadHistory = false;
+
+  // 그래프에서 선택한 날짜. 드래그 중에는 카드 전체가 아니라 환산 줄만 다시 그린다.
+  // 값은 이 날짜로 기록에서 찾아, 스왑해도 같은 날짜를 가리키고 마커와 어긋나지 않는다.
+  final _selectedDate = ValueNotifier<DateTime?>(null);
 
   final _refreshFocus = FocusNode(debugLabel: 'market-chart-refresh');
   final _retryFocus = FocusNode(debugLabel: 'market-chart-retry');
@@ -245,11 +249,11 @@ class _MarketChartCardState extends State<MarketChartCard>
         children: [
           Padding(
             // 제목 줄 버튼(48dp)이 위·오른쪽 여백을 품고 있어 그만큼 줄인다.
-            // 아이콘의 위·오른쪽 끝은 카드 안쪽 여백 18에 맞는다.
+            // 아이콘의 위·오른쪽 끝은 카드 안쪽 여백 16에 맞는다.
             padding: const EdgeInsetsDirectional.fromSTEB(
-              18,
-              6,
-              18 - MarketChartHeader.contentEndInset,
+              16,
+              16 - MarketChartHeader.contentEndInset,
+              16 - MarketChartHeader.contentEndInset,
               0,
             ),
             child: MarketChartHeader(
@@ -267,17 +271,22 @@ class _MarketChartCardState extends State<MarketChartCard>
                     ? null
                     : () => onPick(base: widget.swapped),
               ),
-              converter: ChartAmountConverter(
+              converterBuilder: (status) => ChartAmountConverter(
                 rate: widget.swapped
                     ? ChartInversion.rate(state.currentRate)
                     : state.currentRate,
                 baseCode: _shownBase.code,
                 targetCode: _shownTarget.code,
                 historicalRate: state.historicalRate,
+                staleRate: !unavailable && state.showsOldData,
+                history: _shownHistory(state.history),
+                selectedDate: _selectedDate,
+                selectionKey: widget.swapped,
+                status: status,
                 message:
                     widget.unavailableText ??
                     (!widget.shouldLoad && !state.hasLoaded
-                        ? '차트를 넘기면 데이터를 불러옵니다.'
+                        ? '차트를 넘기면 데이터를 불러옵니다'
                         : null),
               ),
               onMore: controls.open,
@@ -308,6 +317,8 @@ class _MarketChartCardState extends State<MarketChartCard>
                 period: widget.period,
                 maxXAxisLabels: widget.maxXAxisLabels,
                 interactive: !controls.active,
+                onSelectionChanged: _onSelectionChanged,
+                selectionKey: widget.swapped,
               ),
             ),
           ),
@@ -318,8 +329,13 @@ class _MarketChartCardState extends State<MarketChartCard>
     );
   }
 
+  void _onSelectionChanged(DateTime? date) {
+    if (mounted) _selectedDate.value = date;
+  }
+
   @override
   void dispose() {
+    _selectedDate.dispose();
     _chart
       ..removeListener(_onChartChanged)
       ..dispose();

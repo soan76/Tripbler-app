@@ -22,6 +22,7 @@ import 'package:tripbler/widgets/charts/market_chart_delete_mode.dart';
 import 'package:tripbler/widgets/navigation/app_drawer.dart';
 
 import '../../crypto/crypto_test.dart' show makeApi, FiatApi;
+import '../../helpers/chart_amount_finder.dart';
 import '../../helpers/memory_chart_snapshots.dart';
 
 const usd = ChartPair.fiat('USD', 'KRW');
@@ -444,8 +445,8 @@ void main() {
       expect(remove, findsNothing);
     }
     // 아래 스왑 버튼이나 차트에는 탭이 닿지 않았다.
-    expect(find.text('USD 금액'), findsOneWidget);
-    expect(chartData(tester).showingTooltipIndicators, isEmpty);
+    expect(amountField('USD'), findsOneWidget);
+    expect(chartData(tester).lineBarsData.first.showingIndicators, isEmpty);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -488,21 +489,21 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  testWidgets('chart touch and tooltip are off while the mode is open', (
+  testWidgets('chart touch and marker are off while the mode is open', (
     tester,
   ) async {
     await tester.pumpWidget(app(const [usd, jpy]));
     await tester.pumpAndSettle();
     expect(chartData(tester).lineTouchData.enabled, isTrue);
 
-    // 떠 있던 툴팁은 모드를 열면 사라진다.
+    // 떠 있던 마커는 모드를 열면 사라진다.
     select(tester);
     await tester.pump();
-    expect(chartData(tester).showingTooltipIndicators, isNotEmpty);
+    expect(chartData(tester).lineBarsData.first.showingIndicators, isNotEmpty);
 
     await open(tester);
     expect(chartData(tester).lineTouchData.enabled, isFalse);
-    expect(chartData(tester).showingTooltipIndicators, isEmpty);
+    expect(chartData(tester).lineBarsData.first.showingIndicators, isEmpty);
     // 차트 위를 눌러도 층이 받는다.
     expect(
       find
@@ -511,15 +512,15 @@ void main() {
       findsWidgets,
     );
 
-    // 닫으면 다시 켜지고, 닫는 탭으로 툴팁이 생기지 않는다.
+    // 닫으면 다시 켜지고, 닫는 탭으로 마커가 생기지 않는다.
     await tester.tapAt(tester.getCenter(find.byType(LineChart)));
     await tester.pumpAndSettle();
     expect(chartData(tester).lineTouchData.enabled, isTrue);
-    expect(chartData(tester).showingTooltipIndicators, isEmpty);
+    expect(chartData(tester).lineBarsData.first.showingIndicators, isEmpty);
 
     select(tester);
     await tester.pump();
-    expect(chartData(tester).showingTooltipIndicators, isNotEmpty);
+    expect(chartData(tester).lineBarsData.first.showingIndicators, isNotEmpty);
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpWidget(const SizedBox());
   });
@@ -1418,7 +1419,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await press(tester, LogicalKeyboardKey.enter);
-      expect(find.text('KRW 금액'), findsOneWidget);
+      expect(amountField('KRW'), findsOneWidget);
       expect(buttonFocus(tester, swap), same(node));
       expect(node.hasFocus, isTrue);
       page.expectStayed();

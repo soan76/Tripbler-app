@@ -22,6 +22,7 @@ import 'package:tripbler/widgets/exchange/exchange_chart_axis_helper.dart';
 import 'package:tripbler/widgets/exchange/exchange_chart_tooltip.dart';
 import 'package:tripbler/widgets/exchange/exchange_rate_line_chart.dart';
 
+import '../../helpers/chart_amount_finder.dart';
 import '../../helpers/memory_chart_snapshots.dart';
 
 class Source implements ChartDataSource {
@@ -415,7 +416,7 @@ void main() {
       await tester.pumpWidget(carousel(source));
       await tester.pumpAndSettle();
 
-      expect(find.text('BTC 금액'), findsOneWidget);
+      expect(amountField('BTC'), findsOneWidget);
       await tester.enterText(
         find.byKey(const ValueKey('market-chart-amount')),
         '2',
@@ -428,7 +429,7 @@ void main() {
       await tester.tap(find.byKey(swapKey));
       await tester.pumpAndSettle();
 
-      expect(find.text('KRW 금액'), findsOneWidget);
+      expect(amountField('KRW'), findsOneWidget);
       expect(find.text('0.02 BTC'), findsOneWidget);
       final history = shownHistory(tester);
       expect(history.first.rate, 0.01);
@@ -441,17 +442,17 @@ void main() {
       await tester.tap(find.text('3M'));
       await tester.pumpAndSettle();
       expect(source.loads.last, ChartPeriod.threeMonths);
-      expect(find.text('KRW 금액'), findsOneWidget);
+      expect(amountField('KRW'), findsOneWidget);
 
       // 화면을 다시 만들어도(앱 재시작) 저장된 방향을 복원한다.
       await tester.pumpWidget(const SizedBox());
       await tester.pumpWidget(carousel(Source()));
       await tester.pumpAndSettle();
-      expect(find.text('KRW 금액'), findsOneWidget);
+      expect(amountField('KRW'), findsOneWidget);
 
       await tester.tap(find.byKey(swapKey));
       await tester.pumpAndSettle();
-      expect(find.text('BTC 금액'), findsOneWidget);
+      expect(amountField('BTC'), findsOneWidget);
       expect(await stored(), isEmpty);
       await tester.pumpWidget(const SizedBox());
     },
@@ -676,7 +677,7 @@ void main() {
 
     await tester.tap(find.byKey(swapKey));
     await tester.pump();
-    expect(find.text('BTC 금액'), findsOneWidget);
+    expect(amountField('BTC'), findsOneWidget);
     // 되돌아간 그래프도 투명해지지 않고 지금 투명도에서 이어서 나타난다.
     expect(chartOpacity(tester), greaterThanOrEqualTo(before));
     await tester.pump(const Duration(milliseconds: 150));
@@ -800,7 +801,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
     expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
     expect(sideRect(tester, 'KRW').right, closeTo(pairRight, 0.01));
     expect(codeX(tester, 'BTC'), lessThan(codeX(tester, 'KRW')));
     await tester.pumpWidget(const SizedBox());
@@ -828,7 +829,7 @@ void main() {
     expect(chartOpacity(tester), greaterThanOrEqualTo(midOpacity));
     await tester.pumpAndSettle();
     expect(chartOpacity(tester), 1);
-    expect(find.text('BTC 금액'), findsOneWidget);
+    expect(amountField('BTC'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -850,7 +851,7 @@ void main() {
           // 통화 묶음이 버튼 위를 지나가는 중이어도 버튼이 눌린다.
           await tester.tap(find.byKey(swapKey));
           await tester.pumpAndSettle();
-          expect(find.text('BTC 금액'), findsOneWidget);
+          expect(amountField('BTC'), findsOneWidget);
           expect(turns(tester), 0);
           await tester.pumpWidget(const SizedBox());
         },
@@ -877,7 +878,7 @@ void main() {
 
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
     final krwAfter = sideRect(tester, 'KRW');
     final dogeAfter = sideRect(tester, 'DOGE');
     button = tester.getRect(find.byKey(swapKey));
@@ -889,7 +890,7 @@ void main() {
     // 옮겨진 버튼 자리를 눌러도 판정된다.
     await tester.tapAt(button.center);
     await tester.pumpAndSettle();
-    expect(find.text('DOGE 금액'), findsOneWidget);
+    expect(amountField('DOGE'), findsOneWidget);
     expect(sideRect(tester, 'DOGE').left, closeTo(start, 0.01));
     await tester.pumpWidget(const SizedBox());
   });
@@ -963,7 +964,7 @@ void main() {
     expect(turns(tester), 0.5);
     expect(chartOpacity(tester), 1);
     expect(codeX(tester, 'KRW'), closeTo(btcStart, 0.01));
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
     await tester.pumpAndSettle();
     await tester.pumpWidget(const SizedBox());
   });
@@ -986,7 +987,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -1002,13 +1003,13 @@ void main() {
       await tester.tap(find.byKey(swapKey));
     }
     await tester.pumpAndSettle();
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
     expect(await stored(), [id]);
 
     await tester.tap(find.byKey(swapKey));
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
     expect(await stored(), [id]);
     expect(source.loads, hasLength(1));
     await tester.pumpWidget(const SizedBox());
@@ -1024,7 +1025,7 @@ void main() {
 
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
     expect(find.text('마지막 성공 데이터 · 갱신 지연'), findsOneWidget);
     expect(find.text('업데이트: 2026.01.02 03:04'), findsOneWidget);
     expect(source.loads, hasLength(1));
@@ -1094,32 +1095,22 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(swapKey));
     await tester.pumpAndSettle();
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
 
     await tester.drag(find.byType(PageView), const Offset(-600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('ETH 금액'), findsOneWidget);
+    expect(amountField('ETH'), findsOneWidget);
     await tester.drag(find.byType(PageView), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
 
     // 두 카드의 위치가 서로 바뀌면 페이지는 그대로이고, 방향은 ID를 따라간다.
     await tester.pumpWidget(coinCarousel(const ['ETH', 'BTC'], sourceFor));
     await tester.pumpAndSettle();
-    expect(
-      find
-          .ancestor(of: find.text('ETH 금액'), matching: find.byType(TextField))
-          .hitTestable(),
-      findsOneWidget,
-    );
+    expect(amountField('ETH').hitTestable(), findsOneWidget);
     await tester.drag(find.byType(PageView), const Offset(-600, 0));
     await tester.pumpAndSettle();
-    expect(
-      find
-          .ancestor(of: find.text('KRW 금액'), matching: find.byType(TextField))
-          .hitTestable(),
-      findsOneWidget,
-    );
+    expect(amountField('KRW').hitTestable(), findsOneWidget);
     expect(await stored(), [coinId('BTC')]);
 
     // 삭제한 코인의 ID는 메모리와 저장값에서 모두 지운다.
@@ -1129,11 +1120,11 @@ void main() {
     await tester.pumpWidget(coinCarousel(const ['BTC', 'ETH'], sourceFor));
     await tester.pumpAndSettle();
     // 보고 있던 ETH(2번째 페이지)를 유지하므로 BTC로 돌아가 확인한다.
-    expect(find.text('ETH 금액'), findsOneWidget);
+    expect(amountField('ETH'), findsOneWidget);
     await tester.drag(find.byType(PageView), const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('BTC 금액'), findsOneWidget);
-    expect(find.text('KRW 금액'), findsNothing);
+    expect(amountField('BTC'), findsOneWidget);
+    expect(amountField('KRW'), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -1146,7 +1137,7 @@ void main() {
     });
     await tester.pumpWidget(carousel(Source()));
     await tester.pumpAndSettle();
-    expect(find.text('KRW 금액'), findsOneWidget);
+    expect(amountField('KRW'), findsOneWidget);
     expect(await stored(), [id]);
     await tester.pumpWidget(const SizedBox());
   });
@@ -1840,7 +1831,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(ChartPairCarousel.unsupportedCoinText), findsOneWidget);
     expect(find.text(ChartPairCarousel.unsupportedCoinHint), findsOneWidget);
-    expect(find.text('암호화폐 차트를 불러오지 못했습니다.'), findsNothing);
+    expect(find.text('암호화폐 차트를 불러오지 못했습니다'), findsNothing);
     expect(sources['OLD']?.loads ?? const [], isEmpty);
     expect(
       tester
@@ -1864,7 +1855,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text(ChartPairCarousel.unsupportedCoinText), findsNothing);
     expect(sources['OLD']!.loads, hasLength(1));
-    expect(find.text('OLD 금액'), findsOneWidget);
+    expect(amountField('OLD'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 }

@@ -3,12 +3,79 @@ import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart' hide TextDirection;
 
 import '../../models/exchange_rate_history_model.dart';
 
 /// 축 간격, 라벨 배치와 날짜/숫자 표시 규칙.
 class ExchangeChartAxisHelper {
+  static const _yLabelFontSize = 11.0;
+
+  // Y축 라벨 바깥 여백. 그래프 쪽 여백이 라벨과 그래프 사이의 간격이다.
+  // 카드가 화면 폭을 꽉 채우므로 왼쪽 여백은 곧 화면 가장자리까지의 거리다.
+  static const _yLabelStartGap = 4.0;
+  static const _yLabelEndGap = 4.0;
+
+  // 작은 화면에서 Y축 칸이 그래프 자리를 지나치게 차지하지 않게 하는 상한.
+  // 이보다 긴 라벨은 잘리지 않게 글자를 줄인다.
+  static const _yAxisMaxWidthRatio = 0.25;
+
+  // 눈금이 이보다 많을 만큼 간격이 비정상이면 양 끝 라벨만 잰다.
+  static const _yTickMeasureLimit = 64;
+
+  /// Y축 칸의 폭. 지금 화면에 그려질 눈금 라벨 중 가장 긴 것에 맞춰 그래프 폭을 최대로 쓴다.
+  /// 방향이나 기간이 바뀌면 칸 폭도 달라질 수 있지만, 라벨과 그래프의 간격은 그대로다.
+  static double yAxisReservedWidth({
+    required double minY,
+    required double maxY,
+    required double yInterval,
+    required double chartWidth,
+    required TextScaler textScaler,
+    TextStyle baseStyle = const TextStyle(),
+  }) {
+    // 라벨은 화면의 기본 글자 스타일(글꼴, 자간)을 물려받으므로 같은 스타일로 잰다.
+    final labelStyle = baseStyle.merge(
+      const TextStyle(fontSize: _yLabelFontSize),
+    );
+    final labels = {
+      for (final value in _yTickValues(minY, maxY, yInterval))
+        formatYAxisRate(value, yInterval),
+    };
+
+    var widest = 0.0;
+    for (final label in labels) {
+      final painter = TextPainter(
+        text: TextSpan(text: label, style: labelStyle),
+        maxLines: 1,
+        textDirection: TextDirection.ltr,
+        textScaler: textScaler,
+      )..layout();
+      widest = math.max(widest, painter.width);
+      painter.dispose();
+    }
+
+    final width = widest.ceilToDouble() + _yLabelStartGap + _yLabelEndGap;
+    return math.min(width, chartWidth * _yAxisMaxWidthRatio);
+  }
+
+  // fl_chart가 라벨을 그리는 값: 양 끝과 그 사이의 눈금 간격 배수.
+  static List<double> _yTickValues(double minY, double maxY, double interval) {
+    final values = [minY, maxY];
+    if (!minY.isFinite ||
+        !maxY.isFinite ||
+        !interval.isFinite ||
+        interval <= 0) {
+      return values;
+    }
+    final first = (minY / interval).ceil();
+    final last = (maxY / interval).floor();
+    if (last - first >= _yTickMeasureLimit) return values;
+    for (var step = first; step <= last; step++) {
+      values.add(step * interval);
+    }
+    return values;
+  }
+
   // 데이터 범위에 맞는 Y축 간격을 계산한다.
   // 읽기 쉬운 1 / 2 / 5 / 10 단위의 눈금을 사용한다.
   static double yInterval(double minY, double maxY) {
@@ -84,7 +151,7 @@ class ExchangeChartAxisHelper {
     final absoluteInterval = interval.abs();
 
     if (absoluteInterval == 0) {
-      return formatRate(value);
+      return _groupThousands(formatRate(value));
     }
 
     // 반전된 코인 환율처럼 눈금이 아주 작으면 축 폭을 넘지 않게 지수로 표시한다.
@@ -105,10 +172,18 @@ class ExchangeChartAxisHelper {
 
     final formatted = value.toStringAsFixed(decimalPlaces);
     // 정수의 끝자리 0은 보존하고 소수부의 불필요한 0만 제거한다.
-    return formatted.contains('.')
-        ? formatted.replaceAll(RegExp(r'\.?0+$'), '')
-        : formatted;
+    return _groupThousands(
+      formatted.contains('.')
+          ? formatted.replaceAll(RegExp(r'\.?0+$'), '')
+          : formatted,
+    );
   }
+
+  // 금액과 같은 천 단위 쉼표를 정수부에만 넣는다. 소수부와 지수 표기에는 넣지 않는다.
+  static String _groupThousands(String number) => number.replaceFirstMapped(
+    RegExp(r'^-?\d+'),
+    (match) => match[0]!.replaceAll(RegExp(r'(?<=\d)(?=(\d{3})+$)'), ','),
+  );
 
   // Y축 레이블을 포맷하는 메서드
   static String formatRate(double value) {
@@ -146,6 +221,7 @@ class ExchangeChartAxisHelper {
     required ChartPeriod period,
     required Set<int> xLabelIndexes,
     required double yInterval,
+    required double yAxisWidth,
     required ColorScheme colorScheme,
   }) {
     return FlTitlesData(
@@ -159,23 +235,27 @@ class ExchangeChartAxisHelper {
           showTitles: true,
 
           // Y축 숫자 영역을 줄여 실제 그래프가 사용할 수 있는 폭을 확보한다.
-          reservedSize: 56,
+          reservedSize: yAxisWidth,
 
           interval: yInterval,
 
           getTitlesWidget: (value, meta) {
+            // 그래프 쪽에 붙여 라벨 길이와 상관없이 그래프와의 간격을 같게 한다.
             return Padding(
-              padding: const EdgeInsets.only(left: 2, right: 4),
+              padding: const EdgeInsets.only(
+                left: _yLabelStartGap,
+                right: _yLabelEndGap,
+              ),
               child: Align(
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.centerRight,
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
+                  alignment: Alignment.centerRight,
                   child: Text(
                     formatYAxisRate(value, yInterval),
                     maxLines: 1,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: _yLabelFontSize,
                       color: colorScheme.onSurfaceVariant,
                     ),
                   ),

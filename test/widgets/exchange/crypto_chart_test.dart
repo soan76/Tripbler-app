@@ -13,6 +13,7 @@ import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 import 'package:tripbler/widgets/exchange/exchange_rate_line_chart.dart';
 import '../../crypto/crypto_history_test.dart' show historyResponse;
+import '../../helpers/chart_amount_finder.dart';
 
 const btc = CryptoCoin(symbol: 'BTC', name: 'Bitcoin');
 const doge = CryptoCoin(symbol: 'DOGE', name: 'Dogecoin');
@@ -64,19 +65,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ExchangeRateLineChart), findsOneWidget);
       expect(find.text('BTC'), findsOneWidget);
-      expect(find.text('BTC 금액'), findsOneWidget);
+      expect(amountField('BTC'), findsOneWidget);
       final initialCount = requests.length;
       for (final period in ['2Y', '5Y']) {
         await tester.tap(find.text(period));
         await tester.pumpAndSettle();
-        expect(find.text('암호화폐 차트를 불러오지 못했습니다.'), findsOneWidget);
+        expect(find.text('암호화폐 차트를 불러오지 못했습니다'), findsOneWidget);
         expect(find.byType(ExchangeRateLineChart), findsNothing);
       }
       expect(requests.length, initialCount);
       await tester.tap(find.text('7D'));
       await tester.pumpAndSettle();
       expect(find.byType(ExchangeRateLineChart), findsOneWidget);
-      expect(find.text('암호화폐 차트를 불러오지 못했습니다.'), findsNothing);
+      expect(find.text('암호화폐 차트를 불러오지 못했습니다'), findsNothing);
       expect(
         requests
             .where((uri) => uri.path.endsWith('/history'))

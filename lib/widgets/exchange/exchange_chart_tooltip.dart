@@ -15,6 +15,8 @@ class ExchangeChartTooltip {
     return LineTouchData(
       handleBuiltInTouches: false,
       touchCallback: onTouch,
+      // 기록 사이를 짚어도 끊기지 않게 항상 가장 가까운 실제 기록을 고른다.
+      touchSpotThreshold: double.infinity,
 
       touchTooltipData: LineTouchTooltipData(
         tooltipBorderRadius: BorderRadius.circular(12),

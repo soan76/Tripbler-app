@@ -8,7 +8,7 @@ class MarketChartHeader extends StatelessWidget {
     super.key,
     required this.title,
     required this.pair,
-    this.converter,
+    this.converterBuilder,
     required this.isLoading,
     required this.showsOldData,
     required this.fetchedAt,
@@ -21,8 +21,9 @@ class MarketChartHeader extends StatelessWidget {
   final String title;
   final Widget pair;
 
-  /// 통화쌍과 갱신 상태 사이의 금액 환산 줄.
-  final Widget? converter;
+  /// 통화쌍 아래의 금액 환산 줄. 그래프 선택 중에 증감 표시가 갱신 상태 자리를 쓰므로
+  /// 갱신 상태 위젯을 받아 함께 배치한다.
+  final Widget Function(Widget status)? converterBuilder;
   final bool isLoading;
 
   /// 저장값이나 마지막 성공값을 보여 주는 중인지.
@@ -74,10 +75,35 @@ class MarketChartHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final mutedColor = Theme.of(context).colorScheme.onSurfaceVariant;
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final mutedColor = theme.colorScheme.onSurfaceVariant;
     final fetchedAt = this.fetchedAt;
     // 초점을 지키려고 켜 둔 채 조회 중인 상태. 끈 버튼은 원래 꺼진 것으로 읽힌다.
     final busy = isLoading && onRefresh != null;
+    // 두 줄 자리를 늘 두어 상태가 바뀌어도 아래의 차트가 움직이지 않는다.
+    // 시각을 위에 두어, 안내 문구가 없는 평상시에 통화쌍과 시각 사이가 비지 않게 한다.
+    final status = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _StatusLine(
+          text: fetchedAt == null
+              ? null
+              : '업데이트: ${_fetchedAtFormat.format(fetchedAt.toLocal())}',
+          reserved: '업데이트: 0000.00.00 00:00',
+          style: textTheme.bodySmall!.copyWith(color: mutedColor),
+        ),
+        _StatusLine(
+          text: !showsOldData
+              ? null
+              : isLoading
+              ? '저장된 데이터 · 갱신 중'
+              : _staleFailedText,
+          reserved: _staleFailedText,
+          style: textTheme.labelSmall!.copyWith(color: mutedColor),
+        ),
+      ],
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,11 +115,7 @@ class MarketChartHeader extends StatelessWidget {
             Expanded(
               child: Text(
                 title,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: mutedColor,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: textTheme.titleSmall?.copyWith(color: mutedColor),
               ),
             ),
             // 화면 낭독기에는 조회 중에 라벨 없이 꺼진 버튼으로 읽힌다.
@@ -146,26 +168,12 @@ class MarketChartHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               pair,
-              ?converter,
-              const SizedBox(height: 8),
-              // 두 줄 자리를 늘 두어 상태가 바뀌어도 아래의 차트가 움직이지 않는다.
-              // 시각을 위에 두어, 안내 문구가 없는 평상시에 통화쌍과 시각 사이가 비지 않게 한다.
-              _StatusLine(
-                text: fetchedAt == null
-                    ? null
-                    : '업데이트: ${_fetchedAtFormat.format(fetchedAt.toLocal())}',
-                reserved: '업데이트: 0000.00.00 00:00',
-                style: TextStyle(fontSize: 12, color: mutedColor),
-              ),
-              _StatusLine(
-                text: !showsOldData
-                    ? null
-                    : isLoading
-                    ? '저장된 데이터 · 갱신 중'
-                    : _staleFailedText,
-                reserved: _staleFailedText,
-                style: TextStyle(fontSize: 11, color: mutedColor),
-              ),
+              if (converterBuilder case final build?)
+                build(status)
+              else ...[
+                const SizedBox(height: 8),
+                status,
+              ],
             ],
           ),
         ),

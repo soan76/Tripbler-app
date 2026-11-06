@@ -13,7 +13,7 @@ import 'package:tripbler/widgets/exchange/exchange_rate_line_chart.dart';
 
 import '../../helpers/memory_chart_snapshots.dart';
 
-const emptyText = '표시할 차트 데이터가 없습니다.';
+const emptyText = '표시할 차트 데이터가 없습니다';
 
 class PendingSource implements ChartDataSource {
   final List<Completer<ChartData>> requests = [];

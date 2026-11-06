@@ -22,7 +22,8 @@ class CurrencyPairSide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final onPick = this.onPick;
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final content = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -32,7 +33,7 @@ class CurrencyPairSide extends StatelessWidget {
           dimension: _iconBox,
           child: FittedBox(child: CurrencyIcon(currency: currency, size: 24)),
         ),
-        const SizedBox(width: 6),
+        const SizedBox(width: 8),
         // 좁은 화면이나 4자리 심볼(DOGE)은 잘라내지 않고 글자를 줄여 맞춘다.
         Flexible(
           child: FittedBox(
@@ -40,9 +41,7 @@ class CurrencyPairSide extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Text(
               currency.code,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
+              style: theme.textTheme.titleMedium?.copyWith(
                 color: colorScheme.onSurface,
               ),
               maxLines: 1,
@@ -116,7 +115,7 @@ class _CurrencyPickButtonState extends State<_CurrencyPickButton> {
           constraints: const BoxConstraints(minHeight: 48),
           // 왼쪽 여백이 없어 아이콘이 위 제목과 같은 선에서 시작한다.
           child: Padding(
-            padding: const EdgeInsetsDirectional.only(end: 2),
+            padding: const EdgeInsetsDirectional.only(end: 4),
             child: AnimatedOpacity(
               opacity: _pressed ? _pressedOpacity : 1,
               duration: duration,

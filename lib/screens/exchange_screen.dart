@@ -56,7 +56,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     final isLoading = provider.isLoading;
     final errorMessage = provider.errorMessage;
     final lastUpdated = provider.lastUpdated;
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Container(
       color: colorScheme.surface,
@@ -72,7 +73,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                 lastUpdated,
                 emptyMessage: visibleCurrencies.isEmpty
                     ? (display.crypto.selectedCoins.isEmpty
-                          ? '환산할 통화를 추가해 주세요.'
+                          ? '환산할 통화를 추가해 주세요'
                           : '암호화폐 현재가 기준 환산 수량')
                     : null,
               ),
@@ -141,7 +142,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
 
               // 통화 추가 / 편집 버튼을 표시하는 OutlinedButton 위젯
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                 child: OutlinedButton.icon(
                   onPressed: () {
                     _leaveAmountField();
@@ -151,24 +152,21 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                   label: const Text('통화 추가 / 편집'),
                   style: OutlinedButton.styleFrom(
                     minimumSize: const Size(double.infinity, 52),
-                    foregroundColor: Colors.blue,
-                    side: const BorderSide(color: Colors.blue),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: BorderRadius.zero,
+                    foregroundColor: colorScheme.onSurface,
+                    side: BorderSide(color: colorScheme.outline),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                 ),
               ),
 
               // 차트는 위쪽 환산 통화와 따로 고른 통화쌍을 보여 준다.
-              const SizedBox(height: 64),
+              const SizedBox(height: 32),
 
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                child: Text(
-                  '차트',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text('환율 흐름', style: theme.textTheme.titleLarge),
               ),
 
               const SizedBox(height: 16),
@@ -222,7 +220,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
       title: '차트 통화 선택',
       current: pair.currencyOf(base: base, currencies: display.available),
       optionsOf: (available) => pair.options(base: base, currencies: available),
-      note: pair.isCrypto && !base ? '코인 차트는 KRW 기준만 지원합니다.' : null,
+      note: pair.isCrypto && !base ? '코인 차트는 KRW 기준만 지원합니다' : null,
     );
     if (picked == null || !mounted) return;
     final result = charts.replaceSide(
@@ -235,24 +233,25 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     if (result == ChartPairChange.swappedPositions) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('이미 있던 차트와 위치를 바꿨습니다.')));
+      ).showSnackBar(const SnackBar(content: Text('이미 있던 차트와 위치를 바꿨습니다')));
     }
   }
 
   // 기준 통화와 상대 통화의 그래프 안내 SnackBar 중복 코드를 하나의 메서드로 분리.
   void _showChartGuide() {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('아래 차트 영역에서 환율 변동을 확인할 수 있습니다.')),
+      const SnackBar(content: Text('아래 차트 영역에서 환율 변동을 확인할 수 있습니다')),
     );
   }
 
   // 환율 화면의 헤더 영역을 구성하는 위젯을 반환하는 메서드
   Widget _buildHeader(DateTime? lastUpdated, {String? emptyMessage}) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: colorScheme.surface,
       child: Center(
         child: Text(
@@ -260,7 +259,9 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               ? emptyMessage
               : _formatLastUpdatedText(lastUpdated?.toLocal()),
           textAlign: TextAlign.center,
-          style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );
@@ -269,7 +270,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
   // 마지막 업데이트 문자열 생성 로직을 분리해 build와 header 코드를 읽기 쉽게 함.
   String _formatLastUpdatedText(DateTime? lastUpdated) {
     if (lastUpdated == null) {
-      return '환율 정보를 불러오는 중입니다.';
+      return '환율 정보를 불러오는 중입니다';
     }
 
     final month = lastUpdated.month.toString().padLeft(2, '0');
@@ -285,25 +286,36 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     required String message,
     required Future<void> Function() onRetry,
   }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        border: Border.all(color: Colors.red.shade100),
+        color: colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Colors.redAccent),
+          Icon(Icons.error_outline, color: colorScheme.onErrorContainer),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               message,
-              style: const TextStyle(color: Colors.redAccent),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onErrorContainer,
+              ),
             ),
           ),
           TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: colorScheme.onErrorContainer,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
             onPressed: () {
               // 누르면 이 박스가 사라져 버튼의 초점이 전에 쓴 입력칸으로 돌아가므로 먼저 푼다.
               // 입력칸에 초점을 둔 채 터치했으면 그대로 둔다.

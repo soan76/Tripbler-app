@@ -29,13 +29,42 @@ class ExchangeChartTouchController extends ChangeNotifier {
   bool _isValidSpot(LineBarSpot spot) =>
       ExchangeChartDataCalculator.isValidSpot(spot, _history);
 
-  void updateData(List<ChartPoint> history, ChartPeriod period) {
+  /// 지금 선택된 기록의 날짜.
+  DateTime? get selectedDate {
+    final spot = selectedSpot;
+    return spot == null ? null : _history[spot.spotIndex].date;
+  }
+
+  /// [keepSelectedDate]이면 같은 날짜(없으면 가장 가까운 기록)의 선택을 유지한다.
+  /// 같은 차트의 방향만 바뀐 경우에 쓴다. 다른 데이터로 바뀌면 선택을 지운다.
+  void updateData(
+    List<ChartPoint> history,
+    ChartPeriod period, {
+    bool keepSelectedDate = false,
+  }) {
     if (_disposed || (_period == period && listEquals(_history, history))) {
       return;
     }
+    final date = keepSelectedDate ? selectedDate : null;
+    final previous = _selectedSpot;
     _history = List.of(history);
     _period = period;
-    clearSelection();
+    final index = date == null
+        ? null
+        : ExchangeChartDataCalculator.nearestIndex(_history, date);
+    if (index == null || previous == null) {
+      clearSelection();
+      return;
+    }
+    // LineBarSpot은 위치를 선 데이터에서 찾으므로 새 기록으로 만든 선을 넘긴다.
+    final bar = previous.bar.copyWith(
+      spots: [
+        for (var i = 0; i < _history.length; i++)
+          FlSpot(i.toDouble(), _history[i].rate),
+      ],
+    );
+    _selectedSpot = LineBarSpot(bar, previous.barIndex, bar.spots[index]);
+    notifyListeners();
   }
 
   void clearSelection() {
