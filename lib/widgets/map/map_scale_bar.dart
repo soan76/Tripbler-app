@@ -17,7 +17,7 @@ class MapScaleBar extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          // 라이트/다크 모드에 따라 Scale Bar 배경색 변경  
+          // 라이트/다크 모드에 따라 Scale Bar 배경색 변경
           color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.92),
           borderRadius: BorderRadius.circular(8),
           boxShadow: const [

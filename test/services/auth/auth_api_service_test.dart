@@ -275,4 +275,34 @@ void main() {
       expect(capturedRequest.headers.containsKey('Authorization'), isFalse);
     });
   });
+
+  group('AuthApiService logout', () {
+    test(
+      'POST /api/v1/auth/logout에 Authorization 없이 Refresh Token 본문을 보내고 204를 성공 처리한다',
+      () async {
+        late http.Request capturedRequest;
+
+        final client = MockClient((request) async {
+          capturedRequest = request;
+
+          return http.Response('', 204);
+        });
+
+        final service = AuthApiService(
+          client: client,
+          messages: const _TestAuthApiMessages(),
+        );
+        addTearDown(service.dispose);
+
+        await service.logout(refreshToken: 'refresh-token-of-this-device');
+
+        expect(capturedRequest.method, 'POST');
+        expect(capturedRequest.url, ApiConfig.authLogoutUri);
+        expect(capturedRequest.headers['Authorization'], isNull);
+        expect(jsonDecode(capturedRequest.body), <String, dynamic>{
+          'refreshToken': 'refresh-token-of-this-device',
+        });
+      },
+    );
+  });
 }

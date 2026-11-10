@@ -234,7 +234,7 @@ class AuthApiService {
     final response = await _httpClient.delete(
       uri: ApiConfig.usersMeProfileImageUri,
       authorizationHeader: authorizationHeader,
-    );  
+    );
 
     _responseParser.ensureNoContentResponse(response);
   }
@@ -294,10 +294,12 @@ class AuthApiService {
   }
 
   /// 서버에서 로그아웃한다.
-  Future<void> logout({required String authorizationHeader}) async {
+  /// 로그아웃: 이 기기의 Refresh Token 하나만 서버에서 폐기한다.
+  /// Access Token 없이 보내므로 Access Token이 만료돼도 서버 세션을 끝낼 수 있다.
+  Future<void> logout({required String refreshToken}) async {
     final response = await _httpClient.post(
       uri: ApiConfig.authLogoutUri,
-      authorizationHeader: authorizationHeader,
+      body: <String, dynamic>{'refreshToken': refreshToken},
     );
 
     _responseParser.ensureNoContentResponse(response);

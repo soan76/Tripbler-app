@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/tab_item.dart';
+import '../providers/auth_provider.dart';
 import '../providers/tab_provider.dart';
+import '../widgets/auth/session_restore_banner.dart';
 import '../widgets/bottom_tab_bar.dart';
 import '../widgets/navigation/app_drawer.dart';
 import '../widgets/navigation/app_top_bar.dart';
@@ -42,6 +44,7 @@ class MainScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tabProvider = context.watch<TabProvider>();
+    final authProvider = context.watch<AuthProvider>();
     final colorScheme = Theme.of(context).colorScheme;
 
     final selectedIndex = tabProvider.selectedIndex;
@@ -66,6 +69,13 @@ class MainScreen extends StatelessWidget {
             Column(
               children: [
                 AppTopBar(title: screenTitle),
+
+                // 세션 만료가 확인되지 않은 오류로 세션 복구에 실패하면 상단 바 아래에서 다시 시도를 안내한다.
+                if (authProvider.sessionRestoreFailed)
+                  SessionRestoreBanner(
+                    isRetrying: authProvider.isLoading,
+                    onRetry: authProvider.retryRestoreSession,
+                  ),
 
                 Expanded(
                   child: IndexedStack(

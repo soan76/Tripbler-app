@@ -1,18 +1,208 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:geolocator/geolocator.dart';
 
+import '../core/network/api_exception.dart';
 import '../models/place_model.dart';
+import '../providers/auth_provider.dart';
+import '../repositories/auth/auth_repository.dart';
 import '../services/place_api_service.dart';
+import '../utils/map/search_query_normalizer.dart';
 
 enum MapPlaceStatus { idle, loading, success, failure }
 
-/// 지도 화면에서 주변 장소를 관리하는 Provider 클래스
-class MapProvider extends ChangeNotifier {
-  MapProvider({PlaceApiService? placeApiService})
-    : _placeApiService = placeApiService ?? PlaceApiService();
+/// 장소 검색 진행 상태. 주변 장소·지도 탭용 [MapPlaceStatus]와 따로 관리한다.
+enum MapSearchStatus { idle, loading, success, failure }
 
+/// 화면 문구를 고르기 위한 검색 실패 종류.
+enum MapSearchErrorType {
+  /// 400: 검색어·좌표가 서버 기준에 맞지 않음
+  invalidQuery,
+
+  /// 503: Google 장소 서비스 장애
+  providerUnavailable,
+
+  /// 시간 초과, 연결 실패
+  network,
+
+  /// 그 밖의 실패
+  unknown,
+}
+
+class MapSearchError {
+  const MapSearchError({required this.type, required this.message});
+
+  final MapSearchErrorType type;
+  final String message;
+}
+
+/// 선택한 장소의 상세 정보(평점·영업 여부) 조회 상태.
+enum PlaceDetailsStatus { idle, loading, failure }
+
+/// 상세 캐시 항목. 저장 시각으로 만료 여부를 판단한다.
+class _CachedPlaceDetails {
+  const _CachedPlaceDetails({required this.place, required this.storedAt});
+
+  final PlaceModel place;
+  final DateTime storedAt;
+}
+
+/// 검색 요청 조건. 정리된 검색어와 실제로 보낸 중심 좌표가 모두 같아야 같은 조건이다.
+@immutable
+class _SearchRequest {
+  const _SearchRequest({required this.query, this.center});
+
+  final String query;
+  final LatLng? center;
+
+  @override
+  bool operator ==(Object other) =>
+      other is _SearchRequest && other.query == query && other.center == center;
+
+  @override
+  int get hashCode => Object.hash(query, center);
+}
+
+/// 지도 화면에서 주변 장소, 장소 검색, 선택한 장소를 관리하는 Provider 클래스
+class MapProvider extends ChangeNotifier {
+  /// [authorizedRequest]: 로그인이 필요한 검색 요청을 토큰과 함께 실행한다
+  /// (보통 [AuthProvider.runAuthorizedRequest]).
+  /// [authState]와 [isAuthenticated]를 주면 로그인이 풀릴 때 검색 상태를 비운다.
+  /// [now]는 상세 캐시 만료 판단에 쓰는 현재 시각이다(테스트용, 기본 [DateTime.now]).
+  MapProvider({
+    required AuthorizedRequestRunner authorizedRequest,
+    PlaceApiService? placeApiService,
+    Listenable? authState,
+    bool Function()? isAuthenticated,
+    DateTime Function()? now,
+  }) : _authorizedRequest = authorizedRequest,
+       _placeApiService = placeApiService ?? PlaceApiService(),
+       _authState = authState,
+       _isAuthenticated = isAuthenticated,
+       _now = now ?? DateTime.now {
+    _authState?.addListener(_handleAuthStateChanged);
+  }
+
+  /// 상세 결과를 기억해 두는 최대 장소 수. 넘으면 오래된 것부터 지운다.
+  static const int maxCachedPlaceDetails = 50;
+
+  /// 상세 결과(영업 여부 등)를 재사용하는 시간. 지나면 다시 조회한다.
+  static const Duration placeDetailsCacheTtl = Duration(minutes: 30);
+
+  final AuthorizedRequestRunner _authorizedRequest;
   final PlaceApiService _placeApiService;
+  final Listenable? _authState;
+  final bool Function()? _isAuthenticated;
+  final DateTime Function() _now;
+
+  bool _isDisposed = false;
+
+  // ----- 장소 검색 상태 -----
+  MapSearchStatus _searchStatus = MapSearchStatus.idle;
+  List<PlaceModel> _searchResults = const [];
+  MapSearchError? _searchError;
+  String? _lastSearchQuery;
+
+  /// 지금 화면에 있는 검색 결과의 조건.
+  _SearchRequest? _resultsRequest;
+
+  /// 마지막으로 실패한 검색 요청. [retrySearch]가 같은 조건으로 다시 보낸다.
+  _SearchRequest? _lastFailedRequest;
+
+  /// 가장 최근 검색 요청 번호. 이보다 앞선 요청의 응답은 버린다.
+  int _searchRequestId = 0;
+
+  // ----- 세션 만료 안내 -----
+  // 사용자 검색에서 만료가 확정됐을 때만, 만료된 세션당 한 번 안내한다.
+  // 검색 중 만료되면 AuthProvider가 로그인 상태를 먼저 해제하고 그 알림으로 검색 상태가
+  // 비워진 뒤에 만료 예외가 도착한다. 그래서 로그인이 풀린 순간 진행 중이던 검색 요청을
+  // 따로 기억해 두고, 그 요청이 만료로 끝나면 안내한다.
+
+  /// 응답을 기다리는 검색 요청 번호들(최신이 아닌 요청 포함).
+  final Set<int> _inFlightSearchIds = <int>{};
+
+  /// 로그인이 풀린 순간 진행 중이던 검색 요청 번호들.
+  final Set<int> _signedOutSearchIds = <int>{};
+
+  /// 이미 안내했거나 안내를 기다리는 만료 세션 번호들.
+  final Set<int> _noticedExpiredSessionIds = <int>{};
+
+  bool _hasSessionExpiryNotice = false;
+
+  // ----- 상세 조회 상태 -----
+  PlaceDetailsStatus _detailsStatus = PlaceDetailsStatus.idle;
+  String? _detailsErrorMessage;
+  int _detailsRequestId = 0;
+  final LinkedHashMap<String, _CachedPlaceDetails> _detailsCache =
+      LinkedHashMap<String, _CachedPlaceDetails>();
+
+  MapSearchStatus get searchStatus => _searchStatus;
+  List<PlaceModel> get searchResults => List.unmodifiable(_searchResults);
+  MapSearchError? get searchError => _searchError;
+  String? get lastSearchQuery => _lastSearchQuery;
+  bool get isSearching => _searchStatus == MapSearchStatus.loading;
+  bool get hasSearchResults => _searchResults.isNotEmpty;
+  bool get canRetrySearch => _lastFailedRequest != null;
+
+  /// 표시를 기다리는 세션 만료 안내가 있는지. 지도 탭이 활성일 때만 표시하고
+  /// [consumeSessionExpiryNotice]로 소비한다.
+  bool get hasSessionExpiryNotice => _hasSessionExpiryNotice;
+
+  PlaceDetailsStatus get detailsStatus => _detailsStatus;
+  String? get detailsErrorMessage => _detailsErrorMessage;
+
+  /// 좌표가 있는 검색 결과를 모두 감싸는 범위. 카메라 이동은 화면이 맡는다.
+  /// 결과가 하나면 남서·북동 꼭짓점이 같다.
+  ///
+  /// 경도는 모든 좌표를 담는 가장 짧은 구간을 고른다. 정렬한 경도 사이 간격
+  /// (마지막과 첫째 사이는 360을 더한 순환 간격) 중 가장 큰 간격의 반대쪽이 범위다.
+  /// 날짜변경선을 넘는 범위는 west > east로 만든다(예: west 179.9, east -179.9).
+  /// 가장 큰 간격이 여럿이면 날짜변경선을 넘지 않는 순환 간격을 먼저 고르고,
+  /// 그다음은 서쪽(작은 경도)에 있는 간격을 고른다. 예: -90과 90이면 west -90, east 90.
+  LatLngBounds? get searchResultBounds {
+    double? south;
+    double? north;
+    final longitudes = <double>[];
+
+    for (final place in _searchResults) {
+      if (!place.hasCoordinates) {
+        continue;
+      }
+
+      final latitude = place.latitude!;
+
+      south = south == null || latitude < south ? latitude : south;
+      north = north == null || latitude > north ? latitude : north;
+      longitudes.add(place.longitude!);
+    }
+
+    if (south == null || north == null || longitudes.isEmpty) {
+      return null;
+    }
+
+    longitudes.sort();
+
+    // 순환 간격(날짜변경선 쪽)이 가장 크면 날짜변경선을 넘지 않는 일반 범위다.
+    var west = longitudes.first;
+    var east = longitudes.last;
+    var largestGap = longitudes.first + 360 - longitudes.last;
+
+    for (var i = 0; i < longitudes.length - 1; i++) {
+      final gap = longitudes[i + 1] - longitudes[i];
+
+      if (gap > largestGap) {
+        largestGap = gap;
+        west = longitudes[i + 1];
+        east = longitudes[i];
+      }
+    }
+
+    return LatLngBounds(
+      southwest: LatLng(south, west),
+      northeast: LatLng(north, east),
+    );
+  }
 
   MapPlaceStatus _status = MapPlaceStatus.idle;
   List<PlaceModel> _places = [];
@@ -23,7 +213,6 @@ class MapProvider extends ChangeNotifier {
   List<PlaceModel> get places => List.unmodifiable(_places);
   PlaceModel? get selectedPlace => _selectedPlace;
   String? get errorMessage => _errorMessage;
-  String? _tapSelectedPlaceId;
 
   bool get isLoading => _status == MapPlaceStatus.loading;
   bool get hasPlaces => _places.isNotEmpty;
@@ -53,22 +242,27 @@ class MapProvider extends ChangeNotifier {
       );
     }
 
-    // 지도 탭으로 선택한 장소 전용 마커
-    final selectedPlace = _selectedPlace;
+    // 검색 결과 마커. 탭하면 그 결과를 선택하고, 선택된 마커는 색과 겹침 순서로 구분한다.
+    // 모양은 화면 디자인 단계에서 다듬는다.
+    final selectedId = _selectedPlace?.id;
 
-    if (selectedPlace != null &&
-        _tapSelectedPlaceId != null &&
-        selectedPlace.hasCoordinates) {
+    for (final place in _searchResults) {
+      if (!place.hasCoordinates) {
+        continue;
+      }
+
+      final isSelected = place.id == selectedId;
+
       markers.add(
         Marker(
-          markerId: const MarkerId('selected_place'),
-          position: LatLng(selectedPlace.latitude!, selectedPlace.longitude!),
-          infoWindow: InfoWindow(
-            title: selectedPlace.name,
-            snippet: selectedPlace.address,
-          ),
+          markerId: MarkerId('search_${place.id}'),
+          position: LatLng(place.latitude!, place.longitude!),
+          icon: isSelected
+              ? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure)
+              : BitmapDescriptor.defaultMarker,
+          zIndexInt: isSelected ? 2 : 1,
           onTap: () {
-            selectPlace(selectedPlace);
+            selectSearchResult(place);
           },
         ),
       );
@@ -86,7 +280,7 @@ class MapProvider extends ChangeNotifier {
     _status = MapPlaceStatus.loading;
     _errorMessage = null;
     _selectedPlace = null;
-    _tapSelectedPlaceId = null;
+    _resetDetailsState();
     notifyListeners();
 
     try {
@@ -106,134 +300,255 @@ class MapProvider extends ChangeNotifier {
 
       _places = [];
       _selectedPlace = null;
+      _resetDetailsState();
       _errorMessage = error.toString();
       _status = MapPlaceStatus.failure;
       notifyListeners();
     }
   }
 
-  // 사용자가 지도 위를 탭했을 때 호출됨.
-  // 핵심:
-  // 1. 마커 위치는 백엔드가 반환한 장소 좌표가 아니라 사용자가 실제로 탭한 좌표를 사용함.
-  // 2. 백엔드 nearest 결과는 장소 이름/주소/카테고리 같은 정보 참고용으로만 사용함.
-  // 3. nearest 결과가 탭 좌표와 너무 멀면 잘못 선택된 장소로 보고 버림.
-  Future<void> selectNearestPlaceByLatLng({
-    required double latitude,
-    required double longitude,
-  }) async {
-    _status = MapPlaceStatus.loading;
-    _errorMessage = null;
-    notifyListeners();
+  // ----- 장소 검색 -----
+
+  /// 검색어로 장소를 검색한다.
+  ///
+  /// [center]는 검색 버튼을 누른 순간의 지도 중심이다. 없으면 좌표 없이 검색한다.
+  /// 검색어를 정리한 뒤 비었거나 100자를 넘으면 서버를 호출하지 않는다.
+  /// 새 검색은 기존 선택과 상세 카드를 해제한다.
+  Future<void> search(String query, {LatLng? center}) async {
+    final normalizedQuery = SearchQueryNormalizer.normalize(query);
+
+    if (normalizedQuery == null) {
+      return;
+    }
+
+    // 장소 검색은 로그인이 필요하다. 비로그인·세션 복구 대기 안내는 화면이 맡는다.
+    if (!_isSignedIn) {
+      return;
+    }
+
+    await _runSearch(_SearchRequest(query: normalizedQuery, center: center));
+  }
+
+  /// 마지막으로 실패한 검색을 같은 조건으로 다시 보낸다.
+  Future<void> retrySearch() async {
+    final request = _lastFailedRequest;
+
+    if (request == null || !_isSignedIn) {
+      return;
+    }
+
+    await _runSearch(request);
+  }
+
+  Future<void> _runSearch(_SearchRequest request) async {
+    final requestId = ++_searchRequestId;
+
+    _lastSearchQuery = request.query;
+    _searchStatus = MapSearchStatus.loading;
+    _searchError = null;
+    _clearSelectionState();
+    _inFlightSearchIds.add(requestId);
+    _notify();
 
     try {
-      final nearestPlace = await _placeApiService.fetchNearestPlace(
-        latitude: latitude,
-        longitude: longitude,
-        radius: 40,
+      final places = await _authorizedRequest<List<PlaceModel>>(
+        (authorizationHeader) => _placeApiService.searchPlaces(
+          query: request.query,
+          latitude: request.center?.latitude,
+          longitude: request.center?.longitude,
+          authorizationHeader: authorizationHeader,
+        ),
       );
-      debugPrint('nearestPlace id: ${nearestPlace?.id}');
-      debugPrint('nearestPlace name: ${nearestPlace?.name}');
 
-      PlaceModel selectedPlace;
-
-      // 백엔드가 nearest 장소를 못 찾은 경우뿐 아니라,
-      // 찾았더라도 좌표가 없는 경우(파싱 실패)도 동일하게
-      // "찾지 못함"으로 취급하여 탭 좌표를 그대로 사용함.
-      if (nearestPlace == null || !nearestPlace.hasCoordinates) {
-        // 백엔드에서 주변 장소를 찾지 못한 경우에도
-        // 사용자가 탭한 위치 자체를 선택 위치로 표시함.
-        selectedPlace = PlaceModel(
-          id: 'tap_${latitude}_$longitude',
-          name: '선택한 위치',
-          latitude: latitude,
-          longitude: longitude,
-          address:
-              '위도 ${latitude.toStringAsFixed(6)}, 경도 ${longitude.toStringAsFixed(6)}',
-          rating: null,
-          category: 'selected_location',
-          openNow: null,
-        );
-      } else {
-        final distanceFromTap = Geolocator.distanceBetween(
-          latitude,
-          longitude,
-          nearestPlace.latitude!,
-          nearestPlace.longitude!,
-        );
-
-        // nearest 결과가 탭한 좌표에서 40m보다 멀면
-        // 사용자가 누른 위치와 다른 장소가 선택된 것으로 판단함.
-        if (distanceFromTap > 40) {
-          selectedPlace = PlaceModel(
-            id: 'tap_${latitude}_$longitude',
-            name: '선택한 위치',
-            latitude: latitude,
-            longitude: longitude,
-            address:
-                '위도 ${latitude.toStringAsFixed(6)}, 경도 ${longitude.toStringAsFixed(6)}',
-            rating: null,
-            category: 'selected_location',
-            openNow: null,
-          );
-        } else {
-          // nearest 결과가 탭 좌표와 충분히 가까운 경우에만
-          // 장소 정보는 nearestPlace를 사용하되,
-          // 마커 좌표는 사용자가 실제로 탭한 좌표를 사용함.
-          selectedPlace = PlaceModel(
-            id: nearestPlace.id,
-            name: nearestPlace.name,
-            latitude: latitude,
-            longitude: longitude,
-            address: nearestPlace.address,
-            rating: nearestPlace.rating,
-            category: nearestPlace.category,
-            openNow: nearestPlace.openNow,
-          );
-        }
+      if (!_isCurrentSearch(requestId)) {
+        return;
       }
 
-      // 기존 선택 마커를 제거하고 새로 탭한 위치 마커만 추가함.
-      // 이렇게 해야 예전에 잘못 찍힌 마커가 계속 남지 않음.
-      _places = _places.where((place) => !place.id.startsWith('tap_')).toList();
+      _searchResults = places;
+      _resultsRequest = request;
+      _lastFailedRequest = null;
+      _searchStatus = MapSearchStatus.success;
+      _notify();
+    } on SessionExpiredException catch (error) {
+      // 이 검색이 만료를 확정했다: 로그인이 풀리기 전에 시작된 최신 검색이었거나,
+      // 로그인이 풀린 순간 진행 중이던 검색이다(최신이 아니어도 같은 세션의 사용자 검색).
+      final confirmedBySearch =
+          _isCurrentSearch(requestId) ||
+          _signedOutSearchIds.contains(requestId);
 
-      _selectedPlace = selectedPlace;
-      _tapSelectedPlaceId = selectedPlace.id;
+      if (!_isDisposed && confirmedBySearch) {
+        _raiseSessionExpiryNotice(error.sessionId);
+      }
 
-      _status = MapPlaceStatus.success;
-      notifyListeners();
-    } catch (error, stackTrace) {
-      debugPrint('지도 탭 장소 선택 실패: $error');
-      debugPrint('$stackTrace');
+      if (!_isCurrentSearch(requestId)) {
+        return;
+      }
 
-      // API가 실패해도 사용자가 탭한 좌표에는 마커를 표시함.
-      // 서버 오류 때문에 지도 클릭 자체가 무반응처럼 보이지 않도록 하기 위함.
-      final selectedPlace = PlaceModel(
-        id: 'tap_${latitude}_$longitude',
-        name: '선택한 위치',
-        latitude: latitude,
-        longitude: longitude,
-        address:
-            '위도 ${latitude.toStringAsFixed(6)}, 경도 ${longitude.toStringAsFixed(6)}',
-        rating: null,
-        category: 'selected_location',
-        openNow: null,
-      );
+      // 로그인 상태는 AuthProvider가 해제한다(앱은 비로그인으로도 쓸 수 있어 화면은 그대로).
+      _resetSearchState();
+      _notify();
+    } on SessionChangedException {
+      // 이전 세션에서 시작한 검색: 결과를 반영하지 않는다.
+      // 보통은 로그인 해제 알림으로 이미 요청 번호가 바뀌어 여기까지 오지 않는다.
+      if (!_isCurrentSearch(requestId)) {
+        return;
+      }
 
-      // API가 실패해도 사용자가 탭한 좌표에는 선택 마커를 표시함.
-      // 단, 이 선택 마커는 _places에 누적하지 않고 _selectedPlace로만 관리함.
-      _places = _places.where((place) => !place.id.startsWith('tap_')).toList();
+      // 화면에 있던 결과와 오류 문구는 그대로 두고 로딩 표시만 거둔다.
+      _searchStatus = _resultsRequest != null
+          ? MapSearchStatus.success
+          : MapSearchStatus.idle;
+      _notify();
+    } catch (error) {
+      if (!_isCurrentSearch(requestId)) {
+        return;
+      }
 
-      _selectedPlace = selectedPlace;
-      _tapSelectedPlaceId = selectedPlace.id;
+      _lastFailedRequest = request;
 
-      _errorMessage = error.toString();
-      _status = MapPlaceStatus.failure;
-      notifyListeners();
+      // 같은 조건(다시 시도 등)이면 화면의 결과를 유지하고, 조건이 다르면 비운다.
+      if (_resultsRequest != request) {
+        _searchResults = const [];
+        _resultsRequest = null;
+      }
+
+      _searchError = _toSearchError(error);
+      _searchStatus = MapSearchStatus.failure;
+      _notify();
+    } finally {
+      _inFlightSearchIds.remove(requestId);
+      _signedOutSearchIds.remove(requestId);
     }
   }
 
-  // 현재 선택된 장소의 placeId를 기준으로 상세 정보를 다시 조회함.
-  // 상세 조회 성공 시 selectedPlace를 더 정확한 상세 정보로 교체함.
+  bool get _isSignedIn => _isAuthenticated?.call() ?? true;
+
+  /// 만료된 세션의 안내를 한 번만 대기시킨다.
+  /// 이미 다시 로그인했다면(이전 세션의 늦은 예외) 새 화면에 띄우지 않는다.
+  void _raiseSessionExpiryNotice(int? sessionId) {
+    if (_isAuthenticated?.call() ?? false) {
+      return;
+    }
+
+    if (sessionId != null && !_noticedExpiredSessionIds.add(sessionId)) {
+      return;
+    }
+
+    if (_hasSessionExpiryNotice) {
+      return;
+    }
+
+    _hasSessionExpiryNotice = true;
+    _notify();
+  }
+
+  /// 화면이 세션 만료 안내를 표시했음을 알린다(지도 탭이 활성일 때만 부른다).
+  void consumeSessionExpiryNotice() {
+    if (!_hasSessionExpiryNotice) {
+      return;
+    }
+
+    _hasSessionExpiryNotice = false;
+    _notify();
+  }
+
+  bool _isCurrentSearch(int requestId) {
+    return !_isDisposed && requestId == _searchRequestId;
+  }
+
+  MapSearchError _toSearchError(Object error) {
+    if (error is ApiException) {
+      final MapSearchErrorType type;
+
+      if (error.isNetworkError) {
+        type = MapSearchErrorType.network;
+      } else if (error.statusCode == 400) {
+        type = MapSearchErrorType.invalidQuery;
+      } else if (error.statusCode == 503) {
+        type = MapSearchErrorType.providerUnavailable;
+      } else {
+        type = MapSearchErrorType.unknown;
+      }
+
+      return MapSearchError(type: type, message: error.message);
+    }
+
+    debugPrint('장소 검색 실패: $error');
+
+    return const MapSearchError(
+      type: MapSearchErrorType.unknown,
+      message: '장소를 검색하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    );
+  }
+
+  /// 검색 결과 목록이나 마커에서 장소를 고른다. 상세 카드에 표시된다.
+  void selectSearchResult(PlaceModel place) {
+    if (_selectedPlace?.id == place.id) {
+      return;
+    }
+
+    _selectedPlace = _freshCachedDetails(place.id) ?? place;
+    _resetDetailsState();
+    _notify();
+  }
+
+  /// 검색어, 결과, 선택, 진행 중인 검색을 모두 지운다(검색창 X 버튼).
+  void clearSearch() {
+    _resetSearchState();
+    _clearSelectionState();
+    _notify();
+  }
+
+  void _resetSearchState() {
+    // 진행 중인 요청의 응답은 번호가 달라져 버려진다.
+    _searchRequestId++;
+    _searchStatus = MapSearchStatus.idle;
+    _searchResults = const [];
+    _searchError = null;
+    _lastSearchQuery = null;
+    _resultsRequest = null;
+    _lastFailedRequest = null;
+  }
+
+  void _handleAuthStateChanged() {
+    final isAuthenticated = _isAuthenticated;
+
+    if (isAuthenticated == null) {
+      return;
+    }
+
+    if (isAuthenticated()) {
+      // 새로 로그인했다: 아직 표시하지 않은 이전 세션의 만료 안내는 무효다.
+      if (_hasSessionExpiryNotice) {
+        _hasSessionExpiryNotice = false;
+        _notify();
+      }
+
+      return;
+    }
+
+    // 로그인이 풀린 순간 진행 중이던 검색: 만료로 끝나면 사용자 검색이 만료를 확정한 것이다.
+    _signedOutSearchIds.addAll(_inFlightSearchIds);
+
+    // 로그아웃·세션 만료: 다음 사용자에게 이전 검색과 상세 결과가 남지 않게 비운다.
+    final hadState =
+        _searchStatus != MapSearchStatus.idle ||
+        _selectedPlace != null ||
+        _detailsCache.isNotEmpty;
+
+    _resetSearchState();
+    _clearSelectionState();
+    _detailsCache.clear();
+
+    if (hadState) {
+      _notify();
+    }
+  }
+
+  // ----- 선택과 상세 조회 -----
+
+  // 선택한 장소의 상세 정보(평점·영업 여부)를 조회한다. 카드의 버튼을 눌렀을 때만 부른다.
+  // 같은 장소를 다시 열면 기억해 둔 결과를 쓰고, 실패해도 검색 결과는 그대로 둔다.
   Future<void> loadSelectedPlaceDetails() async {
     final selectedPlace = _selectedPlace;
 
@@ -241,64 +556,126 @@ class MapProvider extends ChangeNotifier {
       return;
     }
 
-    // 지도 탭으로 생성한 임시 위치는 실제 Google placeId가 아닐 수 있으므로 상세 조회하지 않음.
-    if (selectedPlace.id.startsWith('tap_')) {
-      _errorMessage = '선택한 위치는 상세 정보를 조회할 수 없습니다.';
-      notifyListeners();
+    final cachedPlace = _freshCachedDetails(selectedPlace.id);
+
+    if (cachedPlace != null) {
+      _applyPlaceDetails(cachedPlace);
+      _resetDetailsState();
+      _notify();
       return;
     }
 
-    _status = MapPlaceStatus.loading;
-    _errorMessage = null;
-    notifyListeners();
+    final requestId = ++_detailsRequestId;
+
+    _detailsStatus = PlaceDetailsStatus.loading;
+    _detailsErrorMessage = null;
+    _notify();
 
     try {
       final detailPlace = await _placeApiService.fetchPlaceDetails(
         placeId: selectedPlace.id,
       );
 
-      // 상세 정보로 selectedPlace 갱신
-      _selectedPlace = detailPlace;
+      if (!_isCurrentDetails(requestId, selectedPlace.id)) {
+        return;
+      }
 
-      // 기존 places 목록에 같은 id가 있으면 상세 정보로 교체
-      _places = _places.map((place) {
-        if (place.id == detailPlace.id) {
-          return detailPlace;
-        }
-
-        return place;
-      }).toList();
-
-      _status = MapPlaceStatus.success;
-      notifyListeners();
+      _cachePlaceDetails(detailPlace);
+      _applyPlaceDetails(detailPlace);
+      _detailsStatus = PlaceDetailsStatus.idle;
+      _notify();
     } catch (error, stackTrace) {
       debugPrint('장소 상세 조회 실패: $error');
       debugPrint('$stackTrace');
 
-      _errorMessage = error.toString();
-      _status = MapPlaceStatus.failure;
-      notifyListeners();
+      if (!_isCurrentDetails(requestId, selectedPlace.id)) {
+        return;
+      }
+
+      _detailsStatus = PlaceDetailsStatus.failure;
+      _detailsErrorMessage = error is PlaceApiException
+          ? error.message
+          : '장소 상세 정보를 불러오지 못했습니다.';
+      _notify();
     }
+  }
+
+  bool _isCurrentDetails(int requestId, String placeId) {
+    return !_isDisposed &&
+        requestId == _detailsRequestId &&
+        _selectedPlace?.id == placeId;
+  }
+
+  /// 만료되지 않은 상세 결과만 돌려준다. 만료된 항목은 다시 조회해 갱신한다.
+  PlaceModel? _freshCachedDetails(String placeId) {
+    final entry = _detailsCache[placeId];
+
+    if (entry == null) {
+      return null;
+    }
+
+    if (_now().difference(entry.storedAt) >= placeDetailsCacheTtl) {
+      return null;
+    }
+
+    return entry.place;
+  }
+
+  void _cachePlaceDetails(PlaceModel place) {
+    _detailsCache.remove(place.id);
+    _detailsCache[place.id] = _CachedPlaceDetails(
+      place: place,
+      storedAt: _now(),
+    );
+
+    while (_detailsCache.length > maxCachedPlaceDetails) {
+      _detailsCache.remove(_detailsCache.keys.first);
+    }
+  }
+
+  // 상세 결과로 선택한 장소와, 같은 id의 주변 장소·검색 결과 항목을 함께 갱신한다.
+  void _applyPlaceDetails(PlaceModel detailPlace) {
+    _selectedPlace = detailPlace;
+
+    PlaceModel replace(PlaceModel place) =>
+        place.id == detailPlace.id ? detailPlace : place;
+
+    _places = _places.map(replace).toList();
+    _searchResults = _searchResults.map(replace).toList();
+  }
+
+  void _resetDetailsState() {
+    // 진행 중인 상세 조회의 응답은 번호가 달라져 버려진다.
+    _detailsRequestId++;
+    _detailsStatus = PlaceDetailsStatus.idle;
+    _detailsErrorMessage = null;
   }
 
   void selectPlace(PlaceModel place) {
     _selectedPlace = place;
-    _tapSelectedPlaceId = null;
+    _resetDetailsState();
     notifyListeners();
   }
 
+  /// 상세 카드만 닫는다. 검색 결과는 그대로 둔다.
   void clearSelectedPlace() {
     if (_selectedPlace == null) {
       return;
     }
 
-    _selectedPlace = null;
-    _tapSelectedPlaceId = null;
-
-    // _places에 들어갔던 tap_ 마커가 남아 있을 수 있으므로 정리함.
-    _places = _places.where((place) => !place.id.startsWith('tap_')).toList();
-
+    _clearSelectionState();
     notifyListeners();
+  }
+
+  void _clearSelectionState() {
+    _selectedPlace = null;
+    _resetDetailsState();
+  }
+
+  void _notify() {
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 
   void clearError() {
@@ -313,6 +690,8 @@ class MapProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isDisposed = true;
+    _authState?.removeListener(_handleAuthStateChanged);
     _placeApiService.dispose();
     super.dispose();
   }

@@ -4,7 +4,7 @@ class ApiConfig {
   static const String _definedBaseUrl = String.fromEnvironment(
     'TRIPBLER_API_BASE_URL',
   );
-  
+
   static String get baseUrl {
     if (_definedBaseUrl.isNotEmpty) {
       return _definedBaseUrl;
@@ -54,13 +54,18 @@ class ApiConfig {
 
   static const String usersMeProfileImagePath =
       '/api/v1/users/me/profile-image';
-  
+
   static const String usersMeGoogleLinkPath =
       '/api/v1/users/me/social-accounts/google';
   static const String usersMeSocialAccountsPath =
       '/api/v1/users/me/social-accounts';
 
   static const String usersCheckLoginIdPath = '/api/v1/users/check-login-id';
+
+  static const String placesPath = '/api/v1/places';
+  static const String placesSearchPath = '$placesPath/search';
+  static const String placesNearbyPath = '$placesPath/nearby';
+  static const String placesNearestPath = '$placesPath/nearest';
 
   static Uri get usersUri {
     return Uri.parse(baseUrl).replace(path: usersPath);
@@ -122,6 +127,71 @@ class ApiConfig {
     return Uri.parse(baseUrl).replace(
       path: usersCheckLoginIdPath,
       queryParameters: <String, String>{'loginId': loginId},
+    );
+  }
+
+  /// 장소 검색(로그인 필요).
+  ///
+  /// 좌표는 둘 다 넣거나 둘 다 생략한다. 서버가 하나만 온 요청을 400으로 막는다.
+  static Uri placesSearchUri({
+    required String query,
+    double? latitude,
+    double? longitude,
+  }) {
+    if ((latitude == null) != (longitude == null)) {
+      throw ArgumentError('위도와 경도는 함께 전달해야 합니다.');
+    }
+
+    return Uri.parse(baseUrl).replace(
+      path: placesSearchPath,
+      queryParameters: <String, String>{
+        'query': query,
+        if (latitude != null && longitude != null) ...<String, String>{
+          'lat': latitude.toString(),
+          'lng': longitude.toString(),
+        },
+      },
+    );
+  }
+
+  static Uri placesNearbyUri({
+    required double latitude,
+    required double longitude,
+    required String type,
+    required int radius,
+  }) {
+    return Uri.parse(baseUrl).replace(
+      path: placesNearbyPath,
+      queryParameters: <String, String>{
+        'lat': latitude.toString(),
+        'lng': longitude.toString(),
+        'type': type,
+        'radius': radius.toString(),
+      },
+    );
+  }
+
+  static Uri placesNearestUri({
+    required double latitude,
+    required double longitude,
+    required int radius,
+  }) {
+    return Uri.parse(baseUrl).replace(
+      path: placesNearestPath,
+      queryParameters: <String, String>{
+        'lat': latitude.toString(),
+        'lng': longitude.toString(),
+        'radius': radius.toString(),
+      },
+    );
+  }
+
+  /// 장소 상세. placeId는 경로 조각으로 넣어 `/`, `?` 같은 문자도 인코딩한다.
+  static Uri placeDetailsUri({required String placeId}) {
+    final baseUri = Uri.parse(baseUrl);
+
+    return baseUri.replace(
+      pathSegments: <String>[...Uri.parse(placesPath).pathSegments, placeId],
     );
   }
 

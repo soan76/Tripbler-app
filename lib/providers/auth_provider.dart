@@ -3,20 +3,36 @@ import 'package:flutter/foundation.dart';
 import '../repositories/auth/auth_repository.dart';
 import '../models/user/user_response.dart';
 import '../core/network/api_exception.dart';
+
+/// 로그인이 필요한 요청을 토큰과 함께 실행하는 함수 형식.
+/// [AuthProvider.runAuthorizedRequest]를 다른 Provider에 넘길 때 쓴다.
+typedef AuthorizedRequestRunner =
+    Future<T> Function<T>(
+      Future<T> Function(String authorizationHeader) request,
+    );
+
 /// 앱의 인증 상태를 관리하는 ChangeNotifier 기반 클래스
 class AuthProvider extends ChangeNotifier {
   AuthProvider({AuthRepository? authRepository})
     : _authRepository = authRepository ?? AuthRepository();
 
   final AuthRepository _authRepository;
+
   /// 앱 초기화 시 인증 상태를 복구했는지 여부
   bool _isInitialized = false;
   bool _isLoading = false;
   bool _isAuthenticated = false;
   bool _isCheckingLoginId = false;
   bool _isLoadingSocialAccounts = false;
+  bool _isDisposed = false;
+
+  /// 세션 만료가 확인되지 않은 오류로 세션 복구에 실패해 토큰을 남겨 둔 상태.
+  /// 화면은 상단 배너로 다시 시도([retryRestoreSession])를 안내한다.
+  bool _sessionRestoreFailed = false;
+
   /// 현재 로그인 사용자의 Google 계정 연동 상태
   bool? _googleLinked;
+
   /// 현재 로그인 사용자의 정보
   int? _userId;
   String? _loginId;
@@ -32,6 +48,7 @@ class AuthProvider extends ChangeNotifier {
   bool get isAuthenticated => _isAuthenticated;
   bool get isCheckingLoginId => _isCheckingLoginId;
   bool get isLoadingSocialAccounts => _isLoadingSocialAccounts;
+  bool get sessionRestoreFailed => _sessionRestoreFailed;
   bool? get googleLinked => _googleLinked;
 
   int? get userId => _userId;
@@ -158,6 +175,7 @@ class AuthProvider extends ChangeNotifier {
     _nickname = user.nickname;
     _profileImageUrl = user.profileImageUrl;
     _isAuthenticated = true;
+    _sessionRestoreFailed = false;
   }
 
   /// 현재 로그인 사용자의 닉네임을 변경한다.
@@ -210,57 +228,80 @@ class AuthProvider extends ChangeNotifier {
     );
   }
 
-  /// 앱 시작 시 저장된 인증정보 확인
+  /// 앱 시작 시 저장된 토큰으로 로그인 상태를 복구한다.
   ///
-  /// 현재 단계에서는 Access Token / Refresh Token의
-  /// 저장 여부를 기준으로 로그인 상태를 복구한다.
-  ///
-  /// 실제 Refresh Token 유효성 검증 및 자동 재발급은
-  /// 이후 단계에서 추가한다.
+  /// - 세션 만료가 확인되면([AuthRepository.isSessionExpiredError]) 토큰을 지운다.
+  /// - 그 밖의 실패(네트워크 오류, 5xx, 403, 재발급 뒤 401, 예상하지 못한 오류 등)는
+  ///   토큰을 남기고 [sessionRestoreFailed]를 켠다. 화면은 상단 배너로
+  ///   [retryRestoreSession]을 안내한다.
+  /// - 복구 중 다른 계정으로 로그인되면 늦게 온 복구 결과는 버린다.
   Future<void> restoreSession() async {
     if (_isInitialized) {
       return;
     }
 
+    await _restoreSessionFromStorage();
+  }
+
+  /// 일시적 장애로 실패한 세션 복구를 다시 시도한다(상단 배너의 다시 시도).
+  Future<void> retryRestoreSession() async {
+    if (!_sessionRestoreFailed || _isLoading) {
+      return;
+    }
+
+    await _restoreSessionFromStorage();
+  }
+
+  Future<void> _restoreSessionFromStorage() async {
     _setLoading(true);
     _errorMessage = null;
 
+    final sessionId = _authRepository.sessionId;
+
     try {
       final hasTokens = await _authRepository.hasTokens();
+
+      if (_authRepository.sessionId != sessionId) {
+        return;
+      }
 
       if (!hasTokens) {
         _clearUserState();
         return;
       }
 
-      try {
-        // 기존 Access Token으로 현재 사용자 조회
-        final user = await _authRepository.getCurrentUser();
+      // 401이면 getCurrentUser 안에서 같은 세션으로 재발급·재시도한다.
+      final user = await _authRepository.getCurrentUser();
 
-        _setCurrentUser(user);
-      } on ApiException catch (error) {
-        if (error.statusCode == 401) {
-          debugPrint('Access Token 인증 실패. Refresh Token으로 재발급을 시도합니다.');
-
-          await _authRepository.refreshAccessToken();
-
-          final user = await _authRepository.getCurrentUser();
-
-          _setCurrentUser(user);
-
-          debugPrint('Access Token 재발급 후 세션 복구 성공');
-        } else {
-          rethrow;
-        }
+      if (_authRepository.sessionId != sessionId) {
+        return;
       }
+
+      _setCurrentUser(user);
+    } on SessionChangedException {
+      // 복구 중 로그아웃·재로그인됨: 늦게 온 복구 응답은 버린다.
     } catch (error) {
       debugPrint('인증 상태 복구 실패: $error');
 
-      // Refresh Token까지 사용할 수 없거나
-      // 사용자 조회에 최종적으로 실패한 경우 세션 제거
-      await _authRepository.clearTokens();
+      if (_authRepository.sessionId != sessionId) {
+        return;
+      }
 
-      _clearUserState();
+      if (AuthRepository.isSessionExpiredError(error)) {
+        // 세션 만료가 확인된 경우에만 토큰을 지운다.
+        try {
+          await _authRepository.clearTokensIfSession(sessionId);
+        } catch (clearError) {
+          debugPrint('토큰 삭제 실패: $clearError');
+        }
+
+        _clearUserState();
+      } else {
+        // 만료가 확인되지 않은 실패(네트워크 오류, 5xx, 403, 재발급 뒤 401 등)는
+        // 로그인 정보를 잃지 않도록 토큰을 남기고 다시 시도를 안내한다.
+        _clearUserState();
+        _sessionRestoreFailed = true;
+      }
     } finally {
       _isInitialized = true;
       _setLoading(false);
@@ -348,12 +389,70 @@ class AuthProvider extends ChangeNotifier {
 
       _errorMessage = '로그아웃 중 오류가 발생했습니다.';
     } finally {
-      // AuthRepository에서 서버 로그아웃 성공 여부와 관계없이
-      // 로컬 토큰을 제거하므로 Flutter 인증 상태도 로그아웃으로 변경한다.
+      // AuthRepository가 로컬 토큰을 먼저 지우고 서버 로그아웃은 따로 보내므로(로컬 우선)
+      // 연결 상태와 관계없이 Flutter 인증 상태도 바로 로그아웃으로 바꾼다.
       _clearUserState();
 
       _setLoading(false);
     }
+  }
+
+  /// 로그인이 필요한 요청을 실행한다(장소 검색 등).
+  ///
+  /// 토큰 첨부, 401 재발급·재시도, 세션 확인은 [AuthRepository.authorizedRequest]가 맡는다.
+  /// - 세션 만료가 확인되면([AuthRepository.isSessionExpiredError]) 요청을 시작한 세션이
+  ///   아직 현재 세션일 때만 토큰을 지우고 로그인 상태를 해제한 뒤 [SessionExpiredException]을 던진다.
+  ///   앱은 비로그인으로도 쓸 수 있으므로 화면 이동은 하지 않는다. 안내는 호출한 화면이 맡는다.
+  /// - 요청 중 로그아웃·재로그인되면 [SessionChangedException]을 그대로 던진다.
+  ///   호출부는 현재 화면의 데이터와 오류 문구를 그대로 두고 무시한다.
+  /// - 그 밖의 오류(네트워크, 5xx 등)는 로그인 상태를 유지한 채 그대로 던진다.
+  Future<T> runAuthorizedRequest<T>(
+    Future<T> Function(String authorizationHeader) request,
+  ) async {
+    final sessionId = _authRepository.sessionId;
+
+    try {
+      return await _authRepository.authorizedRequest<T>(request);
+    } on SessionChangedException {
+      rethrow;
+    } catch (error) {
+      if (!AuthRepository.isSessionExpiredError(error)) {
+        rethrow;
+      }
+
+      final isSameSession =
+          !_isDisposed &&
+          _isAuthenticated &&
+          _authRepository.sessionId == sessionId;
+
+      if (isSameSession) {
+        debugPrint('세션 만료 확인: 로그인 상태를 해제합니다.');
+
+        await _endExpiredSession(sessionId);
+      }
+
+      throw SessionExpiredException(sessionId);
+    }
+  }
+
+  /// 만료된 세션이 아직 현재 세션일 때만 토큰을 지우고 로그인 상태를 해제한다.
+  Future<void> _endExpiredSession(int sessionId) async {
+    bool cleared;
+
+    try {
+      cleared = await _authRepository.clearTokensIfSession(sessionId);
+    } catch (error) {
+      // 저장소 삭제가 실패해도 세션 번호는 이미 바뀌었으므로 상태는 해제한다.
+      debugPrint('토큰 삭제 실패: $error');
+      cleared = true;
+    }
+
+    if (!cleared || _isDisposed) {
+      return;
+    }
+
+    _clearUserState();
+    notifyListeners();
   }
 
   /// 인증 상태를 강제로 해제할 때 사용
@@ -368,7 +467,9 @@ class AuthProvider extends ChangeNotifier {
 
     _clearUserState();
 
-    notifyListeners();
+    if (!_isDisposed) {
+      notifyListeners();
+    }
   }
 
   /// 인증 관련 단일 작업의 로딩 상태와 예외 처리를 공통으로 관리한다.
@@ -392,6 +493,11 @@ class AuthProvider extends ChangeNotifier {
     try {
       await action();
       return true;
+    } on SessionChangedException {
+      // 이전 세션에서 시작한 작업: 현재 화면의 데이터와 오류 문구를 그대로 둔다.
+      debugPrint('$logPrefix: 로그인 세션이 바뀌어 결과를 반영하지 않습니다.');
+
+      return false;
     } on ApiException catch (error) {
       debugPrint('$logPrefix: $error');
 
@@ -410,6 +516,7 @@ class AuthProvider extends ChangeNotifier {
       _setLoading(false);
     }
   }
+
   /// 인증 관련 예외 메시지를 초기화한다.
   void clearError() {
     if (_errorMessage == null) {
@@ -419,9 +526,13 @@ class AuthProvider extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
   }
+
   /// 현재 로그인 사용자의 상태를 초기화한다.
+  ///
+  /// 세션 번호는 [AuthRepository]가 토큰 저장·삭제와 함께 관리한다.
   void _clearUserState() {
     _isAuthenticated = false;
+    _sessionRestoreFailed = false;
 
     _userId = null;
     _loginId = null;
@@ -429,6 +540,7 @@ class AuthProvider extends ChangeNotifier {
     _profileImageUrl = null;
     _googleLinked = null;
   }
+
   /// 로딩 상태를 변경하고 ChangeNotifier에 알린다.
   void _setLoading(bool value) {
     if (_isLoading == value) {
@@ -438,9 +550,11 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = value;
     notifyListeners();
   }
+
   /// AuthProvider를 더 이상 사용하지 않을 때 호출한다.
   @override
   void dispose() {
+    _isDisposed = true;
     _authRepository.dispose();
     super.dispose();
   }
