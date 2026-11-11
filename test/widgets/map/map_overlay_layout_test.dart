@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/models/place_model.dart';
 import 'package:tripbler/providers/map_provider.dart';
 import 'package:tripbler/widgets/map/map_overlay_layout.dart';
+import 'package:tripbler/widgets/map/place_detail_card.dart';
 import 'package:tripbler/widgets/map/place_search_bar.dart';
 import 'package:tripbler/widgets/map/place_search_results_panel.dart';
 
@@ -31,6 +32,8 @@ class _Harness {
     required double screenHeight,
     double textScale = 1,
     bool withCard = true,
+    Widget? card,
+    MapSearchStatus panelStatus = MapSearchStatus.success,
   }) {
     return MaterialApp(
       builder: (context, child) => MediaQuery(
@@ -60,12 +63,18 @@ class _Harness {
                   onCleared: () {},
                   onUnavailable: () {},
                 ),
+                mapControlsHeight: 80,
                 mapControls: const SizedBox(key: _controlsKey, height: 80),
                 resultsPanel: PlaceSearchResultsPanel(
-                  status: MapSearchStatus.success,
+                  status: panelStatus,
                   results: [for (var i = 0; i < 20; i++) _place('$i')],
-                  error: null,
-                  canRetry: false,
+                  error: panelStatus == MapSearchStatus.failure
+                      ? const MapSearchError(
+                          type: MapSearchErrorType.network,
+                          message: '네트워크 연결을 확인해 주세요.',
+                        )
+                      : null,
+                  canRetry: panelStatus == MapSearchStatus.failure,
                   expanded: true,
                   expandedHeight: screenHeight * 0.45,
                   selectedPlaceId: null,
@@ -73,9 +82,11 @@ class _Harness {
                   onSelect: (_) {},
                   onRetry: () {},
                 ),
-                detailCard: withCard
-                    ? const SizedBox(key: _cardKey, height: 160)
-                    : null,
+                detailCard:
+                    card ??
+                    (withCard
+                        ? const SizedBox(key: _cardKey, height: 160)
+                        : null),
               ),
             ),
           ],
@@ -102,6 +113,8 @@ void main() {
     double textScale = 1,
     bool withCard = true,
     double keyboardHeight = 0,
+    Widget? card,
+    MapSearchStatus panelStatus = MapSearchStatus.success,
   }) async {
     tester.view.physicalSize = Size(320, height);
     tester.view.devicePixelRatio = 1;
@@ -116,6 +129,8 @@ void main() {
         screenHeight: height,
         textScale: textScale,
         withCard: withCard,
+        card: card,
+        panelStatus: panelStatus,
       ),
     );
   }
@@ -211,5 +226,99 @@ void main() {
 
     await tester.tapAt(Offset(160, (searchBarBottom + controlsTop) / 2));
     expect(harness.mapTapCount, 1);
+  });
+
+  group('실제 상세 카드와 함께', () {
+    var retryCount = 0;
+
+    setUp(() => retryCount = 0);
+
+    PlaceDetailCard failureCard() => PlaceDetailCard(
+      place: _place('card'),
+      detailsStatus: PlaceDetailsStatus.failure,
+      detailsLoaded: false,
+      detailsErrorMessage: '장소 상세 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      onClose: () {},
+      onDetailPressed: () => retryCount++,
+    );
+
+    Finder cardRetry() => find.descendant(
+      of: find.byType(PlaceDetailCard),
+      matching: find.text(PlaceDetailCard.retryLabel),
+    );
+
+    for (final height in [640.0, 480.0]) {
+      testWidgets(
+        '폭 320·높이 $height·큰 글자·목록 펼침·실패에서 넘치지 않고 카드의 다시 시도를 누를 수 있다',
+        (tester) async {
+          await pumpAt(
+            tester,
+            height: height,
+            textScale: 2,
+            card: failureCard(),
+            panelStatus: MapSearchStatus.failure,
+          );
+
+          expect(tester.takeException(), isNull);
+
+          final searchBarBottom = tester
+              .getRect(find.byType(PlaceSearchBar))
+              .bottom;
+          final cardRect = tester.getRect(find.byType(PlaceDetailCard));
+          final panelRect = tester.getRect(
+            find.byType(PlaceSearchResultsPanel),
+          );
+
+          expect(panelRect.top, greaterThanOrEqualTo(searchBarBottom));
+          expect(panelRect.bottom, lessThanOrEqualTo(cardRect.top));
+          expect(cardRect.bottom, lessThanOrEqualTo(height));
+
+          // 목록이 먼저 줄어든다: 펼친 높이를 다 쓰지 못한다.
+          expect(
+            panelRect.height,
+            lessThan(height * 0.45 + PlaceSearchResultsPanel.handleHeight),
+          );
+
+          // 카드 안을 스크롤해 다시 시도 버튼을 화면에 보이게 한 뒤 실제로 누른다.
+          await tester.ensureVisible(cardRetry());
+          await tester.pumpAndSettle();
+
+          final retryRect = tester.getRect(cardRetry());
+          final visibleCard = tester.getRect(find.byType(PlaceDetailCard));
+          expect(retryRect.top, greaterThanOrEqualTo(visibleCard.top));
+          expect(retryRect.bottom, lessThanOrEqualTo(visibleCard.bottom));
+
+          await tester.tap(cardRetry());
+          expect(retryCount, 1);
+        },
+      );
+    }
+
+    testWidgets('카드 높이는 남은 높이의 상한을 넘지 않는다', (tester) async {
+      await pumpAt(tester, height: 640, textScale: 2, card: failureCard());
+
+      expect(tester.takeException(), isNull);
+
+      final searchBarBottom = tester
+          .getRect(find.byType(PlaceSearchBar))
+          .bottom;
+      final available = 640 - searchBarBottom;
+      final cardHeight = tester.getSize(find.byType(PlaceDetailCard)).height;
+
+      expect(
+        cardHeight,
+        lessThanOrEqualTo(
+          available * MapOverlayLayout.detailCardMaxHeightFactor + 0.01,
+        ),
+      );
+    });
+
+    testWidgets('카드 자리가 모자라면 지도 위 버튼을 숨긴다', (tester) async {
+      await pumpAt(tester, height: 420, textScale: 2, card: failureCard());
+
+      expect(tester.takeException(), isNull);
+      expect(find.byKey(_controlsKey), findsNothing);
+      expect(find.byType(PlaceDetailCard), findsOneWidget);
+    });
   });
 }

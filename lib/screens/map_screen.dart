@@ -685,6 +685,7 @@ class _MapScreenState extends State<MapScreen> {
                       onCleared: _clearSearch,
                       onUnavailable: _onSearchUnavailable,
                     ),
+                    mapControlsHeight: _mapControlsHeight,
                     mapControls: SizedBox(
                       height: _mapControlsHeight,
                       child: Stack(
@@ -734,18 +735,29 @@ class _MapScreenState extends State<MapScreen> {
                     detailCard: selectedPlace != null
                         ? PlaceDetailCard(
                             place: selectedPlace,
+                            detailsStatus: mapProvider.detailsStatus,
+                            detailsLoaded:
+                                mapProvider.selectedPlaceDetailsLoaded,
+                            detailsStale: mapProvider.selectedPlaceDetailsStale,
+                            detailsFetchedAt:
+                                mapProvider.selectedPlaceDetailsFetchedAt,
+                            detailsErrorMessage:
+                                mapProvider.detailsErrorMessage,
 
                             // 장소 선택 해제
                             onClose: context
                                 .read<MapProvider>()
                                 .clearSelectedPlace,
 
-                            // Place Details API 요청
+                            // 평점·영업 정보 조회와 다시 시도
                             onDetailPressed: () {
                               context
                                   .read<MapProvider>()
                                   .loadSelectedPlaceDetails();
                             },
+
+                            // 길찾기는 5단계에서 연결한다. 그때까지 버튼은 꺼 둔다.
+                            onRoutePressed: null,
                           )
                         : null,
                   ),

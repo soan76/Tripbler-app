@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
@@ -137,6 +138,9 @@ class MapProvider extends ChangeNotifier {
   final LinkedHashMap<String, _CachedPlaceDetails> _detailsCache =
       LinkedHashMap<String, _CachedPlaceDetails>();
 
+  // 선택한 장소의 상세 결과가 만료되는 순간 화면에 알리는 타이머
+  Timer? _detailsExpiryTimer;
+
   MapSearchStatus get searchStatus => _searchStatus;
   List<PlaceModel> get searchResults => List.unmodifiable(_searchResults);
   MapSearchError? get searchError => _searchError;
@@ -151,6 +155,30 @@ class MapProvider extends ChangeNotifier {
 
   PlaceDetailsStatus get detailsStatus => _detailsStatus;
   String? get detailsErrorMessage => _detailsErrorMessage;
+
+  /// 선택한 장소의 상세 결과를 받아 둔 적이 있는지(만료된 결과 포함).
+  ///
+  /// 평점·영업 여부가 둘 다 없는 성공 응답도 받아 둔 것으로 본다. true면 카드가
+  /// [selectedPlace]의 평점·영업 여부를 표시한다. 만료됐는지는
+  /// [selectedPlaceDetailsStale]로 구분한다.
+  bool get selectedPlaceDetailsLoaded => _selectedCacheEntry != null;
+
+  /// 선택한 장소의 상세 결과가 30분이 지나 오래된 정보인지.
+  ///
+  /// 오래돼도 값은 지우지 않는다. 새로 고침하는 동안과 새로 고침이 실패했을 때도
+  /// 마지막 성공값과 [selectedPlaceDetailsFetchedAt]을 그대로 보여준다.
+  bool get selectedPlaceDetailsStale {
+    final entry = _selectedCacheEntry;
+    return entry != null && _isExpired(entry);
+  }
+
+  /// 선택한 장소의 상세 결과를 받은 시각(기기 현지 시간). 받은 적이 없으면 null.
+  DateTime? get selectedPlaceDetailsFetchedAt => _selectedCacheEntry?.storedAt;
+
+  _CachedPlaceDetails? get _selectedCacheEntry {
+    final selectedId = _selectedPlace?.id;
+    return selectedId == null ? null : _detailsCache[selectedId];
+  }
 
   /// 좌표가 있는 검색 결과를 모두 감싸는 범위. 카메라 이동은 화면이 맡는다.
   /// 결과가 하나면 남서·북동 꼭짓점이 같다.
@@ -487,7 +515,8 @@ class MapProvider extends ChangeNotifier {
       return;
     }
 
-    _selectedPlace = _freshCachedDetails(place.id) ?? place;
+    // 받아 둔 상세 결과가 있으면 오래됐어도 그 값을 보여준다(오래된 정보로 표시).
+    _selectedPlace = _detailsCache[place.id]?.place ?? place;
     _resetDetailsState();
     _notify();
   }
@@ -552,7 +581,8 @@ class MapProvider extends ChangeNotifier {
   Future<void> loadSelectedPlaceDetails() async {
     final selectedPlace = _selectedPlace;
 
-    if (selectedPlace == null) {
+    // 이미 조회 중이면 같은 요청을 다시 보내지 않는다.
+    if (selectedPlace == null || _detailsStatus == PlaceDetailsStatus.loading) {
       return;
     }
 
@@ -580,9 +610,11 @@ class MapProvider extends ChangeNotifier {
         return;
       }
 
+      // 새 응답의 값이 비어 있으면 이전 값도 지운다("정보 없음"으로 바뀜).
       _cachePlaceDetails(detailPlace);
       _applyPlaceDetails(detailPlace);
       _detailsStatus = PlaceDetailsStatus.idle;
+      _syncDetailsExpiryTimer();
       _notify();
     } catch (error, stackTrace) {
       debugPrint('장소 상세 조회 실패: $error');
@@ -614,11 +646,44 @@ class MapProvider extends ChangeNotifier {
       return null;
     }
 
-    if (_now().difference(entry.storedAt) >= placeDetailsCacheTtl) {
+    if (_isExpired(entry)) {
       return null;
     }
 
     return entry.place;
+  }
+
+  bool _isExpired(_CachedPlaceDetails entry) {
+    return _now().difference(entry.storedAt) >= placeDetailsCacheTtl;
+  }
+
+  /// 선택한 장소의 상세 결과가 아직 유효하면, 원래 만료 시각(받은 시각 + 30분)에
+  /// 화면에 알리도록 타이머를 맞춘다. 선택이 바뀌거나 결과가 없으면 타이머를 끈다.
+  void _syncDetailsExpiryTimer() {
+    _detailsExpiryTimer?.cancel();
+    _detailsExpiryTimer = null;
+
+    final entry = _selectedCacheEntry;
+
+    if (_isDisposed || entry == null || _isExpired(entry)) {
+      return;
+    }
+
+    final remaining = entry.storedAt
+        .add(placeDetailsCacheTtl)
+        .difference(_now());
+
+    _detailsExpiryTimer = Timer(remaining, () {
+      _detailsExpiryTimer = null;
+
+      if (_isDisposed) {
+        return;
+      }
+
+      // 기기 시계와 타이머가 어긋나 아직 유효하면 남은 시간만큼 다시 맞춘다.
+      _syncDetailsExpiryTimer();
+      _notify();
+    });
   }
 
   void _cachePlaceDetails(PlaceModel place) {
@@ -649,10 +714,12 @@ class MapProvider extends ChangeNotifier {
     _detailsRequestId++;
     _detailsStatus = PlaceDetailsStatus.idle;
     _detailsErrorMessage = null;
+    _syncDetailsExpiryTimer();
   }
 
   void selectPlace(PlaceModel place) {
-    _selectedPlace = place;
+    // 받아 둔 상세 결과가 있으면 그 값을 쓴다(조회 완료 표시와 값이 어긋나지 않게).
+    _selectedPlace = _detailsCache[place.id]?.place ?? place;
     _resetDetailsState();
     notifyListeners();
   }
@@ -691,6 +758,8 @@ class MapProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
+    _detailsExpiryTimer?.cancel();
+    _detailsExpiryTimer = null;
     _authState?.removeListener(_handleAuthStateChanged);
     _placeApiService.dispose();
     super.dispose();

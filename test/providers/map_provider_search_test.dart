@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:tripbler/core/network/api_exception.dart';
@@ -8,6 +8,7 @@ import 'package:tripbler/models/place_model.dart';
 import 'package:tripbler/providers/map_provider.dart';
 import 'package:tripbler/repositories/auth/auth_repository.dart';
 import 'package:tripbler/services/place_api_service.dart';
+import 'package:tripbler/widgets/map/place_detail_card.dart';
 
 PlaceModel _place(
   String id, {
@@ -44,6 +45,7 @@ class FakePlaceApiService extends PlaceApiService {
   final List<Completer<PlaceModel>> detailCompleters =
       <Completer<PlaceModel>>[];
   List<PlaceModel> nearbyResult = const [];
+  Object? nearbyError;
   final List<Completer<PlaceModel?>> nearestCompleters =
       <Completer<PlaceModel?>>[];
 
@@ -79,6 +81,12 @@ class FakePlaceApiService extends PlaceApiService {
     String type = 'restaurant',
     int radius = 1000,
   }) async {
+    final error = nearbyError;
+
+    if (error != null) {
+      throw error;
+    }
+
     return nearbyResult;
   }
 
@@ -676,6 +684,144 @@ void main() {
       expect(provider.selectedPlace, isNull);
       expect(provider.searchResults.single.rating, isNull);
     });
+
+    test('조회 중에는 같은 요청을 다시 보내지 않는다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+
+      final first = provider.loadSelectedPlaceDetails();
+      await provider.loadSelectedPlaceDetails();
+
+      expect(service.detailCalls, ['a']);
+      service.detailCompleters.single.complete(_place('a', rating: 4.6));
+      await first;
+      expect(provider.selectedPlace?.rating, 4.6);
+    });
+  });
+
+  group('상세 조회 완료 여부', () {
+    test('조회 전·조회 중·실패는 미완료, 성공하면 완료', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      provider.selectSearchResult(provider.searchResults.single);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      final failed = provider.loadSelectedPlaceDetails();
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+      service.detailCompleters.single.completeError(
+        const PlaceApiException(message: '실패'),
+      );
+      await failed;
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      final retried = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.last.complete(_place('a', rating: 4.6));
+      await retried;
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+    });
+
+    test('평점·영업 여부가 모두 없는 성공 응답도 완료로 본다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(_place('a'));
+      await pending;
+
+      expect(provider.selectedPlace?.rating, isNull);
+      expect(provider.selectedPlace?.openNow, isNull);
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+    });
+
+    test('기억해 둔 결과가 있는 장소를 다시 고르면 바로 완료', () async {
+      await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
+      provider.selectSearchResult(provider.searchResults.first);
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(_place('a'));
+      await pending;
+
+      provider.selectSearchResult(provider.searchResults[1]);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      provider.selectSearchResult(provider.searchResults.first);
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(service.detailCalls, ['a']);
+    });
+
+    test('A 조회를 마친 뒤 B를 고르면 B는 미완료', () async {
+      await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
+      provider.selectSearchResult(provider.searchResults.first);
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(_place('a', rating: 4.6));
+      await pending;
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+
+      provider.selectSearchResult(provider.searchResults[1]);
+
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+      expect(provider.detailsStatus, PlaceDetailsStatus.idle);
+    });
+
+    test('A 조회 중 B를 고르면 늦은 A 응답이 B를 완료로 만들지 않는다', () async {
+      await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
+      provider.selectSearchResult(provider.searchResults.first);
+      final pending = provider.loadSelectedPlaceDetails();
+
+      provider.selectSearchResult(provider.searchResults[1]);
+      service.detailCompleters.single.complete(_place('a', rating: 4.6));
+      await pending;
+
+      expect(provider.selectedPlace?.id, 'b');
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      // B는 바로 조회할 수 있다(A의 조회 중 상태가 막지 않음).
+      unawaited(provider.loadSelectedPlaceDetails());
+      expect(service.detailCalls, ['a', 'b']);
+      service.detailCompleters.last.complete(_place('b'));
+      await _flush();
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+    });
+
+    test('주변 장소에서 고를 때도 기억해 둔 상세 결과를 쓴다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(
+        _place('a', rating: 4.6, openNow: true),
+      );
+      await pending;
+
+      // 상세 값이 없는 같은 장소를 주변 장소 경로로 고른다.
+      provider.selectPlace(_place('a'));
+
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.selectedPlace?.rating, 4.6);
+      expect(provider.selectedPlace?.openNow, isTrue);
+    });
+
+    test('30분이 지나면 값은 남기고 오래된 정보가 된다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      final fetchedAt = clock;
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(_place('a', rating: 4.6));
+      await pending;
+
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+      expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
+
+      clock = clock.add(
+        MapProvider.placeDetailsCacheTtl - const Duration(seconds: 1),
+      );
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+
+      clock = clock.add(const Duration(seconds: 1));
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+      expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
+      expect(provider.selectedPlace?.rating, 4.6);
+    });
   });
 
   group('선택이 바뀔 때 상세 상태 초기화', () {
@@ -897,9 +1043,10 @@ void main() {
       expect(provider.selectedPlace?.openNow, isFalse);
     });
 
-    test('selectSearchResult는 만료된 캐시 값을 카드에 쓰지 않는다', () async {
+    test('만료 뒤 같은 장소를 다시 고르면 이전 값을 오래된 정보로 쓴다', () async {
       await searchAndSucceed('경복궁', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
+      final fetchedAt = clock;
       await loadDetails(_place('a', rating: 4.6, openNow: true));
 
       clock = clock.add(
@@ -908,13 +1055,60 @@ void main() {
       await searchAndSucceed('경복궁 근처', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
       expect(provider.selectedPlace?.openNow, isTrue);
+      expect(provider.selectedPlaceDetailsStale, isFalse);
 
       clock = clock.add(const Duration(seconds: 1));
       await searchAndSucceed('경복궁 다시', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
 
-      expect(provider.selectedPlace?.openNow, isNull);
+      expect(provider.selectedPlace?.openNow, isTrue);
+      expect(provider.selectedPlace?.rating, 4.6);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+      expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
+    });
+
+    test('새로 고침을 기다리는 동안과 실패했을 때는 이전 값과 받은 시각을 유지한다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      final fetchedAt = clock;
+      await loadDetails(_place('a', rating: 4.6, openNow: true));
+
+      clock = clock.add(MapProvider.placeDetailsCacheTtl);
+      final pending = provider.loadSelectedPlaceDetails();
+
+      expect(provider.detailsStatus, PlaceDetailsStatus.loading);
+      expect(provider.selectedPlace?.openNow, isTrue);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+      expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
+
+      service.detailCompleters.last.completeError(
+        const PlaceApiException(message: '실패'),
+      );
+      await pending;
+
+      expect(provider.detailsStatus, PlaceDetailsStatus.failure);
+      expect(provider.selectedPlace?.rating, 4.6);
+      expect(provider.selectedPlace?.openNow, isTrue);
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+      expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
+    });
+
+    test('새로 고침 응답에 값이 없으면 이전 값을 지우고 정보 없음으로 바꾼다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetails(_place('a', rating: 4.6, openNow: true));
+
+      clock = clock.add(MapProvider.placeDetailsCacheTtl);
+      final refreshedAt = clock;
+      await loadDetails(_place('a'));
+
       expect(provider.selectedPlace?.rating, isNull);
+      expect(provider.selectedPlace?.openNow, isNull);
+      expect(provider.searchResults.single.openNow, isNull);
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+      expect(provider.selectedPlaceDetailsFetchedAt, refreshedAt);
     });
   });
 
@@ -954,5 +1148,180 @@ void main() {
     expect(provider.status, MapPlaceStatus.success);
     expect(provider.places.map((p) => p.id), ['n1']);
     expect(provider.searchStatus, MapSearchStatus.idle);
+  });
+
+  group('상세 결과 만료 타이머', () {
+    /// 주입한 현재 시각과 테스트의 가짜 타이머 시간을 함께 진행시킨다.
+    Future<void> advance(WidgetTester tester, Duration duration) async {
+      clock = clock.add(duration);
+      await tester.pump(duration);
+    }
+
+    Future<void> loadDetailsNow(PlaceModel result) async {
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.last.complete(result);
+      await pending;
+    }
+
+    testWidgets('원래 만료 시각에 알린다: 14:05에 받은 장소를 14:30에 다시 열면 14:35에 만료', (
+      tester,
+    ) async {
+      clock = DateTime(2026, 11, 11, 14, 5);
+      await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
+      provider.selectSearchResult(provider.searchResults.first);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      provider.selectSearchResult(provider.searchResults[1]);
+      await advance(tester, const Duration(minutes: 25));
+
+      provider.selectSearchResult(provider.searchResults.first);
+      expect(clock, DateTime(2026, 11, 11, 14, 30));
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+
+      var notified = 0;
+      provider.addListener(() => notified++);
+
+      await advance(tester, const Duration(minutes: 4, seconds: 59));
+      expect(notified, 0);
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+
+      await advance(tester, const Duration(seconds: 1));
+      expect(clock, DateTime(2026, 11, 11, 14, 35));
+      expect(notified, 1);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+      expect(provider.selectedPlace?.openNow, isTrue);
+    });
+
+    testWidgets('카드를 닫거나 다른 장소를 고르면 이전 장소의 만료를 알리지 않는다', (tester) async {
+      await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
+      provider.selectSearchResult(provider.searchResults.first);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      var notified = 0;
+      provider.addListener(() => notified++);
+
+      provider.clearSelectedPlace();
+      provider.selectSearchResult(provider.searchResults[1]);
+      final afterSelect = notified;
+
+      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      expect(notified, afterSelect);
+    });
+
+    testWidgets('새로 고침에 성공하면 그 시각부터 다시 30분 뒤에 알린다', (tester) async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+
+      await loadDetailsNow(_place('a', openNow: false));
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+
+      var notified = 0;
+      provider.addListener(() => notified++);
+
+      await advance(
+        tester,
+        MapProvider.placeDetailsCacheTtl - const Duration(seconds: 1),
+      );
+      expect(notified, 0);
+
+      await advance(tester, const Duration(seconds: 1));
+      expect(notified, 1);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+    });
+
+    testWidgets('로그아웃하면 타이머를 끈다', (tester) async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      authState.signOut();
+
+      var notified = 0;
+      provider.addListener(() => notified++);
+      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      expect(notified, 0);
+    });
+
+    testWidgets('dispose하면 타이머를 끈다', (tester) async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      provider.dispose();
+      disposedInTest = true;
+
+      // 시간을 진행시키지 않고 끝낸다. dispose가 타이머를 끄지 않으면 testWidgets가
+      // 테스트 끝에 남은 타이머(A Timer is still pending)로 실패시킨다.
+    });
+
+    for (final fails in [false, true]) {
+      testWidgets('주변 장소 조회(${fails ? '실패' : '성공'})로 선택이 풀리면 타이머를 끈다', (
+        tester,
+      ) async {
+        await searchAndSucceed('경복궁', [_place('a')]);
+        provider.selectSearchResult(provider.searchResults.single);
+        await loadDetailsNow(_place('a', openNow: true));
+
+        if (fails) {
+          service.nearbyError = const PlaceApiException(message: '실패');
+        } else {
+          service.nearbyResult = [_place('n1')];
+        }
+
+        await provider.loadNearbyPlaces(latitude: 37.5, longitude: 126.9);
+        expect(provider.selectedPlace, isNull);
+
+        var notified = 0;
+        provider.addListener(() => notified++);
+
+        await advance(tester, MapProvider.placeDetailsCacheTtl);
+        expect(notified, 0);
+      });
+    }
+
+    testWidgets('지도 이벤트 없이 열어 둔 카드에 30분 뒤 새로 고침이 나타난다', (tester) async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      // 화면 대역: Provider 알림으로만 다시 그린다(지도·위치 갱신 없음).
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: provider,
+              builder: (context, _) => PlaceDetailCard(
+                place: provider.selectedPlace!,
+                detailsStatus: provider.detailsStatus,
+                detailsLoaded: provider.selectedPlaceDetailsLoaded,
+                detailsStale: provider.selectedPlaceDetailsStale,
+                detailsFetchedAt: provider.selectedPlaceDetailsFetchedAt,
+                detailsErrorMessage: provider.detailsErrorMessage,
+                onClose: () {},
+                onDetailPressed: provider.loadSelectedPlaceDetails,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('영업 중'), findsOneWidget);
+      expect(find.text(PlaceDetailCard.refreshLabel), findsNothing);
+
+      await advance(
+        tester,
+        MapProvider.placeDetailsCacheTtl - const Duration(seconds: 1),
+      );
+      expect(find.text(PlaceDetailCard.refreshLabel), findsNothing);
+
+      await advance(tester, const Duration(seconds: 1));
+      expect(find.text(PlaceDetailCard.refreshLabel), findsOneWidget);
+      expect(find.text('영업 중'), findsOneWidget);
+      expect(find.textContaining(PlaceDetailCard.staleLabel), findsOneWidget);
+    });
   });
 }
