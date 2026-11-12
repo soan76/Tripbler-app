@@ -44,8 +44,12 @@ class PlaceDetailCard extends StatelessWidget {
   static const String refreshLabel = '새로 고침';
   static const String staleLabel = '오래된 정보';
 
-  /// 길찾기 버튼이 꺼져 있을 때 버튼 아래에 붙이는 안내.
-  static const String routeUnavailableLabel = '길찾기는 준비 중입니다';
+  /// 길찾기 버튼의 낭독 문구. 누르면 Tripbler를 떠나 Google 지도(앱 또는 브라우저)로
+  /// 넘어간다는 것을 미리 알린다. 화면에는 아이콘이 길찾기를 나타내므로 글자는 짧게 둔다.
+  static const String routeSemanticsLabel = '길찾기, Google 지도에서 열기';
+
+  /// 길찾기를 열지 못했을 때 화면이 띄우는 안내.
+  static const String routeFailedMessage = '길찾기를 열 수 없습니다';
 
   /// 버튼 두 개를 한 줄에 놓을 최소 폭(글자 배율 1 기준). 좁으면 세로로 쌓는다.
   static const double _buttonRowMinWidth = 320;
@@ -74,7 +78,7 @@ class PlaceDetailCard extends StatelessWidget {
   /// 상세 조회와 다시 시도에 쓴다.
   final VoidCallback onDetailPressed;
 
-  /// null이면 길찾기 버튼이 꺼진다(5단계에서 연결).
+  /// 길찾기 열기. null이면 버튼이 꺼진다.
   final VoidCallback? onRoutePressed;
 
   bool get _isLoading => detailsStatus == PlaceDetailsStatus.loading;
@@ -196,15 +200,6 @@ class PlaceDetailCard extends StatelessWidget {
                     ],
                     const SizedBox(height: 16),
                     _buildButtons(context),
-                    if (onRoutePressed == null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        routeUnavailableLabel,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -331,7 +326,7 @@ class PlaceDetailCard extends StatelessWidget {
       onPressed: onRoutePressed,
       style: style,
       icon: const Icon(Icons.directions_outlined),
-      label: const Text(routeLabel),
+      label: const Text(routeLabel, semanticsLabel: routeSemanticsLabel),
     );
 
     // 유효한 값을 받아 두었으면 상세 버튼을 숨기고 길찾기만 남긴다.

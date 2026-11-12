@@ -42,6 +42,7 @@ void main() {
     String? errorMessage,
     double width = 400,
     double textScale = 1,
+    VoidCallback? onRoutePressed,
   }) async {
     tester.view.physicalSize = Size(width, 800);
     tester.view.devicePixelRatio = 1;
@@ -68,6 +69,7 @@ void main() {
               detailsErrorMessage: errorMessage,
               onClose: () => closed++,
               onDetailPressed: () => detailPressed++,
+              onRoutePressed: onRoutePressed,
             ),
           ),
         ),
@@ -202,14 +204,71 @@ void main() {
     });
   });
 
-  testWidgets('길찾기 버튼은 보이지만 꺼져 있다', (tester) async {
+  testWidgets('길찾기 콜백이 없으면 버튼만 꺼지고 준비 중 문구는 없다', (tester) async {
     for (final loaded in [false, true]) {
       await pumpCard(tester, loaded: loaded);
 
       expect(find.text(PlaceDetailCard.routeLabel), findsOneWidget);
       expect(isEnabled(tester, PlaceDetailCard.routeLabel), isFalse);
-      expect(find.text(PlaceDetailCard.routeUnavailableLabel), findsOneWidget);
+      expect(find.text('길찾기는 준비 중입니다'), findsNothing);
     }
+  });
+
+  testWidgets('길찾기 버튼은 상세 조회 상태와 상관없이 켜지고 한 번 누르면 콜백이 한 번 불린다', (tester) async {
+    for (final status in PlaceDetailsStatus.values) {
+      for (final loaded in [false, true]) {
+        var routePressed = 0;
+
+        await pumpCard(
+          tester,
+          status: status,
+          loaded: loaded,
+          onRoutePressed: () => routePressed++,
+        );
+
+        expect(isEnabled(tester, PlaceDetailCard.routeLabel), isTrue);
+
+        await tester.tap(find.text(PlaceDetailCard.routeLabel));
+        await tester.pump();
+
+        expect(routePressed, 1, reason: '$status, loaded: $loaded');
+        expect(detailPressed, 0);
+      }
+    }
+  });
+
+  testWidgets('좌표가 없는 장소도 길찾기 버튼이 켜진다', (tester) async {
+    await pumpCard(
+      tester,
+      place: const PlaceModel(
+        id: 'no-coordinates',
+        name: '좌표 없는 장소',
+        latitude: null,
+        longitude: null,
+        address: '주소',
+        rating: null,
+        category: 'cafe',
+        openNow: null,
+      ),
+      onRoutePressed: () {},
+    );
+
+    expect(isEnabled(tester, PlaceDetailCard.routeLabel), isTrue);
+  });
+
+  testWidgets('길찾기 버튼은 Google 지도로 넘어간다는 것을 낭독 문구로 알린다', (tester) async {
+    final semantics = tester.ensureSemantics();
+
+    await pumpCard(tester, onRoutePressed: () {});
+
+    expect(
+      find.bySemanticsLabel(PlaceDetailCard.routeSemanticsLabel),
+      findsOneWidget,
+    );
+    // 화면 글자는 짧은 "길찾기" 그대로다.
+    expect(find.text(PlaceDetailCard.routeLabel), findsOneWidget);
+
+    semantics.dispose();
   });
 
   testWidgets('버튼은 터치 영역 48 이상이고, 넓으면 나란히 좁거나 글자가 크면 세로로 놓인다', (tester) async {

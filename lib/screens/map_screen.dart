@@ -9,6 +9,7 @@ import '../providers/tab_provider.dart';
 import '../services/map/location_service.dart';
 import '../services/map/map_location_controller.dart';
 import '../services/map/map_marker_icon_service.dart';
+import '../services/map/route_launcher.dart';
 import '../utils/map/scale_bar_calculator.dart';
 import '../utils/map/search_query_normalizer.dart';
 import 'auth/login_screen.dart';
@@ -87,6 +88,9 @@ class _MapScreenState extends State<MapScreen> {
 
   // 현재 위치 마커 아이콘 생성 Service
   final MapMarkerIconService _markerIconService = const MapMarkerIconService();
+
+  // Google 지도 길찾기를 외부 앱으로 여는 Service
+  final RouteLauncher _routeLauncher = RouteLauncher();
 
   // Google Map Controller
   GoogleMapController? _mapController;
@@ -361,6 +365,15 @@ class _MapScreenState extends State<MapScreen> {
       ..showSnackBar(
         SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
       );
+  }
+
+  /// 선택한 장소로 Google 지도 길찾기를 연다. 실패하면 카드는 그대로 두고 안내한다.
+  Future<void> _openDirections(PlaceModel place) async {
+    final result = await _routeLauncher.openDirections(place);
+
+    if (result == RouteLaunchResult.failed) {
+      _showMapSnackBar(PlaceDetailCard.routeFailedMessage);
+    }
   }
 
   // ----- 장소 검색 -----
@@ -759,8 +772,9 @@ class _MapScreenState extends State<MapScreen> {
                                   .loadSelectedPlaceDetails();
                             },
 
-                            // 길찾기는 5단계에서 연결한다. 그때까지 버튼은 꺼 둔다.
-                            onRoutePressed: null,
+                            // Google 지도 길찾기 열기
+                            onRoutePressed: () =>
+                                _openDirections(selectedPlace),
                           )
                         : null,
                   ),

@@ -142,6 +142,10 @@ class MapProvider extends ChangeNotifier {
   // 자정) 화면에 알리는 타이머
   Timer? _detailsDisplayTimer;
 
+  // 지금 열린 카드에서 사용자가 "평점·영업 정보"를 누른 장소 id. 카드를 새로 열 때
+  // (닫기, 다른 장소 선택) 비워, 받아 둔 결과가 있어도 버튼부터 다시 보이게 한다.
+  String? _detailsRevealedPlaceId;
+
   MapSearchStatus get searchStatus => _searchStatus;
   List<PlaceModel> get searchResults => List.unmodifiable(_searchResults);
   MapSearchError? get searchError => _searchError;
@@ -157,7 +161,8 @@ class MapProvider extends ChangeNotifier {
   PlaceDetailsStatus get detailsStatus => _detailsStatus;
   String? get detailsErrorMessage => _detailsErrorMessage;
 
-  /// 선택한 장소의 상세 결과를 받아 둔 적이 있는지(만료된 결과 포함).
+  /// 지금 열린 카드에서 버튼을 눌렀고, 선택한 장소의 상세 결과를 받아 둔 적이
+  /// 있는지(만료된 결과 포함). 카드를 새로 열면 버튼을 누르기 전까지 false다.
   ///
   /// 평점·영업 여부가 둘 다 없는 성공 응답도 받아 둔 것으로 본다. true면 카드가
   /// [selectedPlace]의 평점·영업 여부를 표시한다. 만료됐는지는
@@ -179,9 +184,16 @@ class MapProvider extends ChangeNotifier {
   /// 선택한 장소의 상세 결과를 받은 시각(기기 현지 시간). 받은 적이 없으면 null.
   DateTime? get selectedPlaceDetailsFetchedAt => _selectedCacheEntry?.storedAt;
 
+  /// 지금 열린 카드에 보여줄 상세 결과. 이 카드에서 버튼을 누르기 전이면 받아 둔
+  /// 결과가 있어도 null이다.
   _CachedPlaceDetails? get _selectedCacheEntry {
     final selectedId = _selectedPlace?.id;
-    return selectedId == null ? null : _detailsCache[selectedId];
+
+    if (selectedId == null || selectedId != _detailsRevealedPlaceId) {
+      return null;
+    }
+
+    return _detailsCache[selectedId];
   }
 
   /// 좌표가 있는 검색 결과를 모두 감싸는 범위. 카메라 이동은 화면이 맡는다.
@@ -311,8 +323,7 @@ class MapProvider extends ChangeNotifier {
   }) async {
     _status = MapPlaceStatus.loading;
     _errorMessage = null;
-    _selectedPlace = null;
-    _resetDetailsState();
+    _clearSelectionState();
     notifyListeners();
 
     try {
@@ -331,8 +342,7 @@ class MapProvider extends ChangeNotifier {
       debugPrint('$stackTrace');
 
       _places = [];
-      _selectedPlace = null;
-      _resetDetailsState();
+      _clearSelectionState();
       _errorMessage = error.toString();
       _status = MapPlaceStatus.failure;
       notifyListeners();
@@ -519,8 +529,9 @@ class MapProvider extends ChangeNotifier {
       return;
     }
 
-    // 받아 둔 상세 결과가 있으면 오래됐어도 그 값을 보여준다(오래된 정보로 표시).
-    _selectedPlace = _detailsCache[place.id]?.place ?? place;
+    // 받아 둔 상세 결과로 장소 값은 맞춰 두되, 카드는 버튼부터 보인다.
+    _selectedPlace = _withCachedDetails(place);
+    _detailsRevealedPlaceId = null;
     _resetDetailsState();
     _notify();
   }
@@ -589,6 +600,13 @@ class MapProvider extends ChangeNotifier {
     if (selectedPlace == null || _detailsStatus == PlaceDetailsStatus.loading) {
       return;
     }
+
+    // 이 카드에서 버튼을 눌렀다: 받아 둔 결과가 있으면 바로 보인다. 오래된 결과는
+    // 새로 조회하는 동안 오래된 정보로 함께 보인다.
+    _detailsRevealedPlaceId = selectedPlace.id;
+
+    // 보이기 시작한 결과의 만료·자정 표시 변화에 맞춰 타이머를 다시 맞춘다.
+    _syncDetailsDisplayTimer();
 
     final cachedPlace = _freshCachedDetails(selectedPlace.id);
 
@@ -729,14 +747,42 @@ class MapProvider extends ChangeNotifier {
   }
 
   // 상세 결과로 선택한 장소와, 같은 id의 주변 장소·검색 결과 항목을 함께 갱신한다.
+  //
+  // 상세 조회는 평점·영업 여부만 쓴다. 이름·주소·분류·좌표는 검색 결과 값을 그대로
+  // 둔다(상세 응답은 언어 설정이 달라 이름·주소가 영어로 올 수 있다).
   void _applyPlaceDetails(PlaceModel detailPlace) {
-    _selectedPlace = detailPlace;
-
     PlaceModel replace(PlaceModel place) =>
-        place.id == detailPlace.id ? detailPlace : place;
+        place.id == detailPlace.id ? _withDetails(place, detailPlace) : place;
+
+    final selectedPlace = _selectedPlace;
+
+    if (selectedPlace != null) {
+      _selectedPlace = replace(selectedPlace);
+    }
 
     _places = _places.map(replace).toList();
     _searchResults = _searchResults.map(replace).toList();
+  }
+
+  /// [place]에 상세 결과의 평점·영업 여부만 덮는다. 상세 값이 null이면 null로 바꾼다
+  /// ("정보 없음"으로 표시).
+  static PlaceModel _withDetails(PlaceModel place, PlaceModel details) {
+    return PlaceModel(
+      id: place.id,
+      name: place.name,
+      latitude: place.latitude,
+      longitude: place.longitude,
+      address: place.address,
+      rating: details.rating,
+      category: place.category,
+      openNow: details.openNow,
+    );
+  }
+
+  /// 받아 둔 상세 결과가 있으면 평점·영업 여부만 반영한 장소를 돌려준다.
+  PlaceModel _withCachedDetails(PlaceModel place) {
+    final cached = _detailsCache[place.id]?.place;
+    return cached == null ? place : _withDetails(place, cached);
   }
 
   void _resetDetailsState() {
@@ -748,8 +794,14 @@ class MapProvider extends ChangeNotifier {
   }
 
   void selectPlace(PlaceModel place) {
-    // 받아 둔 상세 결과가 있으면 그 값을 쓴다(조회 완료 표시와 값이 어긋나지 않게).
-    _selectedPlace = _detailsCache[place.id]?.place ?? place;
+    // 카드가 열린 채 같은 장소를 다시 고르면 보이던 정보를 그대로 둔다.
+    if (_selectedPlace?.id == place.id) {
+      return;
+    }
+
+    // 받아 둔 상세 결과로 장소 값은 맞춰 두되, 카드는 버튼부터 보인다.
+    _selectedPlace = _withCachedDetails(place);
+    _detailsRevealedPlaceId = null;
     _resetDetailsState();
     notifyListeners();
   }
@@ -766,6 +818,7 @@ class MapProvider extends ChangeNotifier {
 
   void _clearSelectionState() {
     _selectedPlace = null;
+    _detailsRevealedPlaceId = null;
     _resetDetailsState();
   }
 

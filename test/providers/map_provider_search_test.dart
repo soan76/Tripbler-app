@@ -594,6 +594,57 @@ void main() {
       expect(provider.searchResults.first.openNow, isTrue);
     });
 
+    test('상세 응답에서는 평점·영업 여부만 쓰고 이름·주소·분류·좌표는 검색 결과 값을 유지한다', () async {
+      const korean = PlaceModel(
+        id: 'a',
+        name: '경복궁',
+        latitude: 37.5796,
+        longitude: 126.977,
+        address: '서울특별시 종로구 사직로 161',
+        rating: null,
+        category: 'tourist_attraction',
+        openNow: null,
+      );
+      const english = PlaceModel(
+        id: 'a',
+        name: 'Gyeongbokgung Palace',
+        latitude: 37.58,
+        longitude: 126.98,
+        address: '161 Sajik-ro, Jongno District, Seoul',
+        rating: 4.6,
+        category: 'historical_landmark',
+        openNow: true,
+      );
+
+      void expectKoreanWithDetails(PlaceModel? place) {
+        expect(place?.name, '경복궁');
+        expect(place?.address, '서울특별시 종로구 사직로 161');
+        expect(place?.category, 'tourist_attraction');
+        expect(place?.latitude, 37.5796);
+        expect(place?.longitude, 126.977);
+        expect(place?.rating, 4.6);
+        expect(place?.openNow, isTrue);
+      }
+
+      await searchAndSucceed('경복궁', [korean, _place('b')]);
+      provider.selectSearchResult(provider.searchResults.first);
+
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(english);
+      await pending;
+
+      expectKoreanWithDetails(provider.selectedPlace);
+      expectKoreanWithDetails(provider.searchResults.first);
+
+      // 다른 장소를 골랐다 돌아와 버튼을 눌러도(기억해 둔 결과) 한국어 값을 유지한다.
+      provider.selectSearchResult(provider.searchResults[1]);
+      provider.selectSearchResult(provider.searchResults.first);
+      expect(provider.selectedPlace?.name, '경복궁');
+      await provider.loadSelectedPlaceDetails();
+      expectKoreanWithDetails(provider.selectedPlace);
+      expect(service.detailCalls, ['a']);
+    });
+
     test('같은 장소를 다시 열면 기억해 둔 상세 결과를 쓰고 다시 조회하지 않는다', () async {
       await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
       provider.selectSearchResult(provider.searchResults.first);
@@ -734,19 +785,97 @@ void main() {
       expect(provider.selectedPlaceDetailsLoaded, isTrue);
     });
 
-    test('기억해 둔 결과가 있는 장소를 다시 고르면 바로 완료', () async {
+    test('기억해 둔 결과가 있어도 다시 고르면 버튼부터, 누르면 다시 조회하지 않고 바로 완료', () async {
       await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
       provider.selectSearchResult(provider.searchResults.first);
       final pending = provider.loadSelectedPlaceDetails();
       service.detailCompleters.single.complete(_place('a'));
       await pending;
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
 
       provider.selectSearchResult(provider.searchResults[1]);
       expect(provider.selectedPlaceDetailsLoaded, isFalse);
 
       provider.selectSearchResult(provider.searchResults.first);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+      expect(provider.selectedPlaceDetailsFetchedAt, isNull);
+
+      await provider.loadSelectedPlaceDetails();
       expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.detailsStatus, PlaceDetailsStatus.idle);
       expect(service.detailCalls, ['a']);
+    });
+
+    test('카드를 닫았다 같은 장소를 다시 열면 버튼부터 보인다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      final loading = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.last.complete(
+        _place('a', rating: 4.6, openNow: true),
+      );
+      await loading;
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+
+      provider.clearSelectedPlace();
+      provider.selectSearchResult(provider.searchResults.single);
+
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+      expect(provider.selectedPlaceDetailsFetchedAt, isNull);
+
+      await provider.loadSelectedPlaceDetails();
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.selectedPlace?.rating, 4.6);
+      expect(service.detailCalls, ['a']);
+    });
+
+    test('카드가 열린 채 주변 장소 경로로 같은 장소를 다시 골라도 보이던 정보를 유지한다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      final loading = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.last.complete(_place('a', openNow: true));
+      await loading;
+
+      provider.selectPlace(_place('a'));
+
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.selectedPlace?.openNow, isTrue);
+    });
+
+    test('조회 중 다른 장소를 골랐다 돌아오면 버튼부터이고 늦은 응답은 반영하지 않는다', () async {
+      await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
+      provider.selectSearchResult(provider.searchResults.first);
+      final pending = provider.loadSelectedPlaceDetails();
+      expect(provider.detailsStatus, PlaceDetailsStatus.loading);
+
+      provider.selectSearchResult(provider.searchResults[1]);
+      provider.selectSearchResult(provider.searchResults.first);
+
+      service.detailCompleters.single.complete(_place('a', openNow: true));
+      await pending;
+
+      expect(provider.detailsStatus, PlaceDetailsStatus.idle);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+      expect(provider.selectedPlace?.openNow, isNull);
+
+      // 늦은 응답은 기억해 두지 않았으므로 버튼을 누르면 다시 조회한다.
+      unawaited(provider.loadSelectedPlaceDetails());
+      expect(service.detailCalls, ['a', 'a']);
+      service.detailCompleters.last.complete(_place('a'));
+      await _flush();
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+    });
+
+    test('카드가 열린 채 같은 장소를 다시 고르면 보이던 정보를 유지한다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      final loading = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.last.complete(_place('a', openNow: true));
+      await loading;
+
+      provider.selectSearchResult(provider.searchResults.single);
+
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
     });
 
     test('A 조회를 마친 뒤 B를 고르면 B는 미완료', () async {
@@ -792,12 +921,18 @@ void main() {
       );
       await pending;
 
-      // 상세 값이 없는 같은 장소를 주변 장소 경로로 고른다.
+      // 카드를 닫고, 상세 값이 없는 같은 장소를 주변 장소 경로로 다시 고른다.
+      provider.clearSelectedPlace();
       provider.selectPlace(_place('a'));
 
+      // 카드는 버튼부터 보이지만, 누르면 기억해 둔 값이 그대로 나온다.
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      await provider.loadSelectedPlaceDetails();
       expect(provider.selectedPlaceDetailsLoaded, isTrue);
       expect(provider.selectedPlace?.rating, 4.6);
       expect(provider.selectedPlace?.openNow, isTrue);
+      expect(service.detailCalls, ['a']);
     });
 
     test('30분이 지나면 값은 남기고 오래된 정보가 된다', () async {
@@ -1043,7 +1178,7 @@ void main() {
       expect(provider.selectedPlace?.openNow, isFalse);
     });
 
-    test('만료 뒤 같은 장소를 다시 고르면 이전 값을 오래된 정보로 쓴다', () async {
+    test('만료 뒤 다시 열어 버튼을 누르면 새로 조회하는 동안 이전 값을 오래된 정보로 쓴다', () async {
       await searchAndSucceed('경복궁', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
       final fetchedAt = clock;
@@ -1054,17 +1189,34 @@ void main() {
       );
       await searchAndSucceed('경복궁 근처', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      // 아직 유효하면 다시 조회하지 않는다.
+      await provider.loadSelectedPlaceDetails();
       expect(provider.selectedPlace?.openNow, isTrue);
       expect(provider.selectedPlaceDetailsStale, isFalse);
+      expect(service.detailCalls, ['a']);
 
       clock = clock.add(const Duration(seconds: 1));
       await searchAndSucceed('경복궁 다시', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+      expect(provider.selectedPlaceDetailsStale, isFalse);
 
+      final pending = provider.loadSelectedPlaceDetails();
+
+      expect(provider.detailsStatus, PlaceDetailsStatus.loading);
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
       expect(provider.selectedPlace?.openNow, isTrue);
       expect(provider.selectedPlace?.rating, 4.6);
       expect(provider.selectedPlaceDetailsStale, isTrue);
       expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
+      expect(service.detailCalls, ['a', 'a']);
+
+      service.detailCompleters.last.complete(_place('a', openNow: false));
+      await pending;
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+      expect(provider.selectedPlace?.openNow, isFalse);
     });
 
     test('새로 고침을 기다리는 동안과 실패했을 때는 이전 값과 받은 시각을 유지한다', () async {
@@ -1092,6 +1244,40 @@ void main() {
       expect(provider.selectedPlaceDetailsLoaded, isTrue);
       expect(provider.selectedPlaceDetailsStale, isTrue);
       expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
+    });
+
+    test('다시 연 카드에서 새로 고침이 실패한 뒤 다시 시도해도 오래된 값을 계속 보인다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      final fetchedAt = clock;
+      await loadDetails(_place('a', rating: 4.6, openNow: true));
+
+      clock = clock.add(MapProvider.placeDetailsCacheTtl);
+      provider.clearSelectedPlace();
+      provider.selectSearchResult(provider.searchResults.single);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      final failed = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.last.completeError(
+        const PlaceApiException(message: '실패'),
+      );
+      await failed;
+      expect(provider.detailsStatus, PlaceDetailsStatus.failure);
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+
+      final retry = provider.loadSelectedPlaceDetails();
+      expect(provider.detailsStatus, PlaceDetailsStatus.loading);
+      expect(provider.selectedPlaceDetailsLoaded, isTrue);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+      expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
+      expect(provider.selectedPlace?.openNow, isTrue);
+
+      service.detailCompleters.last.complete(_place('a', openNow: false));
+      await retry;
+      expect(provider.selectedPlaceDetailsStale, isFalse);
+      expect(provider.selectedPlace?.openNow, isFalse);
+      expect(service.detailCalls, ['a', 'a', 'a']);
     });
 
     test('새로 고침 응답에 값이 없으면 이전 값을 지우고 정보 없음으로 바꾼다', () async {
@@ -1134,6 +1320,8 @@ void main() {
     await searchAndSucceed('경복궁', [_place('a')]);
     provider.selectSearchResult(provider.searchResults.single);
     expect(provider.selectedPlace?.rating, isNull);
+    expect(provider.selectedPlaceDetailsLoaded, isFalse);
+    expect(provider.detailsStatus, PlaceDetailsStatus.idle);
     unawaited(provider.loadSelectedPlaceDetails());
     expect(service.detailCalls, ['a', 'a']);
     service.detailCompleters.last.complete(_place('a'));
@@ -1163,6 +1351,62 @@ void main() {
       await pending;
     }
 
+    testWidgets('다시 연 카드에서 버튼을 누르기 전에는 만료·자정 알림을 하지 않는다', (tester) async {
+      clock = DateTime(2026, 11, 11, 14, 5);
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      provider.clearSelectedPlace();
+      provider.selectSearchResult(provider.searchResults.single);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      var notified = 0;
+      provider.addListener(() => notified++);
+
+      // 원래 만료 시각(14:35)과 다음 자정을 모두 지나도 알리지 않는다.
+      await advance(tester, const Duration(hours: 10));
+      expect(clock, DateTime(2026, 11, 12, 0, 5));
+      expect(notified, 0);
+      expect(provider.selectedPlaceDetailsLoaded, isFalse);
+
+      // 남은 타이머가 없으므로 정리 없이 끝난다(testWidgets가 남은 타이머를 검사한다).
+    });
+
+    testWidgets('다시 연 오래된 카드에서 새로 고침이 실패해도 자정에 날짜 표시를 알린다', (tester) async {
+      clock = DateTime(2026, 11, 11, 22);
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      provider.clearSelectedPlace();
+      await advance(tester, const Duration(minutes: 40));
+      provider.selectSearchResult(provider.searchResults.single);
+
+      final failed = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.last.completeError(
+        const PlaceApiException(message: '실패'),
+      );
+      await failed;
+      expect(provider.detailsStatus, PlaceDetailsStatus.failure);
+      expect(provider.selectedPlaceDetailsStale, isTrue);
+
+      var notified = 0;
+      provider.addListener(() => notified++);
+
+      await advance(tester, const Duration(minutes: 1, seconds: 59));
+      expect(notified, 0);
+
+      // 22:40 + 1:19:59 = 23:59:59, 1초 뒤 자정.
+      await advance(tester, const Duration(hours: 1, minutes: 18));
+      expect(notified, 0);
+      await advance(tester, const Duration(seconds: 1));
+      expect(clock, DateTime(2026, 11, 12));
+      expect(notified, 1);
+
+      provider.clearSelectedPlace();
+    });
+
     testWidgets('원래 만료 시각에 알린다: 14:05에 받은 장소를 14:30에 다시 열면 14:35에 만료', (
       tester,
     ) async {
@@ -1176,6 +1420,9 @@ void main() {
 
       provider.selectSearchResult(provider.searchResults.first);
       expect(clock, DateTime(2026, 11, 11, 14, 30));
+
+      // 다시 연 카드는 버튼부터다. 누르면 받아 둔 값을 원래 만료 시각 기준으로 쓴다.
+      await provider.loadSelectedPlaceDetails();
       expect(provider.selectedPlaceDetailsStale, isFalse);
 
       var notified = 0;
