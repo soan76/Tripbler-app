@@ -20,3 +20,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   2. `design-improver`가 바뀐 화면의 디자인과 사용성을 다듬는다.
   3. `code-inspector`로 전체를 점검하고 결과를 보고한다.
 - 화면 변경이 없는 구현(로직, API, 테스트만 바꾸는 경우)은 `design-improver`를 쓰지 않는다.
+
+## 커밋
+- Claude가 만들거나 작성을 도운 커밋은 메시지 끝에 빈 줄을 두고 공동 작성자 줄을 넣는다. 이름에는 작업한 모델 이름을 쓰고, 이메일은 항상 `noreply@anthropic.com`을 쓴다(GitHub는 이 이메일로 공동 작성자를 표시한다).
+  ```
+  Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+  ```
+- 이미 푸시한 커밋에 이 줄을 넣으려고 기록을 다시 쓰지 않는다.
