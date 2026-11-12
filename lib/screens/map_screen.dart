@@ -741,6 +741,9 @@ class _MapScreenState extends State<MapScreen> {
                             detailsStale: mapProvider.selectedPlaceDetailsStale,
                             detailsFetchedAt:
                                 mapProvider.selectedPlaceDetailsFetchedAt,
+
+                            // 만료 판단과 같은 시계로 날짜 표시를 정한다.
+                            now: mapProvider.now,
                             detailsErrorMessage:
                                 mapProvider.detailsErrorMessage,
 

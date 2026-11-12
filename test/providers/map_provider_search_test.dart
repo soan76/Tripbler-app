@@ -1190,6 +1190,9 @@ void main() {
       expect(notified, 1);
       expect(provider.selectedPlaceDetailsStale, isTrue);
       expect(provider.selectedPlace?.openNow, isTrue);
+
+      // 오래된 정보가 남아 자정 타이머가 걸려 있으므로 카드를 닫아 정리한다.
+      provider.clearSelectedPlace();
     });
 
     testWidgets('카드를 닫거나 다른 장소를 고르면 이전 장소의 만료를 알리지 않는다', (tester) async {
@@ -1231,6 +1234,9 @@ void main() {
       await advance(tester, const Duration(seconds: 1));
       expect(notified, 1);
       expect(provider.selectedPlaceDetailsStale, isTrue);
+
+      // 오래된 정보가 남아 자정 타이머가 걸려 있으므로 카드를 닫아 정리한다.
+      provider.clearSelectedPlace();
     });
 
     testWidgets('로그아웃하면 타이머를 끈다', (tester) async {
@@ -1322,6 +1328,72 @@ void main() {
       expect(find.text(PlaceDetailCard.refreshLabel), findsOneWidget);
       expect(find.text('영업 중'), findsOneWidget);
       expect(find.textContaining(PlaceDetailCard.staleLabel), findsOneWidget);
+
+      // 오래된 정보가 남아 자정 타이머가 걸려 있으므로 카드를 닫아 정리한다.
+      provider.clearSelectedPlace();
+    });
+
+    testWidgets('오래된 카드를 연 채 자정을 넘기면 다른 이벤트 없이 날짜가 붙는다', (tester) async {
+      clock = DateTime(2026, 11, 11, 22);
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetailsNow(_place('a', openNow: true));
+
+      // 화면 대역: Provider 알림으로만 다시 그리고, 날짜 판단도 Provider의 시계를 쓴다.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListenableBuilder(
+              listenable: provider,
+              builder: (context, _) => PlaceDetailCard(
+                place: provider.selectedPlace!,
+                detailsStatus: provider.detailsStatus,
+                detailsLoaded: provider.selectedPlaceDetailsLoaded,
+                detailsStale: provider.selectedPlaceDetailsStale,
+                detailsFetchedAt: provider.selectedPlaceDetailsFetchedAt,
+                detailsErrorMessage: provider.detailsErrorMessage,
+                now: provider.now,
+                onClose: () {},
+                onDetailPressed: provider.loadSelectedPlaceDetails,
+              ),
+            ),
+          ),
+        ),
+      );
+
+      const sameDay = '${PlaceDetailCard.staleLabel} · 22:00 기준';
+      const nextDay = '${PlaceDetailCard.staleLabel} · 11월 11일 22:00 기준';
+
+      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      expect(clock, DateTime(2026, 11, 11, 22, 30));
+      expect(find.text(sameDay), findsOneWidget);
+
+      await advance(tester, const Duration(hours: 1, minutes: 29, seconds: 59));
+      expect(clock, DateTime(2026, 11, 11, 23, 59, 59));
+      expect(find.text(sameDay), findsOneWidget);
+
+      await advance(tester, const Duration(seconds: 1));
+      expect(clock, DateTime(2026, 11, 12));
+      expect(find.text(nextDay), findsOneWidget);
+      expect(find.text(sameDay), findsNothing);
+
+      // 날짜가 붙은 뒤에는 더 바뀌지 않으므로 타이머가 남지 않는다
+      // (남으면 testWidgets가 남은 타이머로 실패한다).
+    });
+
+    testWidgets('자정 전에 카드를 닫으면 자정에 알리지 않는다', (tester) async {
+      clock = DateTime(2026, 11, 11, 22);
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      await loadDetailsNow(_place('a', openNow: true));
+      await advance(tester, MapProvider.placeDetailsCacheTtl);
+
+      provider.clearSelectedPlace();
+
+      var notified = 0;
+      provider.addListener(() => notified++);
+      await advance(tester, const Duration(hours: 2));
+      expect(notified, 0);
     });
   });
 }

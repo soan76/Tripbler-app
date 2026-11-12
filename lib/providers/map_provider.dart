@@ -138,8 +138,9 @@ class MapProvider extends ChangeNotifier {
   final LinkedHashMap<String, _CachedPlaceDetails> _detailsCache =
       LinkedHashMap<String, _CachedPlaceDetails>();
 
-  // 선택한 장소의 상세 결과가 만료되는 순간 화면에 알리는 타이머
-  Timer? _detailsExpiryTimer;
+  // 선택한 장소의 상세 표시가 바뀌는 순간(만료, 오래된 정보의 날짜 표시가 바뀌는
+  // 자정) 화면에 알리는 타이머
+  Timer? _detailsDisplayTimer;
 
   MapSearchStatus get searchStatus => _searchStatus;
   List<PlaceModel> get searchResults => List.unmodifiable(_searchResults);
@@ -171,6 +172,9 @@ class MapProvider extends ChangeNotifier {
     final entry = _selectedCacheEntry;
     return entry != null && _isExpired(entry);
   }
+
+  /// 이 Provider가 만료 판단에 쓰는 현재 시각. 카드의 날짜 표시도 같은 시계를 쓴다.
+  DateTime now() => _now();
 
   /// 선택한 장소의 상세 결과를 받은 시각(기기 현지 시간). 받은 적이 없으면 null.
   DateTime? get selectedPlaceDetailsFetchedAt => _selectedCacheEntry?.storedAt;
@@ -614,7 +618,7 @@ class MapProvider extends ChangeNotifier {
       _cachePlaceDetails(detailPlace);
       _applyPlaceDetails(detailPlace);
       _detailsStatus = PlaceDetailsStatus.idle;
-      _syncDetailsExpiryTimer();
+      _syncDetailsDisplayTimer();
       _notify();
     } catch (error, stackTrace) {
       debugPrint('장소 상세 조회 실패: $error');
@@ -657,31 +661,57 @@ class MapProvider extends ChangeNotifier {
     return _now().difference(entry.storedAt) >= placeDetailsCacheTtl;
   }
 
-  /// 선택한 장소의 상세 결과가 아직 유효하면, 원래 만료 시각(받은 시각 + 30분)에
-  /// 화면에 알리도록 타이머를 맞춘다. 선택이 바뀌거나 결과가 없으면 타이머를 끈다.
-  void _syncDetailsExpiryTimer() {
-    _detailsExpiryTimer?.cancel();
-    _detailsExpiryTimer = null;
+  /// 선택한 장소의 상세 표시가 다음에 바뀌는 순간 화면에 알리도록 타이머를 맞춘다.
+  ///
+  /// - 아직 유효하면 원래 만료 시각(받은 시각 + 30분)에 알린다.
+  /// - 오래된 정보이고 받은 날이 오늘이면 다음 현지 자정에 알린다. 자정이 지나면
+  ///   "22:00 기준"이 "11월 10일 22:00 기준"으로 바뀌어야 하기 때문이다. 날짜가
+  ///   이미 붙었으면 더 바뀌지 않으므로 타이머를 두지 않는다.
+  ///
+  /// 선택이 바뀌거나 결과가 없으면 타이머를 끈다.
+  void _syncDetailsDisplayTimer() {
+    _detailsDisplayTimer?.cancel();
+    _detailsDisplayTimer = null;
 
     final entry = _selectedCacheEntry;
 
-    if (_isDisposed || entry == null || _isExpired(entry)) {
+    if (_isDisposed || entry == null) {
       return;
     }
 
-    final remaining = entry.storedAt
-        .add(placeDetailsCacheTtl)
-        .difference(_now());
+    final now = _now();
+    final Duration delay;
 
-    _detailsExpiryTimer = Timer(remaining, () {
-      _detailsExpiryTimer = null;
+    if (!_isExpired(entry)) {
+      delay = entry.storedAt.add(placeDetailsCacheTtl).difference(now);
+    } else {
+      final fetched = entry.storedAt.toLocal();
+      final today = now.toLocal();
+      final fetchedToday =
+          fetched.year == today.year &&
+          fetched.month == today.month &&
+          fetched.day == today.day;
+
+      if (!fetchedToday) {
+        return;
+      }
+
+      delay = DateTime(
+        today.year,
+        today.month,
+        today.day + 1,
+      ).difference(today);
+    }
+
+    _detailsDisplayTimer = Timer(delay, () {
+      _detailsDisplayTimer = null;
 
       if (_isDisposed) {
         return;
       }
 
-      // 기기 시계와 타이머가 어긋나 아직 유효하면 남은 시간만큼 다시 맞춘다.
-      _syncDetailsExpiryTimer();
+      // 다음 변화 시점으로 다시 맞춘다(기기 시계가 어긋나 아직 그 시점 전이어도 안전).
+      _syncDetailsDisplayTimer();
       _notify();
     });
   }
@@ -714,7 +744,7 @@ class MapProvider extends ChangeNotifier {
     _detailsRequestId++;
     _detailsStatus = PlaceDetailsStatus.idle;
     _detailsErrorMessage = null;
-    _syncDetailsExpiryTimer();
+    _syncDetailsDisplayTimer();
   }
 
   void selectPlace(PlaceModel place) {
@@ -758,8 +788,8 @@ class MapProvider extends ChangeNotifier {
   @override
   void dispose() {
     _isDisposed = true;
-    _detailsExpiryTimer?.cancel();
-    _detailsExpiryTimer = null;
+    _detailsDisplayTimer?.cancel();
+    _detailsDisplayTimer = null;
     _authState?.removeListener(_handleAuthStateChanged);
     _placeApiService.dispose();
     super.dispose();
