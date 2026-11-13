@@ -157,4 +157,37 @@ void main() {
 
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('둥근 채움 검색창: 테두리 없이 그림자, 검색 버튼은 강조색', (tester) async {
+    await tester.pumpWidget(harness.build());
+    await tester.enterText(find.byType(TextField), '라멘');
+    await tester.pump();
+
+    final colors = Theme.of(
+      tester.element(find.byType(PlaceSearchBar)),
+    ).colorScheme;
+    final surface = tester.widget<Material>(
+      find
+          .descendant(
+            of: find.byType(PlaceSearchBar),
+            matching: find.byType(Material),
+          )
+          .first,
+    );
+    expect(surface.color, colors.surfaceContainerHighest);
+    expect(surface.elevation, greaterThan(0));
+    final shape = surface.shape! as RoundedRectangleBorder;
+    expect(shape.borderRadius, BorderRadius.circular(28));
+    expect(shape.side, BorderSide.none);
+    // 한 줄 높이의 절반이 둥글기라 양 끝이 반원이다.
+    expect(tester.getSize(find.byType(PlaceSearchBar)).height, 56);
+
+    expect(_searchButton(tester).color, colors.primary);
+    expect(
+      tester
+          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.close))
+          .color,
+      colors.onSurfaceVariant,
+    );
+  });
 }

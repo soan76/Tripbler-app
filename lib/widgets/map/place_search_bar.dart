@@ -47,6 +47,10 @@ class PlaceSearchBar extends StatelessWidget {
   static const String tooLongMessage =
       '검색어는 ${SearchQueryNormalizer.maxSearchQueryLength}자까지 입력할 수 있습니다.';
 
+  /// 검색창 모서리 둥글기. 한 줄 높이(56)의 절반이라 양 끝이 반원이 된다.
+  /// 안내 문구로 높이가 늘어도 같은 값을 써서 지나치게 둥글어지지 않게 한다.
+  static const double _radius = 28;
+
   /// 비로그인 안내. 폭 320에서도 검색 버튼 옆에 한 줄로 들어가게 짧게 쓴다.
   static const String signedOutHint = '로그인 후 장소 검색';
 
@@ -79,15 +83,18 @@ class PlaceSearchBar extends StatelessWidget {
         final canSubmit = SearchQueryNormalizer.normalize(text) != null;
 
         return Material(
-          color: colorScheme.surface,
-          elevation: 2,
-          // 밝은 지도 위와 다크 모드에서 그림자만으로는 경계가 흐려 테두리를 함께 둔다.
+          // 지도 위에 뜬 둥근 검색창. 알약 모양은 금지 목록의 예외로 사용자가 정했다(2026-11-14).
+          // 테두리 없이 채움색과 그림자로 지도와 구분한다.
+          color: colorScheme.surfaceContainerHighest,
+          elevation: 3,
+          shadowColor: colorScheme.shadow,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(4),
-            side: BorderSide(color: colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(_radius),
           ),
+          clipBehavior: Clip.antiAlias,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 0, 0),
+            // 둥근 끝에 글자와 버튼이 붙지 않게 양쪽을 띄운다.
+            padding: const EdgeInsets.fromLTRB(20, 0, 4, 0),
             child: TextField(
               controller: controller,
               focusNode: focusNode,
@@ -113,6 +120,7 @@ class PlaceSearchBar extends StatelessWidget {
                     if (text.isNotEmpty && !isSignedOut)
                       IconButton(
                         tooltip: '검색어 지우기',
+                        color: colorScheme.onSurfaceVariant,
                         icon: const Icon(Icons.close),
                         onPressed: onCleared,
                       ),
@@ -131,6 +139,7 @@ class PlaceSearchBar extends StatelessWidget {
                     else
                       IconButton(
                         tooltip: '검색',
+                        color: colorScheme.primary,
                         icon: const Icon(Icons.search),
                         onPressed: isSignedOut || canSubmit ? _submit : null,
                       ),
