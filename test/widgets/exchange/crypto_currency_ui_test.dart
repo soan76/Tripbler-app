@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/main.dart' show buildAppScope;
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/crypto/models/crypto_coin.dart';
-import 'package:tripbler/crypto/providers/crypto_provider.dart';
 import 'package:tripbler/models/currency_model.dart';
 import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
 import '../../helpers/chart_selection_handle.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
-import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
-import 'package:tripbler/providers/exchange_provider.dart';
 import 'package:tripbler/providers/settings_provider.dart';
 import 'package:tripbler/screens/exchange_screen.dart';
 import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
@@ -18,6 +14,7 @@ import 'package:tripbler/widgets/exchange/amount_input_field.dart';
 import 'package:tripbler/widgets/exchange/currency_management_bottom_sheet.dart';
 import 'package:tripbler/widgets/exchange/currency_row.dart';
 import '../../crypto/crypto_test.dart' show coinFixture, makeApi, FiatApi;
+import '../../helpers/exchange_handles.dart';
 
 void main() {
   final coins = coinFixture
@@ -30,26 +27,16 @@ void main() {
     (tester) async {
       SharedPreferences.setMockInitialValues({});
       final api = makeApi();
-      final crypto = CryptoProvider(api: api);
       final fiatApi = FiatApi();
-      final exchange = ExchangeProvider(apiService: fiatApi);
-      final display = ExchangeDisplayProvider(
-        exchange,
-        crypto,
-        fiatApi: fiatApi,
-      );
+      final harness = ExchangeHarness.create(cryptoApi: api, fiatApi: fiatApi);
+      final crypto = harness.crypto;
+      final exchange = harness.exchange;
+      final display = harness.display;
       await display.initialize();
       final charts = ChartSelectionHandle.of(tester);
       await tester.pumpWidget(
-        buildAppScope(
-          child: MultiProvider(
-            providers: [
-              ChangeNotifierProvider.value(value: crypto),
-              ChangeNotifierProvider.value(value: exchange),
-              ChangeNotifierProvider.value(value: display),
-            ],
-            child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
-          ),
+        harness.scope(
+          const MaterialApp(home: Scaffold(body: ExchangeScreen())),
         ),
       );
       await tester.pumpAndSettle();
@@ -93,9 +80,7 @@ void main() {
       expect(charts.pairs, ChartSelectionNotifier.defaults);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
-      display.dispose();
-      exchange.dispose();
-      crypto.dispose();
+      harness.dispose();
       api.dispose();
       fiatApi.dispose();
     },

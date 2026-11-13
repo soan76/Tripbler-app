@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'
-    show ConsumerState, ConsumerStatefulWidget;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
 
+import '../crypto/providers/crypto_provider.dart';
 import '../presentation/charts/chart_selection_provider.dart';
 import '../presentation/exchange/display_currency.dart';
 import '../presentation/exchange/exchange_display_provider.dart';
+import '../presentation/exchange/exchange_display_view.dart';
 import '../providers/exchange_provider.dart';
 import '../widgets/charts/chart_pair_carousel.dart';
 import '../widgets/exchange/chart_currency_picker_sheet.dart';
@@ -41,7 +41,7 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
           return;
         }
 
-        context.read<ExchangeDisplayProvider>().initialize();
+        ref.read(exchangeDisplayProvider.notifier).initialize();
         ref.read(chartSelectionProvider.notifier).initialize();
       });
     }
@@ -50,8 +50,14 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
   // 환율 화면의 상태를 관리하는 State 클래스
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ExchangeProvider>();
-    final display = context.watch<ExchangeDisplayProvider>();
+    final provider = ref.watch(exchangeProvider);
+    final exchange = ref.read(exchangeProvider.notifier);
+    final view = ref.watch(exchangeDisplayViewProvider);
+    final crypto = ref.watch(cryptoProvider);
+    final conversionError = ref.watch(
+      exchangeDisplayProvider.select((state) => state.conversionError),
+    );
+    final display = ref.read(exchangeDisplayProvider.notifier);
     final charts = ref.watch(chartSelectionProvider);
     final chartsNotifier = ref.read(chartSelectionProvider.notifier);
 
@@ -65,32 +71,31 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
 
     // 입력 중인 통화를 맨 위, 자국 통화를 그 아래에 두고 나머지를 목록으로 보여 준다.
     // 모든 행은 같은 Column 안에서 ValueKey로 자리만 바뀌어 입력칸 상태와 초점을 유지한다.
-    final rows = [display.base, ...display.visible];
-    final active = rows.firstWhere(
-      display.isActive,
-      orElse: () => display.base,
-    );
+    final rows = view.rows;
+    final base = view.base;
+    final active = rows
+        .firstWhere((row) => row.isActive, orElse: () => view.rowOf(base))
+        .currency;
     final others = [
       for (final row in rows)
-        if (row.id != active.id && row.id != display.base.id) row,
+        if (row.currency.id != active.id && row.currency.id != base.id)
+          row.currency,
     ];
 
     Widget buildRow(DisplayCurrency row, CurrencyRowLayout layout) {
-      final isBaseRow = row.id == display.base.id;
-      final quote = row.isCrypto ? display.crypto.priceFor(row.code) : null;
-      final priceError = row.isCrypto
-          ? display.crypto.errorFor(row.code)
-          : null;
+      final isBaseRow = row.id == base.id;
+      final quote = row.isCrypto ? crypto.priceFor(row.code) : null;
+      final priceError = row.isCrypto ? crypto.errorFor(row.code) : null;
       final time = quote?.fetchedAt.toLocal();
       final status = !row.isCrypto
           ? null
           : quote == null
           ? (priceError != null ? '조회 실패 · 아래로 당겨 재시도' : '현재가 조회 중')
-          : '${display.crypto.isStale(row.code) ? '저장값 · ' : ''}${display.crypto.isLoading(row.code) ? '갱신 중 · ' : ''}1 ${row.code} = ${NumberFormat('#,##0.########').format(quote.price)} KRW · ${DateFormat('MM.dd HH:mm').format(time!)}';
+          : '${crypto.isStale(row.code) ? '저장값 · ' : ''}${crypto.isLoading(row.code) ? '갱신 중 · ' : ''}1 ${row.code} = ${NumberFormat('#,##0.########').format(quote.price)} KRW · ${DateFormat('MM.dd HH:mm').format(time!)}';
       return CurrencyRow(
         key: ValueKey(row.id),
         currency: row,
-        amount: display.amountFor(row),
+        amount: view.rowOf(row).amount,
         status: status,
         onAmountTap: () => display.selectInput(row),
         onAmountChanged: (value) => display.changeAmount(row, value),
@@ -105,9 +110,9 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
             selectedCurrency: row.fiat!,
             onSelected: (currency) {
               if (isBaseRow) {
-                provider.changeBaseCurrency(currency);
+                exchange.changeBaseCurrency(currency);
               } else {
-                provider.replaceVisibleCurrency(
+                exchange.replaceVisibleCurrency(
                   index: visibleCurrencies.indexWhere(
                     (item) => item.code == row.code,
                   ),
@@ -134,7 +139,7 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
               _buildHeader(
                 lastUpdated,
                 emptyMessage: visibleCurrencies.isEmpty
-                    ? (display.crypto.selectedCoins.isEmpty
+                    ? (crypto.selectedCoins.isEmpty
                           ? '환산할 통화를 추가해 주세요'
                           : '암호화폐 현재가 기준 환산 수량')
                     : null,
@@ -145,16 +150,15 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
               if (errorMessage != null)
                 _buildErrorBox(
                   message: errorMessage,
-                  onRetry: provider.fetchRates,
+                  onRetry: exchange.fetchRates,
                 ),
-              if (display.conversionError != null)
+              if (conversionError != null)
                 _buildErrorBox(
-                  message: display.conversionError!,
+                  message: conversionError,
                   onRetry: display.refreshConversion,
                 ),
               buildRow(active, CurrencyRowLayout.input),
-              if (active.id != display.base.id)
-                buildRow(display.base, CurrencyRowLayout.home),
+              if (active.id != base.id) buildRow(base, CurrencyRowLayout.home),
               if (others.isNotEmpty) _buildOthersLabel(),
               for (final row in others) buildRow(row, CurrencyRowLayout.list),
 
@@ -192,7 +196,7 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
               if (charts.loaded)
                 ChartPairCarousel(
                   pairs: charts.pairs,
-                  currencies: display.available,
+                  currencies: view.available,
                   onPick: (index, {required base, required swapped}) =>
                       _pickChartCurrency(index, base: base, swapped: swapped),
                   onAdd: charts.canAdd ? chartsNotifier.add : null,
@@ -230,13 +234,13 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
     required bool swapped,
   }) async {
     final charts = ref.read(chartSelectionProvider.notifier);
-    final display = context.read<ExchangeDisplayProvider>();
+    final available = ref.read(exchangeDisplayViewProvider).available;
     final pair = ref.read(chartSelectionProvider).pairs[index];
     _leaveAmountField();
     final picked = await showChartCurrencyPicker(
       context: context,
       title: '차트 통화 선택',
-      current: pair.currencyOf(base: base, currencies: display.available),
+      current: pair.currencyOf(base: base, currencies: available),
       optionsOf: (available) => pair.options(base: base, currencies: available),
       note: pair.isCrypto && !base ? '코인 차트는 KRW 기준만 지원합니다' : null,
     );

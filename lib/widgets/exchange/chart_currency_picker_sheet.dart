@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show Consumer;
 
+import '../../crypto/providers/crypto_provider.dart';
 import '../../presentation/exchange/display_currency.dart';
-import '../../presentation/exchange/exchange_display_provider.dart';
+import '../../presentation/exchange/exchange_display_view.dart';
 import 'currency_search_parts.dart';
 
 /// 차트 한쪽 통화를 고르는 검색 목록. 통화 관리의 '통화 추가'와 같은 검색 입력,
@@ -227,18 +228,22 @@ Future<DisplayCurrency?> showChartCurrencyPicker({
   context: context,
   isScrollControlled: true,
   backgroundColor: Theme.of(context).colorScheme.surface,
-  builder: (sheetContext) => Consumer<ExchangeDisplayProvider>(
-    builder: (_, display, _) => SizedBox(
-      height: MediaQuery.of(sheetContext).size.height * 0.85,
-      child: ChartCurrencyPicker(
-        title: title,
-        current: current,
-        options: optionsOf(display.available),
-        note: note,
-        loading: display.crypto.loading,
-        error: display.crypto.catalogError,
-        onRetry: display.crypto.refreshCatalog,
-      ),
-    ),
+  builder: (sheetContext) => Consumer(
+    builder: (_, ref, _) {
+      final available = ref.watch(exchangeDisplayViewProvider).available;
+      final crypto = ref.watch(cryptoProvider);
+      return SizedBox(
+        height: MediaQuery.of(sheetContext).size.height * 0.85,
+        child: ChartCurrencyPicker(
+          title: title,
+          current: current,
+          options: optionsOf(available),
+          note: note,
+          loading: crypto.loading,
+          error: crypto.catalogError,
+          onRetry: ref.read(cryptoProvider.notifier).refreshCatalog,
+        ),
+      );
+    },
   ),
 );

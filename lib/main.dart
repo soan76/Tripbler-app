@@ -3,9 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:provider/provider.dart';
 
-import 'crypto/providers/crypto_provider.dart';
-import 'presentation/exchange/exchange_display_provider.dart';
-import 'providers/exchange_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/map_provider.dart';
 import 'providers/auth_provider.dart';
@@ -30,14 +27,6 @@ void main() {
       child: MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => AuthProvider()),
-          ChangeNotifierProvider(create: (_) => ExchangeProvider()),
-          ChangeNotifierProvider(create: (_) => CryptoProvider()),
-          ChangeNotifierProvider(
-            create: (context) => ExchangeDisplayProvider(
-              context.read<ExchangeProvider>(),
-              context.read<CryptoProvider>(),
-            ),
-          ),
           // 장소 검색은 로그인이 필요하다. 토큰 첨부·재발급은 AuthProvider가 맡고,
           // 로그인이 풀리면 MapProvider가 검색 상태를 비운다.
           ChangeNotifierProvider(

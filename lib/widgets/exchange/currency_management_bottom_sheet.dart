@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show Consumer, ProviderScope;
+import '../../crypto/providers/crypto_provider.dart';
 import '../../presentation/exchange/display_currency.dart';
 import '../../presentation/exchange/exchange_display_provider.dart';
+import '../../presentation/exchange/exchange_display_view.dart';
 import 'currency_icon.dart';
 import 'currency_search_parts.dart';
 
@@ -393,7 +396,10 @@ class _CurrencyManagementBottomSheetState
 Future<void> showCurrencyManagementBottomSheet({
   required BuildContext context,
 }) {
-  final display = context.read<ExchangeDisplayProvider>();
+  final display = ProviderScope.containerOf(
+    context,
+    listen: false,
+  ).read(exchangeDisplayProvider.notifier);
   final initialization = display.initialize();
   return showModalBottomSheet<void>(
     context: context,
@@ -414,31 +420,35 @@ Future<void> showCurrencyManagementBottomSheet({
             child: Center(child: Text('저장된 통화 목록을 불러오지 못했습니다. 창을 다시 열어 주세요.')),
           );
         }
-        return Consumer<ExchangeDisplayProvider>(
-          builder: (_, model, _) => SizedBox(
-            height: MediaQuery.of(sheetContext).size.height * 0.85,
-            child: CurrencyManagementBottomSheet(
-              baseCurrency: model.base,
-              visibleCurrencies: model.visible,
-              availableCurrencies: model.available,
-              loading: model.crypto.loading,
-              error: model.crypto.catalogError,
-              onRetry: model.crypto.refreshCatalog,
-              onApply: (rows) async {
-                try {
-                  await display.apply(rows);
-                } catch (_) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('통화 목록을 저장하지 못했습니다. 다시 시도해 주세요.'),
-                      ),
-                    );
+        return Consumer(
+          builder: (_, ref, _) {
+            final view = ref.watch(exchangeDisplayViewProvider);
+            final crypto = ref.watch(cryptoProvider);
+            return SizedBox(
+              height: MediaQuery.of(sheetContext).size.height * 0.85,
+              child: CurrencyManagementBottomSheet(
+                baseCurrency: view.base,
+                visibleCurrencies: view.visible,
+                availableCurrencies: view.available,
+                loading: crypto.loading,
+                error: crypto.catalogError,
+                onRetry: ref.read(cryptoProvider.notifier).refreshCatalog,
+                onApply: (rows) async {
+                  try {
+                    await display.apply(rows);
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('통화 목록을 저장하지 못했습니다. 다시 시도해 주세요.'),
+                        ),
+                      );
+                    }
                   }
-                }
-              },
-            ),
-          ),
+                },
+              ),
+            );
+          },
         );
       },
     ),

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
     show ConsumerWidget, WidgetRef;
-import 'package:provider/provider.dart';
 
-import '../presentation/exchange/exchange_display_provider.dart';
+import '../presentation/exchange/exchange_display_view.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/exchange/currency_management_bottom_sheet.dart';
 import '../widgets/navigation/app_top_bar.dart';
@@ -15,12 +14,12 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final display = context.watch<ExchangeDisplayProvider>();
+    final view = ref.watch(exchangeDisplayViewProvider);
     final settings = ref.watch(settingsProvider);
     final settingsNotifier = ref.read(settingsProvider.notifier);
 
     // 현재 환율 화면에 표시되고 있는 모든 통화
-    final displayedCurrencies = [display.base, ...display.visible];
+    final displayedCurrencies = [for (final row in view.rows) row.currency];
 
     final displayedCurrencyCodes = displayedCurrencies
         .map((currency) => currency.code)

@@ -6,6 +6,8 @@ import 'package:tripbler/providers/exchange_provider.dart';
 import 'package:tripbler/services/exchange_rate_api_service.dart';
 import 'package:tripbler/services/local_storage_service.dart';
 
+import '../helpers/exchange_handles.dart';
+
 class SlowApi extends ExchangeRateApiService {
   final pending = Completer<ExchangeRateResponse>();
   @override
@@ -29,23 +31,21 @@ void main() {
       await storage.saveCachedRates(baseCurrency: 'KRW', rates: {'USD': 0.001});
       await storage.saveLastUpdated(baseCurrency: 'KRW', dateTime: time);
       final api = SlowApi();
-      final provider = ExchangeProvider(
-        apiService: api,
-        localStorageService: storage,
-      );
+      final harness = ExchangeHarness.create(fiatApi: api, storage: storage);
+      final provider = harness.exchange;
       await provider.initialize();
       expect(provider.rateFor('USD'), 0.001);
       expect(provider.lastUpdated, time);
       expect(provider.isLoading, isTrue);
       final finished = Completer<void>();
-      provider.addListener(() {
-        if (!provider.isLoading && !finished.isCompleted) finished.complete();
+      harness.container.listen(exchangeProvider, (_, next) {
+        if (!next.isLoading && !finished.isCompleted) finished.complete();
       });
       api.pending.completeError(TimeoutException('slow'));
       await finished.future;
       expect(provider.rateFor('USD'), 0.001);
       expect(provider.errorMessage, contains('마지막 성공'));
-      provider.dispose();
+      harness.dispose();
       api.dispose();
     },
   );
@@ -54,13 +54,11 @@ void main() {
     final storage = LocalStorageService();
     await storage.saveVisibleCurrencies(['USD']);
     final api = SlowApi();
-    final provider = ExchangeProvider(
-      apiService: api,
-      localStorageService: storage,
-    );
+    final harness = ExchangeHarness.create(fiatApi: api, storage: storage);
+    final provider = harness.exchange;
     await provider.initialize();
     await Future<void>.delayed(Duration.zero);
-    provider.dispose();
+    harness.dispose();
     api.pending.complete(
       ExchangeRateResponse(
         baseCurrency: 'KRW',

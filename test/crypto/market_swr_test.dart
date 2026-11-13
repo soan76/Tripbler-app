@@ -4,11 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tripbler/crypto/providers/crypto_provider.dart';
 import 'package:tripbler/crypto/services/crypto_api_service.dart';
 import 'package:tripbler/services/market_snapshot_store.dart';
 import 'package:tripbler/crypto/presentation/crypto_chart_data_source.dart';
 import 'package:tripbler/models/exchange_rate_history_model.dart';
+import '../helpers/exchange_handles.dart';
 import 'crypto_history_test.dart' show historyResponse;
 
 void main() {
@@ -40,7 +40,8 @@ void main() {
           return pending.future;
         }),
       );
-      final provider = CryptoProvider(api: api);
+      final harness = ExchangeHarness.create(cryptoApi: api);
+      final provider = harness.crypto;
       await provider.initialize();
       expect(provider.priceFor('BTC')!.price, 50000);
       expect(provider.priceFor('BTC')!.fetchedAt, time);
@@ -49,7 +50,7 @@ void main() {
       await provider.refresh();
       expect(provider.priceFor('BTC')!.price, 50000);
       expect(provider.errorFor('BTC'), isNotNull);
-      provider.dispose();
+      harness.dispose();
       api.dispose();
     },
   );
@@ -73,7 +74,8 @@ void main() {
                 ),
         ),
       );
-      final provider = CryptoProvider(api: api);
+      final harness = ExchangeHarness.create(cryptoApi: api);
+      final provider = harness.crypto;
       await provider.initialize();
       await provider.refresh();
       await provider.select(['BTC']);
@@ -84,7 +86,7 @@ void main() {
       );
       expect(saved!['price'], 60000);
       expect(DateTime.parse(saved['fetchedAt'] as String), time);
-      provider.dispose();
+      harness.dispose();
       api.dispose();
     },
   );

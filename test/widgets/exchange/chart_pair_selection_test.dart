@@ -1,22 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tripbler/main.dart' show buildAppScope;
-import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tripbler/crypto/providers/crypto_provider.dart';
 import 'package:tripbler/models/currency_model.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
 import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
 import '../../helpers/chart_selection_handle.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
-import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
-import 'package:tripbler/providers/exchange_provider.dart';
 import 'package:tripbler/screens/exchange_screen.dart';
 import 'package:tripbler/widgets/charts/currency_swap_pair.dart';
 import 'package:tripbler/widgets/exchange/chart_currency_picker_sheet.dart';
 import 'package:tripbler/widgets/exchange/currency_search_parts.dart';
 import '../../crypto/crypto_test.dart' show makeApi, FiatApi;
+import '../../helpers/exchange_handles.dart';
 
 const swapKey = ValueKey('market-chart-swap');
 
@@ -24,38 +20,26 @@ Finder pick(String id) => find.byKey(ValueKey('market-chart-pick-$id'));
 Finder option(String id) => find.byKey(ValueKey('chart-option-$id'));
 
 void main() {
-  late CryptoProvider crypto;
-  late ExchangeProvider exchange;
-  late ExchangeDisplayProvider display;
+  late ExchangeHandle exchange;
+  late DisplayHandle display;
   late ChartSelectionHandle charts;
   late FiatApi fiatApi;
 
   Future<void> pumpScreen(WidgetTester tester) async {
     final api = makeApi();
-    crypto = CryptoProvider(api: api);
     fiatApi = FiatApi();
-    exchange = ExchangeProvider(apiService: fiatApi);
-    display = ExchangeDisplayProvider(exchange, crypto, fiatApi: fiatApi);
+    final harness = ExchangeHarness.create(cryptoApi: api, fiatApi: fiatApi);
+    exchange = harness.exchange;
+    display = harness.display;
     charts = ChartSelectionHandle.of(tester);
     await display.initialize();
     addTearDown(() {
-      display.dispose();
-      exchange.dispose();
-      crypto.dispose();
+      harness.dispose();
       api.dispose();
       fiatApi.dispose();
     });
     await tester.pumpWidget(
-      buildAppScope(
-        child: MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: crypto),
-            ChangeNotifierProvider.value(value: exchange),
-            ChangeNotifierProvider.value(value: display),
-          ],
-          child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
-        ),
-      ),
+      harness.scope(const MaterialApp(home: Scaffold(body: ExchangeScreen()))),
     );
     await tester.pumpAndSettle();
   }

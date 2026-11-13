@@ -3,19 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tripbler/main.dart' show buildAppScope;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/core/theme/app_theme.dart';
-import 'package:tripbler/crypto/providers/crypto_provider.dart';
 import 'package:tripbler/models/chart_point.dart';
 import 'package:tripbler/models/exchange_rate_history_model.dart';
 import 'package:tripbler/presentation/charts/chart_data_source.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
 import '../../helpers/chart_selection_handle.dart';
-import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/providers/auth_provider.dart';
-import 'package:tripbler/providers/exchange_provider.dart';
 import 'package:tripbler/screens/exchange_screen.dart';
 import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 import 'package:tripbler/widgets/charts/market_chart_delete_mode.dart';
@@ -23,6 +19,7 @@ import 'package:tripbler/widgets/navigation/app_drawer.dart';
 
 import '../../crypto/crypto_test.dart' show makeApi, FiatApi;
 import '../../helpers/chart_amount_finder.dart';
+import '../../helpers/exchange_handles.dart';
 import '../../helpers/memory_chart_snapshots.dart';
 
 const usd = ChartPair.fiat('USD', 'KRW');
@@ -1651,33 +1648,19 @@ void main() {
       tester.view.physicalSize = const Size(2400, 1200);
       addTearDown(tester.view.reset);
       final api = makeApi();
-      final crypto = CryptoProvider(api: api);
       final fiatApi = FiatApi();
-      final exchange = ExchangeProvider(apiService: fiatApi);
-      final display = ExchangeDisplayProvider(
-        exchange,
-        crypto,
-        fiatApi: fiatApi,
-      );
+      final harness = ExchangeHarness.create(cryptoApi: api, fiatApi: fiatApi);
+      final display = harness.display;
       final charts = ChartSelectionHandle.of(tester);
       await display.initialize();
       addTearDown(() {
-        display.dispose();
-        exchange.dispose();
-        crypto.dispose();
+        harness.dispose();
         api.dispose();
         fiatApi.dispose();
       });
       await tester.pumpWidget(
-        buildAppScope(
-          child: MultiProvider(
-            providers: [
-              ChangeNotifierProvider.value(value: crypto),
-              ChangeNotifierProvider.value(value: exchange),
-              ChangeNotifierProvider.value(value: display),
-            ],
-            child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
-          ),
+        harness.scope(
+          const MaterialApp(home: Scaffold(body: ExchangeScreen())),
         ),
       );
       await tester.pumpAndSettle();

@@ -5,14 +5,13 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/core/network/api_exception.dart';
-import 'package:tripbler/crypto/providers/crypto_provider.dart';
 import 'package:tripbler/crypto/services/crypto_api_service.dart';
 import 'package:tripbler/models/currency_model.dart';
 import 'package:tripbler/models/exchange_rate_response.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
-import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
-import 'package:tripbler/providers/exchange_provider.dart';
 import 'package:tripbler/services/exchange_rate_api_service.dart';
+
+import '../helpers/exchange_handles.dart';
 
 const coinFixture = [
   {'symbol': 'BTC', 'name': 'Bitcoin'},
@@ -151,7 +150,8 @@ void main() {
     'selection survives restart with cached catalog even while server is offline',
     () async {
       final api = makeApi();
-      final provider = CryptoProvider(api: api);
+      final harness = ExchangeHarness.create(cryptoApi: api);
+      final provider = harness.crypto;
       await provider.initialize();
       await provider.refresh();
       await provider.select(['BTC', 'DOGE', 'DASH', 'INVALID', 'BTC']);
@@ -160,12 +160,13 @@ void main() {
         'DOGE',
         'DASH',
       ]);
-      provider.dispose();
+      harness.dispose();
       api.dispose();
       final offlineApi = CryptoApiService(
         client: MockClient((_) async => throw http.ClientException('offline')),
       );
-      final restored = CryptoProvider(api: offlineApi);
+      final restoredHarness = ExchangeHarness.create(cryptoApi: offlineApi);
+      final restored = restoredHarness.crypto;
       await restored.initialize();
       await restored.refresh();
       expect(restored.coins.length, 7);
@@ -180,7 +181,7 @@ void main() {
         ),
         isEmpty,
       );
-      restored.dispose();
+      restoredHarness.dispose();
       offlineApi.dispose();
     },
   );
@@ -196,13 +197,14 @@ void main() {
           return response.future;
         }),
       );
-      final provider = CryptoProvider(api: api);
+      final harness = ExchangeHarness.create(cryptoApi: api);
+      final provider = harness.crypto;
       final first = provider.fetchPrice('BTC');
       final second = provider.fetchPrice('BTC');
       expect(identical(first, second), isTrue);
       await Future<void>.delayed(Duration.zero);
       expect(calls, 1);
-      provider.dispose();
+      harness.dispose();
       response.complete(priceResponse('BTC'));
       await Future.wait([first, second]);
       api.dispose();
@@ -213,14 +215,11 @@ void main() {
     'mixed display preserves order, converts both directions, and isolates fiat requests',
     () async {
       final api = makeApi();
-      final crypto = CryptoProvider(api: api);
       final fiatApi = FiatApi();
-      final exchange = ExchangeProvider(apiService: fiatApi);
-      final display = ExchangeDisplayProvider(
-        exchange,
-        crypto,
-        fiatApi: fiatApi,
-      );
+      final harness = ExchangeHarness.create(cryptoApi: api, fiatApi: fiatApi);
+      final crypto = harness.crypto;
+      final exchange = harness.exchange;
+      final display = harness.display;
       await display.initialize();
       await crypto.refresh();
       final btc = display.available.firstWhere((row) => row.code == 'BTC');
@@ -258,9 +257,7 @@ void main() {
         ),
         ['crypto:DOGE'],
       );
-      display.dispose();
-      exchange.dispose();
-      crypto.dispose();
+      harness.dispose();
       api.dispose();
       fiatApi.dispose();
     },
