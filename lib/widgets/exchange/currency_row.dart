@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerState, ConsumerStatefulWidget;
 
 import '../../presentation/exchange/display_currency.dart';
 import '../../providers/settings_provider.dart';
@@ -19,7 +20,7 @@ enum CurrencyRowLayout {
 }
 
 // 통화 행 위젯
-class CurrencyRow extends StatefulWidget {
+class CurrencyRow extends ConsumerStatefulWidget {
   final DisplayCurrency currency;
   final double? amount;
   final VoidCallback onCurrencyTap;
@@ -40,10 +41,10 @@ class CurrencyRow extends StatefulWidget {
   });
 
   @override
-  State<CurrencyRow> createState() => _CurrencyRowState();
+  ConsumerState<CurrencyRow> createState() => _CurrencyRowState();
 }
 
-class _CurrencyRowState extends State<CurrencyRow> {
+class _CurrencyRowState extends ConsumerState<CurrencyRow> {
   // 자리(layout)가 바뀌어 위젯 구성이 달라져도 입력칸의 글자·초점을 잃지 않게 한다.
   final _fieldKey = GlobalKey();
 
@@ -71,9 +72,9 @@ class _CurrencyRowState extends State<CurrencyRow> {
 
     // 설정 화면에서 선택한 자릿수 설정을 가져옴
     // 자동이면 국가 통화 2자리, 암호화폐 5자리
-    final decimalPlaces = context.watch<SettingsProvider>().decimalPlacesFor(
-      isCrypto: widget.currency.isCrypto,
-    );
+    final decimalPlaces = ref
+        .watch(settingsProvider)
+        .decimalPlacesFor(isCrypto: widget.currency.isCrypto);
 
     final layout = widget.layout;
     // 강조 배경 위에 놓이는지. 자국 통화 칸만 강조 배경을 쓴다.
@@ -127,7 +128,7 @@ class _CurrencyRowState extends State<CurrencyRow> {
             CurrencyRowLayout.home => 26,
             CurrencyRowLayout.list => 20,
           },
-          // SettingsProvider에서 가져온 자릿수 설정을 전달
+          // settingsProvider에서 가져온 자릿수 설정을 전달
           decimalPlaces: decimalPlaces,
           // 입력 영역을 터치하면 해당 통화를 선택
           onTap: widget.onAmountTap,

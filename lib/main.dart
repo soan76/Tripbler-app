@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderScope;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:provider/provider.dart';
 
 import 'crypto/providers/crypto_provider.dart';
 import 'presentation/charts/chart_selection_provider.dart';
 import 'presentation/exchange/exchange_display_provider.dart';
-import 'providers/tab_provider.dart';
 import 'providers/exchange_provider.dart';
 import 'providers/translation_provider.dart';
 import 'providers/settings_provider.dart';
@@ -35,7 +34,6 @@ void main() {
         providers: [
           ChangeNotifierProvider(create: (_) => AuthProvider()),
           ChangeNotifierProvider(create: (_) => AccountRecoveryProvider()),
-          ChangeNotifierProvider(create: (_) => TabProvider()),
           ChangeNotifierProvider(create: (_) => ExchangeProvider()),
           ChangeNotifierProvider(create: (_) => CryptoProvider()),
           ChangeNotifierProvider(
@@ -59,7 +57,6 @@ void main() {
               );
             },
           ),
-          ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ],
         child: const TripblerApp(),
       ),
@@ -67,12 +64,17 @@ void main() {
   );
 }
 
-class TripblerApp extends StatelessWidget {
-  const TripblerApp({super.key});
+class TripblerApp extends ConsumerWidget {
+  const TripblerApp({super.key, this.home = const AuthGate()});
+
+  /// 시작 화면. 테스트에서 인증 흐름 없이 앱 틀만 띄울 때 바꾼다.
+  final Widget home;
 
   @override
-  Widget build(BuildContext context) {
-    final settingsProvider = context.watch<SettingsProvider>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(
+      settingsProvider.select((settings) => settings.themeMode),
+    );
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Tripbler',
@@ -80,8 +82,8 @@ class TripblerApp extends StatelessWidget {
 
       darkTheme: AppTheme.darkTheme,
 
-      themeMode: settingsProvider.themeMode,
-      home: const AuthGate(),
+      themeMode: themeMode,
+      home: home,
     );
   }
 }

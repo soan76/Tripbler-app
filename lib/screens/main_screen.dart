@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerWidget, WidgetRef;
 import 'package:provider/provider.dart';
 
 import '../models/tab_item.dart';
@@ -15,7 +17,7 @@ import 'map_screen.dart';
 import 'translation_screen.dart';
 
 // 메인 화면을 구성하는 StatelessWidget
-class MainScreen extends StatelessWidget {
+class MainScreen extends ConsumerWidget {
   const MainScreen({super.key});
 
   static const List<TabItem> tabs = [
@@ -42,16 +44,15 @@ class MainScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final tabProvider = context.watch<TabProvider>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tabState = ref.watch(tabProvider);
     final authProvider = context.watch<AuthProvider>();
     final colorScheme = Theme.of(context).colorScheme;
 
-    final selectedIndex = tabProvider.selectedIndex;
+    final selectedIndex = tabState.selectedIndex;
 
     final isValidTabIndex =
-        selectedIndex >= TabProvider.firstTabIndex &&
-        selectedIndex < tabs.length;
+        selectedIndex >= TabState.firstTabIndex && selectedIndex < tabs.length;
 
     final stackIndex = isValidTabIndex ? selectedIndex : tabs.length;
 
@@ -98,9 +99,9 @@ class MainScreen extends StatelessWidget {
               child: BottomTabBar(
                 tabs: tabs,
                 selectedIndex: selectedIndex,
-                isHomeSelected: tabProvider.isHomeSelected,
-                onTabTap: tabProvider.selectTab,
-                onHomeTap: tabProvider.selectHome,
+                isHomeSelected: tabState.isHomeSelected,
+                onTabTap: ref.read(tabProvider.notifier).selectTab,
+                onHomeTap: ref.read(tabProvider.notifier).selectHome,
               ),
             ),
           ],

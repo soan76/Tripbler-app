@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerState, ConsumerStatefulWidget;
 import 'package:provider/provider.dart';
 
 import '../models/place_model.dart';
@@ -24,15 +26,15 @@ import '../widgets/map/session_expiry_notice_listener.dart';
 import '../widgets/map/tripbler_google_map.dart';
 
 /// 구글 맵 화면을 구성하는 StatefulWidget 클래스
-class MapScreen extends StatefulWidget {
+class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
   @override
-  State<MapScreen> createState() => _MapScreenState();
+  ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
 /// 구글 맵 화면을 구성하는 State 클래스
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends ConsumerState<MapScreen> {
   // 위치를 가져오지 못했을 때 사용할 기본 위치
   static const LatLng _seoulCityHall = LatLng(37.5665, 126.9780);
 
@@ -49,7 +51,7 @@ class _MapScreenState extends State<MapScreen> {
   // 현재 위치 방향 아이콘 크기
   static const int _currentLocationIconSize = 72;
 
-  // 하단 탭에서 지도 탭의 인덱스(TabProvider)
+  // 하단 탭에서 지도 탭의 인덱스(tabProvider)
   static const int _mapTabIndex = 1;
 
   // 검색 결과가 1개일 때 줌, 결과를 고를 때 최소 줌
@@ -379,7 +381,7 @@ class _MapScreenState extends State<MapScreen> {
   // ----- 장소 검색 -----
 
   bool _isMapTabActive(BuildContext context) {
-    return context.read<TabProvider>().selectedIndex == _mapTabIndex;
+    return ref.read(tabProvider).selectedIndex == _mapTabIndex;
   }
 
   PlaceSearchAvailability _availabilityOf(AuthProvider authProvider) {
@@ -624,8 +626,7 @@ class _MapScreenState extends State<MapScreen> {
   Widget build(BuildContext context) {
     final mapProvider = context.watch<MapProvider>();
     final authProvider = context.watch<AuthProvider>();
-    final isMapTabActive =
-        context.watch<TabProvider>().selectedIndex == _mapTabIndex;
+    final isMapTabActive = ref.watch(tabProvider).selectedIndex == _mapTabIndex;
 
     // 현재 선택된 장소
     final selectedPlace = mapProvider.selectedPlace;

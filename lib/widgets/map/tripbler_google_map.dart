@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/map_id_config.dart';
 import '../../providers/settings_provider.dart';
 
 /// 구글 맵을 표시하는 위젯 클래스
-class TripblerGoogleMap extends StatefulWidget {
+class TripblerGoogleMap extends ConsumerStatefulWidget {
   final CameraPosition initialCameraPosition;
   final Set<Marker> markers;
   final void Function(GoogleMapController controller) onMapCreated;
@@ -23,36 +23,27 @@ class TripblerGoogleMap extends StatefulWidget {
   });
 
   @override
-  State<TripblerGoogleMap> createState() => _TripblerGoogleMapState();
+  ConsumerState<TripblerGoogleMap> createState() => _TripblerGoogleMapState();
 }
 
-class _TripblerGoogleMapState extends State<TripblerGoogleMap> {
+class _TripblerGoogleMapState extends ConsumerState<TripblerGoogleMap> {
   GoogleMapController? _controller;
   bool? _lastIsDarkMode;
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    final bool isDarkMode = context.watch<SettingsProvider>().isDarkMode;
-
+  void _applyColorScheme(bool isDarkMode) {
     if (_lastIsDarkMode == isDarkMode) {
       return;
     }
 
     _lastIsDarkMode = isDarkMode;
 
-    final GoogleMapController? controller = _controller;
-
-    if (controller != null) {
-      controller.setMapColorScheme(isDarkMode);
-    }
+    _controller?.setMapColorScheme(isDarkMode);
   }
 
   void _onMapCreated(GoogleMapController controller) {
     _controller = controller;
 
-    final bool isDarkMode = context.read<SettingsProvider>().isDarkMode;
+    final bool isDarkMode = ref.read(settingsProvider).isDarkMode;
 
     _lastIsDarkMode = isDarkMode;
 
@@ -63,6 +54,11 @@ class _TripblerGoogleMapState extends State<TripblerGoogleMap> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(
+      settingsProvider.select((settings) => settings.isDarkMode),
+      (_, isDarkMode) => _applyColorScheme(isDarkMode),
+    );
+
     return GoogleMap(
       // 플랫폼별 Google Cloud Map ID 적용
       cloudMapId: MapIdConfig.current,

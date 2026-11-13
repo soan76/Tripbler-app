@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerWidget, WidgetRef;
 import 'package:provider/provider.dart';
 
 import '../presentation/exchange/exchange_display_provider.dart';
@@ -6,15 +8,16 @@ import '../providers/settings_provider.dart';
 import '../widgets/exchange/currency_management_bottom_sheet.dart';
 import '../widgets/navigation/app_top_bar.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
 
     final display = context.watch<ExchangeDisplayProvider>();
-    final settingsProvider = context.watch<SettingsProvider>();
+    final settings = ref.watch(settingsProvider);
+    final settingsNotifier = ref.read(settingsProvider.notifier);
 
     // 현재 환율 화면에 표시되고 있는 모든 통화
     final displayedCurrencies = [display.base, ...display.visible];
@@ -67,16 +70,20 @@ class SettingsScreen extends StatelessWidget {
                   _buildSettingItem(
                     context: context,
                     title: '자릿수 제한',
-                    subtitle: settingsProvider.decimalPlacesLabel,
+                    subtitle: settings.decimalPlacesLabel,
                     onTap: () {
-                      _showDecimalLimitDialog(context, settingsProvider);
+                      _showDecimalLimitDialog(
+                        context,
+                        settings,
+                        settingsNotifier,
+                      );
                     },
                   ),
 
                   const Divider(),
 
                   // 라이트 / 다크 모드
-                  _buildThemeSettingItem(context, settingsProvider),
+                  _buildThemeSettingItem(context, settings, settingsNotifier),
                 ],
               ),
             ),
@@ -139,7 +146,8 @@ class SettingsScreen extends StatelessWidget {
   // 자릿수 제한 선택 창
   void _showDecimalLimitDialog(
     BuildContext context,
-    SettingsProvider settingsProvider,
+    SettingsState settings,
+    SettingsNotifier settingsNotifier,
   ) {
     // -1은 자동
     const decimalOptions = [-1, 0, 1, 2, 3, 4, 5, 6];
@@ -151,19 +159,19 @@ class SettingsScreen extends StatelessWidget {
           title: const Text('자릿수 제한'),
           children: decimalOptions.map((decimal) {
             final label = decimal == -1
-                ? SettingsProvider.autoDecimalPlacesLabel
+                ? SettingsState.autoDecimalPlacesLabel
                 : '$decimal';
 
             return RadioListTile<int>(
               title: Text(label),
               value: decimal,
-              groupValue: settingsProvider.decimalPlaces,
+              groupValue: settings.decimalPlaces,
               onChanged: (value) {
                 if (value == null) {
                   return;
                 }
 
-                settingsProvider.changeDecimalPlaces(value);
+                settingsNotifier.changeDecimalPlaces(value);
 
                 Navigator.of(dialogContext).pop();
               },
@@ -177,11 +185,12 @@ class SettingsScreen extends StatelessWidget {
   // 라이트 / 다크 모드 설정 항목
   Widget _buildThemeSettingItem(
     BuildContext context,
-    SettingsProvider settingsProvider,
+    SettingsState settings,
+    SettingsNotifier settingsNotifier,
   ) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final isDarkMode = settingsProvider.isDarkMode;
+    final isDarkMode = settings.isDarkMode;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 18),
@@ -208,7 +217,7 @@ class SettingsScreen extends StatelessWidget {
               return const Icon(Icons.light_mode);
             }),
             onChanged: (_) {
-              settingsProvider.toggleTheme();
+              settingsNotifier.toggleTheme();
             },
           ),
         ],

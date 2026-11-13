@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tripbler/main.dart' show buildAppScope;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/crypto/models/crypto_coin.dart';
@@ -39,15 +40,16 @@ void main() {
       await display.initialize();
       final charts = ChartSelectionProvider();
       await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: crypto),
-            ChangeNotifierProvider.value(value: exchange),
-            ChangeNotifierProvider.value(value: display),
-            ChangeNotifierProvider.value(value: charts),
-            ChangeNotifierProvider(create: (_) => SettingsProvider()),
-          ],
-          child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
+        buildAppScope(
+          child: MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: crypto),
+              ChangeNotifierProvider.value(value: exchange),
+              ChangeNotifierProvider.value(value: display),
+              ChangeNotifierProvider.value(value: charts),
+            ],
+            child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -160,8 +162,7 @@ void main() {
     (tester) async {
       double? amount;
       await tester.pumpWidget(
-        ChangeNotifierProvider(
-          create: (_) => SettingsProvider(),
+        buildAppScope(
           child: MaterialApp(
             home: Scaffold(
               body: SizedBox(
@@ -190,8 +191,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => SettingsProvider(),
+      buildAppScope(
         child: MaterialApp(
           home: Scaffold(
             body: CurrencyRow(
@@ -214,11 +214,14 @@ void main() {
     double amount, {
     int? decimalPlaces,
   }) async {
-    final settings = SettingsProvider();
-    if (decimalPlaces != null) settings.changeDecimalPlaces(decimalPlaces);
     await tester.pumpWidget(
-      ChangeNotifierProvider.value(
-        value: settings,
+      buildAppScope(
+        overrides: [
+          if (decimalPlaces != null)
+            settingsProvider.overrideWithBuild(
+              (ref, notifier) => SettingsState(decimalPlaces: decimalPlaces),
+            ),
+        ],
         child: MaterialApp(
           home: Scaffold(
             body: SizedBox(

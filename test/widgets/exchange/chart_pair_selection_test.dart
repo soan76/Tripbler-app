@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tripbler/main.dart' show buildAppScope;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/crypto/providers/crypto_provider.dart';
@@ -10,7 +11,6 @@ import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/providers/exchange_provider.dart';
-import 'package:tripbler/providers/settings_provider.dart';
 import 'package:tripbler/screens/exchange_screen.dart';
 import 'package:tripbler/widgets/charts/currency_swap_pair.dart';
 import 'package:tripbler/widgets/exchange/chart_currency_picker_sheet.dart';
@@ -46,15 +46,16 @@ void main() {
       fiatApi.dispose();
     });
     await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider.value(value: crypto),
-          ChangeNotifierProvider.value(value: exchange),
-          ChangeNotifierProvider.value(value: display),
-          ChangeNotifierProvider.value(value: charts),
-          ChangeNotifierProvider(create: (_) => SettingsProvider()),
-        ],
-        child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
+      buildAppScope(
+        child: MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: crypto),
+            ChangeNotifierProvider.value(value: exchange),
+            ChangeNotifierProvider.value(value: display),
+            ChangeNotifierProvider.value(value: charts),
+          ],
+          child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
+        ),
       ),
     );
     await tester.pumpAndSettle();
