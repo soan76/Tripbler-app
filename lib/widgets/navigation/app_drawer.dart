@@ -6,38 +6,61 @@ import '../../screens/auth/login_screen.dart';
 import '../../screens/user/user_page.dart';
 import '../../providers/auth_provider.dart';
 
-/// 앱의 Drawer 위젯
+/// 햄버거 메뉴로 여는 앱 서랍.
+///
+/// 위에는 계정(프로필 사진·이름·아이디), 구분선 아래 메뉴, 맨 아래 로그아웃을 둔다.
+/// 로그인하지 않았으면 계정 자리에 로그인 진입을 두고 로그아웃은 보이지 않는다.
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
+
+  static const double _avatarSize = 56;
+  static const EdgeInsets _sidePadding = EdgeInsets.symmetric(horizontal: 24);
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final authProvider = context.watch<AuthProvider>();
+    final isAuthenticated = authProvider.isAuthenticated;
 
     return Drawer(
       backgroundColor: colorScheme.surface,
       child: SafeArea(
-        child: Column(
-          children: [
-            if (!authProvider.isAuthenticated) _buildLoginEntry(context),
+        // 글자를 크게 키우거나 가로 화면처럼 높이가 낮을 때는 스크롤되고,
+        // 공간이 남으면 로그아웃을 맨 아래에 붙인다.
+        child: CustomScrollView(
+          slivers: [
+            SliverList.list(
+              children: [
+                if (isAuthenticated)
+                  _buildUserEntry(context, authProvider)
+                else
+                  _buildLoginEntry(context),
 
-            if (authProvider.isAuthenticated)
-              _buildUserEntry(context, authProvider),
+                Divider(height: 1, color: colorScheme.outlineVariant),
+                const SizedBox(height: 8),
 
-            ListTile(
-              leading: Icon(
-                Icons.settings_outlined,
-                color: colorScheme.onSurface,
+                _buildMenuItem(
+                  context,
+                  icon: Icons.settings_outlined,
+                  label: '설정',
+                  onTap: () {
+                    Navigator.pop(context);
+
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                    );
+                  },
+                ),
+              ],
+            ),
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Align(
+                alignment: Alignment.bottomLeft,
+                child: isAuthenticated
+                    ? _buildLogout(context, authProvider)
+                    : const SizedBox.shrink(),
               ),
-              title: Text('설정', style: TextStyle(color: colorScheme.onSurface)),
-              onTap: () {
-                Navigator.pop(context);
-
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                );
-              },
             ),
           ],
         ),
@@ -45,35 +68,52 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  /// 미로그인 사용자용 로그인 진입 영역
-  Widget _buildLoginEntry(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+  /// 계정 영역의 공통 배치: 위에 사진, 아래 굵은 이름과 작은 보조 글자.
+  Widget _buildAccountHeader(
+    BuildContext context, {
+    required Widget avatar,
+    required String title,
+    String? subtitle,
+    required VoidCallback onTap,
+    String? semanticsHint,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Align(
-        alignment: Alignment.centerLeft,
+    // 이름과 아이디를 버튼 하나로 묶어 화면 낭독기가 한 번에 읽게 한다.
+    return MergeSemantics(
+      child: Semantics(
+        button: true,
+        hint: semanticsHint,
         child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: () {
-            // Drawer 닫기
-            Navigator.pop(context);
-
-            // 로그인 화면으로 이동
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
-          },
+          onTap: onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              '로그인하겠습니까? >',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.9,
-                color: colorScheme.onSurface,
-              ),
+            padding: _sidePadding.copyWith(top: 24, bottom: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                avatar,
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
+                ),
+                if (subtitle != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
@@ -81,109 +121,143 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
+  /// 미로그인 사용자용 로그인 진입 영역
+  Widget _buildLoginEntry(BuildContext context) {
+    return _buildAccountHeader(
+      context,
+      avatar: _defaultAvatar(context),
+      title: '로그인',
+      subtitle: '눌러서 계정에 로그인',
+      semanticsHint: '로그인 화면 열기',
+      onTap: () {
+        // Drawer 닫기
+        Navigator.pop(context);
+
+        // 로그인 화면으로 이동
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+      },
+    );
+  }
+
   Widget _buildUserEntry(BuildContext context, AuthProvider authProvider) {
-    final colorScheme = Theme.of(context).colorScheme;
+    final nickname = authProvider.nickname?.trim();
+    final loginId = authProvider.loginId?.trim();
+    final hasNickname = nickname != null && nickname.isNotEmpty;
+    final hasLoginId = loginId != null && loginId.isNotEmpty;
+
+    return _buildAccountHeader(
+      context,
+      avatar: _buildUserAvatar(context, authProvider),
+      // 닉네임이 있으면 이름으로, 아이디는 그 아래 보조 글자로 쓴다.
+      title: hasNickname ? nickname : (hasLoginId ? loginId : '사용자'),
+      subtitle: hasNickname && hasLoginId ? loginId : null,
+      semanticsHint: '내 정보 열기',
+      onTap: () {
+        Navigator.pop(context);
+
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const UserPage()));
+      },
+    );
+  }
+
+  Widget _buildMenuItem(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return ListTile(
+      contentPadding: _sidePadding,
+      minTileHeight: 56,
+      horizontalTitleGap: 16,
+      leading: Icon(icon, color: colorScheme.onSurfaceVariant),
+      title: Text(
+        label,
+        style: theme.textTheme.bodyLarge?.copyWith(
+          color: colorScheme.onSurface,
+        ),
+      ),
+      onTap: onTap,
+    );
+  }
+
+  /// 서랍 맨 아래의 로그아웃. 실수로 누르지 않게 메뉴와 떨어뜨리고 위험 색으로 구분한다.
+  Widget _buildLogout(BuildContext context, AuthProvider authProvider) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
-              onTap: () {
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+      child: TextButton(
+        onPressed: authProvider.isLoading
+            ? null
+            : () async {
+                // 서랍은 닫힘 애니메이션이 끝나면 트리에서 빠지므로, 로그아웃이 끝난 뒤에도
+                // 안내를 띄울 수 있게 닫기 전에 화면의 ScaffoldMessenger를 잡아 둔다.
+                final messenger = ScaffoldMessenger.of(context);
+
                 Navigator.pop(context);
 
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const UserPage()));
+                await authProvider.logout();
+
+                if (!messenger.mounted) {
+                  return;
+                }
+
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('로그아웃되었습니다.')),
+                );
               },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Row(
-                  children: [
-                    _buildUserAvatar(context, authProvider),
-
-                    const SizedBox(width: 8),
-
-                    Expanded(
-                      child: Text(
-                        authProvider.nickname?.trim().isNotEmpty == true
-                            ? authProvider.nickname!
-                            : (authProvider.loginId ?? '사용자'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 20,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          const SizedBox(width: 8),
-
-          TextButton(
-            onPressed: authProvider.isLoading
-                ? null
-                : () async {
-                    Navigator.pop(context);
-
-                    await authProvider.logout();
-
-                    if (!context.mounted) {
-                      return;
-                    }
-
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(const SnackBar(content: Text('로그아웃되었습니다.')));
-                  },
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(
-              '로그아웃',
-              style: TextStyle(fontSize: 14, color: colorScheme.primary),
-            ),
-          ),
-        ],
+        style: TextButton.styleFrom(
+          foregroundColor: colorScheme.error,
+          textStyle: theme.textTheme.bodyLarge,
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+        ),
+        child: const Text('로그아웃'),
       ),
     );
   }
 
+  Widget _defaultAvatar(BuildContext context) {
+    return Icon(
+      Icons.account_circle_outlined,
+      size: _avatarSize,
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
+  }
+
   Widget _buildUserAvatar(BuildContext context, AuthProvider authProvider) {
-    final colorScheme = Theme.of(context).colorScheme;
     final profileImageUrl = authProvider.profileImageUrl?.trim();
 
     if (profileImageUrl == null || profileImageUrl.isEmpty) {
-      return Icon(
-        Icons.account_circle_outlined,
-        size: 60,
-        color: colorScheme.onSurface,
-      );
+      return _defaultAvatar(context);
     }
 
     return ClipOval(
       child: SizedBox(
-        width: 60,
-        height: 60,
+        width: _avatarSize,
+        height: _avatarSize,
         child: Image.network(
           profileImageUrl,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Icon(
-              Icons.account_circle_outlined,
-              size: 40,
-              color: colorScheme.onSurface,
-            );
+          // 첫 프레임이 나오기 전(연결·수신·디코딩 중)에는 빈 원 대신 기본 아이콘을 둔다.
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            if (wasSynchronouslyLoaded || frame != null) {
+              return child;
+            }
+
+            return _defaultAvatar(context);
           },
+          errorBuilder: (context, error, stackTrace) => _defaultAvatar(context),
         ),
       ),
     );
