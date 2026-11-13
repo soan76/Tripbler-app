@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tripbler — 환율 흐름 차트 디자인 시안 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=block" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F3F0E9;
+    --paper-2: #EAE6DC;
+    --ink: #1C1F23;
+    --ink-2: #4A4F57;
+    --ink-3: #7A7F87;
+    --rule: #D6D1C4;
+    --accent: #0061A4;
+
+    /* 앱 테마: ColorScheme.fromSeed(Colors.blue), 라이트 */
+    --m-primary: #0061A4;
+    --m-on-primary: #FFFFFF;
+    --m-pc: #D1E4FF;
+    --m-on-pc: #001D36;
+    --m-surface: #F8F9FF;
+    --m-on-surface: #191C20;
+    --m-on-sv: #43474E;
+    --m-sch: #E0E2EC;
+    --m-sc: #ECEEF4;
+    --m-outline: #73777F;
+    --m-ov: #C3C7CF;
+    --m-gain: #146C2E;
+    --m-loss: #BA1A1A;
+    --m-tab: #2196F3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans KR", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+  .mono { font-family: "IBM Plex Mono", "IBM Plex Sans KR", ui-monospace, monospace; }
+  .ms {
+    font-family: "Material Symbols Outlined";
+    font-weight: normal; font-style: normal;
+    line-height: 1; letter-spacing: normal; text-transform: none;
+    display: inline-block; white-space: nowrap; direction: ltr;
+    -webkit-font-feature-settings: "liga"; font-feature-settings: "liga";
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    font-size: 24px;
+  }
+  .emoji { font-family: "Noto Color Emoji", sans-serif; }
+
+  /* ---------- 머리말 ---------- */
+  header.top {
+    border-bottom: 1px solid var(--rule);
+  }
+  header.top .wrap {
+    display: flex; justify-content: space-between; align-items: center;
+    height: 64px; font-size: 14px; color: var(--ink-2);
+  }
+  header.top b { color: var(--ink); font-weight: 700; font-size: 17px; }
+  header.top nav a { color: var(--ink-2); text-decoration: none; margin-left: 22px; }
+  header.top nav a:hover { color: var(--ink); }
+
+  .hero { padding: 72px 0 40px; }
+  .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: end; }
+  .hero h1 {
+    font-size: 54px; line-height: 1.15; margin: 0 0 22px; font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p.lead { font-size: 18px; color: var(--ink-2); margin: 0 0 28px; max-width: 30em; }
+  .facts { display: grid; grid-template-columns: repeat(3, auto); gap: 8px 32px; justify-content: start; font-size: 14px; }
+  .facts dt { color: var(--ink-3); }
+  .facts dd { margin: 0; font-weight: 600; }
+  .hero-note { font-size: 13px; color: var(--ink-3); border-left: 2px solid var(--rule); padding-left: 12px; max-width: 26em; }
+
+  .stage {
+    margin-top: 48px;
+    display: flex; justify-content: center; gap: 32px; align-items: flex-end;
+    padding: 48px 0 0;
+    background:
+      linear-gradient(var(--paper-2), var(--paper-2)) bottom / 100% 55% no-repeat;
+    border-bottom: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .stage .phone { margin-bottom: -120px; }
+  .stage .phone:nth-child(2) { margin-bottom: -60px; }
+
+  /* ---------- 섹션 ---------- */
+  section.feature { padding: 104px 0 24px; }
+  .feature-grid { display: grid; grid-template-columns: 380px 1fr; gap: 72px; align-items: start; }
+  .feature.flip .feature-grid { grid-template-columns: 1fr 380px; }
+  .feature.flip .copy { order: -1; }
+  .kicker { font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 10px; }
+  .copy h2 { font-size: 34px; line-height: 1.25; margin: 0 0 18px; letter-spacing: -0.01em; }
+  .copy > p { color: var(--ink-2); margin: 0 0 28px; max-width: 34em; }
+  .points { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--rule); }
+  .points li { padding: 16px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 9.5em 1fr; gap: 16px; font-size: 15px; }
+  .points li b { font-weight: 600; }
+  .points li span { color: var(--ink-2); }
+  .copy .phones-row { display: flex; gap: 28px; margin-top: 40px; flex-wrap: wrap; }
+
+  .divider { height: 1px; background: var(--rule); margin: 96px 0 0; }
+
+  /* ---------- 휴대폰 틀 ---------- */
+  .phone {
+    width: 360px; flex: none;
+    background: #111; border-radius: 44px; padding: 10px;
+    box-shadow: 0 1px 0 #2a2a2a inset, 0 30px 60px -30px rgba(28,31,35,.45), 0 12px 24px -12px rgba(28,31,35,.25);
+  }
+  .phone.sm { width: 300px; border-radius: 38px; padding: 8px; }
+  .screen {
+    position: relative;
+    height: 740px; border-radius: 34px; overflow: hidden;
+    background: var(--m-surface); color: var(--m-on-surface);
+    font-family: "Noto Sans KR", Roboto, sans-serif; font-size: 14px; line-height: 1.4;
+    display: flex; flex-direction: column;
+  }
+  .phone.sm .screen { height: 620px; border-radius: 30px; }
+  .statusbar {
+    height: 32px; flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; font-size: 13px; font-weight: 500;
+  }
+  .statusbar .ms { font-size: 16px; margin-left: 2px; }
+  .topbar {
+    height: 56px; flex: none; position: relative; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700;
+  }
+  .topbar .lead-ic { position: absolute; left: 16px; top: 14px; font-size: 28px; }
+  .topbar.back { justify-content: flex-start; padding-left: 16px; gap: 12px; }
+  .topbar.back .ms { font-size: 26px; }
+  .body { flex: 1; overflow: hidden; position: relative; }
+
+  /* 하단 도넛 손잡이 */
+  .handle {
+    position: absolute; left: 50%; bottom: 17px; transform: translateX(-50%);
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 3px solid rgba(0,97,164,.45);
+  }
+  .gesture { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); width: 110px; height: 4px; border-radius: 2px; background: #1a1a1a; opacity: .75; }
+
+  /* ---------- 환율 ---------- */
+  .updated { text-align: center; font-size: 12px; color: var(--m-on-sv); padding: 12px 16px; }
+  .row {
+    display: flex; align-items: center; min-height: 72px; padding: 0 4px 0 16px;
+    border-bottom: 1px solid var(--m-ov); background: var(--m-surface);
+  }
+  .row.base { background: var(--m-pc); color: var(--m-on-pc); }
+  .row .cur { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; }
+  .row .cur .flag { font-size: 26px; line-height: 1; width: 28px; text-align: center; }
+  .row .cur .ms { font-size: 22px; margin-left: -4px; color: var(--m-on-sv); }
+  .row.base .cur .ms { color: var(--m-on-pc); }
+  .coin { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px; }
+  .row .amt { flex: 1; text-align: right; padding: 0 12px; min-width: 0; }
+  .row .amt .v { font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+  .row.base .amt .v { border-bottom: 2px solid var(--m-primary); padding-bottom: 1px; }
+  .row .amt .st { font-size: 11px; color: var(--m-on-sv); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .gr { width: 48px; height: 48px; display: grid; place-items: center; color: var(--m-on-sv); }
+  .row .gr.none { visibility: hidden; }
+  .btn-outline {
+    margin: 16px 16px 0; height: 52px; border: 1px solid var(--m-outline); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 500;
+  }
+  .btn-outline .ms { font-size: 18px; }
+  .section-t { font-size: 22px; padding: 32px 16px 16px; }
+
+  /* 차트 카드 */
+  .card { margin: 0 16px; border: 1px solid var(--m-ov); border-radius: 12px; background: var(--m-surface); padding: 12px 12px 14px; }
+  .card-h { display: flex; align-items: center; gap: 4px; }
+  .card-h .t { font-size: 16px; font-weight: 500; flex: 1; }
+  .card-h .sub { font-size: 11px; color: var(--m-on-sv); }
+  .card-h .ms { font-size: 22px; color: var(--m-on-sv); width: 36px; text-align: center; }
+  .pair { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 6px; }
+  .pair .side { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; background: var(--m-sc); font-weight: 500; }
+  .pair .side .flag { font-size: 20px; }
+  .pair .swap { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--m-ov); color: var(--m-primary); }
+  .pair .swap .ms { font-size: 20px; }
+  .rate { display: flex; align-items: baseline; justify-content: space-between; margin: 10px 2px 2px; }
+  .rate .big { font-size: 20px; font-weight: 700; }
+  .rate .big small { font-size: 13px; font-weight: 400; color: var(--m-on-sv); }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--m-pc); color: var(--m-on-pc); }
+  .delta { font-size: 12px; color: var(--m-gain); margin: 0 2px 6px; }
+  .chart-svg { display: block; width: 100%; height: auto; }
+  .periods { display: flex; gap: 4px; margin-top: 10px; }
+  .periods span { flex: 1; text-align: center; padding: 8px 0; border-radius: 4px; background: var(--m-sch); color: var(--m-on-sv); font-size: 12px; font-weight: 500; }
+  .periods span.on { background: var(--m-primary); color: var(--m-on-primary); }
+  .compare { display: flex; gap: 8px; margin-top: 10px; }
+  .compare div { flex: 1; background: var(--m-sc); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+  .compare div b { display: block; font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0 0; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--m-ov); }
+  .dots i.on { background: var(--m-primary); width: 18px; border-radius: 3px; }
+
+  /* ---------- 지도 ---------- */
+  .map-bg { position: absolute; inset: 0; }
+  .searchbar {
+    position: absolute; left: 12px; right: 12px; top: 10px; height: 52px; border-radius: 26px;
+    background: var(--m-sch); display: flex; align-items: center; padding: 0 6px 0 18px; gap: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.12);
+  }
+  .searchbar .q { flex: 1; font-size: 15px; }
+  .searchbar .ms { width: 40px; text-align: center; color: var(--m-on-sv); }
+  .fab-loc {
+    position: absolute; right: 14px; bottom: 286px; width: 48px; height: 48px; border-radius: 14px;
+    background: var(--m-surface); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.18); color: var(--m-on-sv);
+  }
+  .scale { position: absolute; left: 14px; bottom: 292px; font-size: 11px; color: #333; }
+  .scale i { display: block; width: 64px; height: 6px; border: 2px solid #333; border-top: 0; margin-top: 2px; }
+  .place {
+    position: absolute; left: 0; right: 0; bottom: 0; background: var(--m-surface);
+    border-radius: 24px 24px 0 0; padding: 10px 18px 64px; box-shadow: 0 -4px 16px rgba(0,0,0,.12);
+  }
+  .grab { width: 32px; height: 4px; border-radius: 2px; background: var(--m-ov); margin: 0 auto 12px; }
+  .place .name { font-size: 20px; font-weight: 700; display: flex; justify-content: space-between; align-items: flex-start; }
+  .place .name .ms { font-size: 22px; color: var(--m-on-sv); }
+  .place .addr { font-size: 13px; color: var(--m-on-sv); margin: 2px 0 12px; }
+  .meta { display: flex; gap: 16px; font-size: 13px; margin-bottom: 14px; }
+  .meta span { display: flex; align-items: center; gap: 4px; }
+  .meta .ms { font-size: 18px; }
+  .meta .open { color: var(--m-gain); }
+  .place .acts { display: flex; gap: 8px; }
+  .fbtn { height: 40px; border-radius: 20px; padding: 0 16px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
+  .fbtn .ms { font-size: 18px; }
+  .fbtn.fill { background: var(--m-primary); color: #fff; }
+  .fbtn.tonal { background: var(--m-pc); color: var(--m-on-pc); }
+  .fbtn.line { border: 1px solid var(--m-outline); color: var(--m-primary); }
+  .stale { font-size: 11px; color: var(--m-on-sv); margin-top: 10px; display: flex; align-items: center; gap: 4px; }
+  .stale .ms { font-size: 14px; }
+
+  /* 지도 검색 결과 */
+  .results { position: absolute; left: 0; right: 0; bottom: 0; top: 330px; background: var(--m-surface); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.12); padding: 10px 0 0; }
+  .results .rh { display: flex; justify-content: space-between; padding: 0 18px 8px; font-size: 13px; color: var(--m-on-sv); }
+  .results .it { padding: 12px 18px; border-top: 1px solid var(--m-ov); }
+  .results .it b { display: block; font-weight: 500; font-size: 15px; }
+  .results .it span { font-size: 12px; color: var(--m-on-sv); }
+
+  /* ---------- 번역 ---------- */
+  .tr-head { padding: 4px 16px 12px; }
+  .tr-head .t { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+  .langs { display: flex; align-items: center; gap: 6px; }
+  .lang { flex: 1; height: 44px; border-radius: 22px; border: 1px solid var(--m-ov); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 14px; font-size: 14px; }
+  .lang .ms { font-size: 20px; color: var(--m-on-sv); }
+  .langs > .ms { color: var(--m-primary); }
+  .info { margin: 0 16px 10px; display: flex; gap: 8px; align-items: center; background: var(--m-sc); padding: 10px 12px; border-radius: 10px; font-size: 12px; color: var(--m-on-sv); }
+  .info .ms { font-size: 18px; }
+  .tr-cards { display: flex; gap: 12px; padding: 0 16px; }
+  .tr-card { flex: none; width: 272px; height: 380px; border-radius: 16px; padding: 14px 16px; background: var(--m-sc); }
+  .tr-card.res { background: var(--m-pc); color: var(--m-on-pc); }
+  .tr-card .lab { font-size: 12px; font-weight: 500; color: var(--m-on-sv); margin-bottom: 10px; display: flex; justify-content: space-between; }
+  .tr-card.res .lab { color: var(--m-on-pc); }
+  .tr-card p { margin: 0 0 10px; font-size: 16px; line-height: 1.6; }
+  .tr-card .jp { font-family: "Noto Sans JP", "Noto Sans KR", sans-serif; }
+  .tr-acts { display: flex; gap: 8px; padding: 14px 16px; }
+  .tr-acts .fbtn { flex: 1; justify-content: center; }
+
+  /* 카메라 */
+  .cam { margin: 0 16px; height: 470px; border-radius: 20px; overflow: hidden; position: relative; background: #2a2723; }
+  .cam .frame { position: absolute; left: 28px; right: 28px; top: 90px; height: 210px; border-radius: 12px; }
+  .cam .frame::before, .cam .frame::after { content: ""; position: absolute; inset: 0; border: 3px solid #fff; border-radius: 12px; clip-path: polygon(0 0, 22% 0, 22% 3px, 3px 3px, 3px 30%, 0 30%, 0 0, 78% 0, 100% 0, 100% 30%, calc(100% - 3px) 30%, calc(100% - 3px) 3px, 78% 3px, 78% 0); }
+  .cam .frame::after { transform: rotate(180deg); }
+  .cam .hint { position: absolute; left: 0; right: 0; top: 24px; text-align: center; color: #fff; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+  .cam .ctrls { position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: space-around; align-items: center; color: #fff; }
+  .cam .ctrls .ms { font-size: 26px; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.14); }
+  .shutter { width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff; display: grid; place-items: center; }
+  .shutter i { width: 52px; height: 52px; border-radius: 50%; background: #fff; }
+
+  /* ---------- 탭 메뉴 시연 ---------- */
+  .menu-demo { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 8px; max-width: 420px; justify-self: center; width: 100%; }
+  .phone.sm .lang { font-size: 12px; white-space: nowrap; padding: 0 4px 0 10px; height: 38px; }
+  .phone.sm .lang .ms { font-size: 18px; }
+  .demo { background: var(--m-surface); border: 1px solid var(--rule); border-radius: 16px; height: 200px; min-width: 320px; position: relative; overflow: hidden; font-family: "Noto Sans KR", sans-serif; }
+  .demo .cap { position: absolute; left: 16px; top: 12px; font-size: 13px; color: var(--ink-3); font-family: "IBM Plex Sans KR", sans-serif; }
+  .tabbtn { position: absolute; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--m-sch); color: var(--m-on-sv); border: 1.5px solid var(--m-ov); }
+  .tabbtn.on { background: var(--m-tab); color: #fff; border-color: var(--m-tab); }
+  .tabbtn .ms { font-size: 26px; }
+  .tabbtn small { position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); font-size: 12px; background: var(--m-surface); padding: 0 4px; line-height: 16px; color: var(--m-on-sv); }
+  .tabbtn.on small { font-weight: 700; }
+  .homebtn { position: absolute; width: 76px; height: 76px; border-radius: 50%; background: var(--m-pc); color: var(--m-on-pc); border: 1.5px solid var(--m-ov); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .homebtn .ms { font-size: 28px; }
+  .arc { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); width: 280px; height: 140px; border-radius: 140px 140px 0 0; background: rgba(0,97,164,.05); border: 1px dashed rgba(0,97,164,.25); border-bottom: 0; }
+  .swipe { position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); color: var(--ink-3); font-size: 12px; display: flex; flex-direction: column; align-items: center; font-family: "IBM Plex Sans KR", sans-serif; }
+  .swipe .ms { font-size: 22px; }
+
+  /* ---------- 설정 / 드로어 ---------- */
+  .tile { display: flex; align-items: center; padding: 14px 20px; gap: 16px; border-bottom: 1px solid var(--m-ov); }
+  .tile .tx { flex: 1; }
+  .tile .tx b { display: block; font-weight: 500; font-size: 16px; }
+  .tile .tx span { font-size: 13px; color: var(--m-on-sv); }
+  .tile .ms { color: var(--m-on-sv); }
+  .seg { display: flex; border: 1px solid var(--m-outline); border-radius: 20px; overflow: hidden; margin: 6px 20px 0; }
+  .seg span { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; border-right: 1px solid var(--m-outline); }
+  .seg span:last-child { border-right: 0; }
+  .seg span.on { background: var(--m-pc); color: var(--m-on-pc); font-weight: 500; }
+  .drawer { position: absolute; inset: 0 70px 0 0; background: var(--m-surface); border-radius: 0 16px 16px 0; box-shadow: 4px 0 18px rgba(0,0,0,.18); padding: 24px 0; display: flex; flex-direction: column; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.32); }
+  .acct { padding: 8px 24px 20px; border-bottom: 1px solid var(--m-ov); }
+  .acct .ms { font-size: 56px; color: var(--m-on-sv); }
+  .acct b { display: block; font-size: 18px; margin-top: 6px; }
+  .acct span { font-size: 13px; color: var(--m-on-sv); }
+  .dr-item { display: flex; gap: 14px; align-items: center; padding: 16px 24px; font-size: 15px; }
+  .dr-item .ms { color: var(--m-on-sv); }
+  .dr-foot { margin-top: auto; padding: 16px 24px; color: var(--m-loss); font-size: 15px; }
+
+  /* ---------- 구조 ---------- */
+  .arch { display: grid; grid-template-columns: 1fr 40px 1fr 40px 1fr; align-items: stretch; margin-top: 40px; }
+  .node { border: 1px solid var(--ink); background: #FBFAF6; padding: 20px; border-radius: 4px; }
+  .node h4 { margin: 0 0 4px; font-size: 17px; }
+  .node .mono { font-size: 12px; color: var(--ink-3); }
+  .node ul { margin: 14px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); }
+  .node ul li { margin: 4px 0; }
+  .arrow { display: grid; place-items: center; color: var(--ink-3); }
+  .arrow .ms { font-size: 28px; }
+  .arch-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 40px; }
+  .arch-notes h5 { margin: 0 0 6px; font-size: 15px; }
+  .arch-notes p { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+  footer { margin-top: 112px; border-top: 1px solid var(--rule); padding: 28px 0 48px; font-size: 13px; color: var(--ink-3); }
+  footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+
+  @media (max-width: 960px) {
+    .hero-grid, .feature-grid, .feature.flip .feature-grid { grid-template-columns: 1fr; gap: 40px; }
+    .feature.flip .copy { order: 0; }
+    .feature-grid > .phone { justify-self: center; }
+    .stage .phone:not(:nth-child(2)) { display: none; }
+    .arch { grid-template-columns: 1fr; }
+    .arrow { height: 40px; }
+    .arrow .ms { transform: rotate(90deg); }
+    .arch-notes { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 40px; }
+  }
+  @media (max-width: 420px) {
+    .wrap { padding: 0 16px; }
+    .phone { transform: scale(.88); transform-origin: top center; margin-bottom: -88px; }
+    .points li { grid-template-columns: 1fr; gap: 2px; }
+    .menu-demo { grid-template-columns: 1fr; }
+    header.top nav { display: none; }
+  }
+
+  /* ---------- 차트 시안 전용 ---------- */
+  .dark {
+    --m-primary: #9ECAFF; --m-on-primary: #003258; --m-pc: #00497D; --m-on-pc: #D1E4FF;
+    --m-surface: #111418; --m-on-surface: #E1E2E8; --m-on-sv: #C3C7CF; --m-sch: #33353A; --m-sc: #1D2024;
+    --m-outline: #8D9199; --m-ov: #43474E; --m-gain: #7BD88F; --m-loss: #FFB4AB;
+  }
+  .variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 48px; }
+  .variant { display: flex; flex-direction: column; align-items: center; }
+  .variant .phone { width: 340px; }
+  .variant .screen { height: 720px; }
+  .vhead { align-self: stretch; margin-bottom: 20px; }
+  .vhead .tag { font-size: 14px; font-weight: 600; color: var(--accent); }
+  .vhead h3 { margin: 2px 0 6px; font-size: 22px; }
+  .vhead p { margin: 0; font-size: 14px; color: var(--ink-2); min-height: 4.8em; }
+  .rec { display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 600; color: #fff; background: var(--accent); border-radius: 4px; padding: 1px 8px; vertical-align: 3px; }
+  .notes { align-self: stretch; margin-top: 28px; font-size: 14px; }
+  .notes h4 { margin: 0 0 6px; font-size: 14px; }
+  .notes ul { margin: 0 0 16px; padding-left: 18px; color: var(--ink-2); }
+  .notes li { margin: 4px 0; }
+  .notes .good h4 { color: #146C2E; }
+  .notes .bad h4 { color: #BA1A1A; }
+  .badge-plan { display: inline-block; font-size: 13px; font-weight: 600; color: #8A4B00; background: #FBE7CC; border-radius: 4px; padding: 2px 8px; margin-bottom: 14px; }
+
+  .sec-t { font-size: 22px; padding: 8px 16px 12px; }
+  .ccard { margin: 0 16px; border: 1px solid var(--m-ov); border-radius: 4px; background: var(--m-surface); padding: 6px 12px 12px 16px; box-shadow: 0 5px 14px rgba(0,0,0,.04); }
+  .ch-top { display: flex; align-items: center; }
+  .ch-top .t { flex: 1; font-size: 14px; font-weight: 500; color: var(--m-on-sv); }
+  .ch-top .ms { width: 40px; height: 40px; display: grid; place-items: center; color: var(--m-on-sv); font-size: 22px; }
+  .pairrow { display: flex; align-items: center; gap: 6px; margin: 2px 0 8px; }
+  .pbtn { height: 40px; padding: 0 8px 0 6px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--m-ov); border-radius: 4px; font-weight: 500; font-size: 15px; }
+  .pbtn .flag { font-size: 20px; }
+  .pbtn .ms { font-size: 18px; color: var(--m-on-sv); }
+  .swapb { width: 40px; height: 40px; display: grid; place-items: center; color: var(--m-primary); }
+  .conv { display: flex; align-items: center; gap: 12px; }
+  .conv .in { flex: 1; height: 44px; background: var(--m-sch); border-radius: 4px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; font-size: 18px; font-weight: 500; }
+  .conv .in small { font-size: 12px; color: var(--m-on-sv); font-weight: 400; }
+  .conv .out { flex: 1; text-align: right; font-size: 16px; font-weight: 500; white-space: nowrap; }
+  .conv .out small { display: block; font-size: 11px; color: var(--m-on-sv); font-weight: 400; }
+  .stat { font-size: 12px; color: var(--m-on-sv); margin: 8px 0 4px; }
+  .periods { display: flex; gap: 4px; margin: 0 16px 12px; }
+  .periods span { flex: 1; text-align: center; padding: 8px 0; border-radius: 4px; background: var(--m-sch); color: var(--m-on-sv); font-size: 12px; font-weight: 500; }
+  .periods span.on { background: var(--m-primary); color: var(--m-on-primary); }
+  .periods.in { margin: 10px 0 0; }
+  .periods.in span { padding: 12px 0; }
+  .cmp3 { display: flex; gap: 8px; margin: 8px 0 4px; }
+  .cmp3 div { flex: 1; background: var(--m-sc); border-radius: 4px; padding: 6px 8px; font-size: 11px; color: var(--m-on-sv); }
+  .cmp3 div b { display: block; font-size: 14px; font-weight: 500; color: var(--m-on-surface); }
+  .dots { display: flex; justify-content: center; gap: 6px; margin: 12px 0 0; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--m-ov); }
+  .dots i.on { background: var(--m-primary); width: 18px; border-radius: 3px; }
+  .chart { display: block; width: 100%; height: auto; }
+  .chart .grid line { stroke: var(--m-ov); stroke-width: 1; }
+  .chart .ax { font-size: 10px; fill: var(--m-on-sv); font-family: "Noto Sans KR", sans-serif; }
+  .chart .ln { fill: none; stroke: var(--m-primary); stroke-width: 2; stroke-linejoin: round; }
+  .chart .area { fill: var(--m-primary); opacity: .12; }
+
+  /* B */
+  .b-rate { display: flex; align-items: baseline; gap: 6px; margin-top: 2px; }
+  .b-rate .v { font-size: 30px; font-weight: 700; letter-spacing: -0.01em; }
+  .b-rate .u { font-size: 14px; color: var(--m-on-sv); }
+  .b-sub { font-size: 12px; color: var(--m-on-sv); }
+  .b-delta { display: flex; align-items: center; gap: 6px; margin: 6px 0 10px; font-size: 13px; white-space: nowrap; }
+  .b-delta span.m { font-size: 12px; }
+  .b-delta .up { color: var(--m-gain); font-weight: 600; }
+  .b-delta span.m { color: var(--m-on-sv); }
+  .b-conv { display: flex; align-items: center; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--m-ov); font-size: 14px; }
+  .b-conv .in { width: 76px; height: 40px; background: var(--m-sch); border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding: 0 10px; font-weight: 500; }
+  .b-conv .eq { color: var(--m-on-sv); }
+  .b-conv .out { flex: 1; text-align: right; font-weight: 700; font-size: 16px; white-space: nowrap; }
+  .b-head { display: flex; align-items: center; gap: 4px; }
+  .b-head .pairs { flex: 1; display: flex; align-items: center; gap: 2px; }
+  .b-head .pc { height: 40px; display: flex; align-items: center; gap: 4px; padding: 0 4px; font-size: 16px; font-weight: 600; }
+  .b-head .pc .flag { font-size: 20px; }
+  .b-head .pc .ms { font-size: 18px; color: var(--m-on-sv); }
+  .b-head .sw { width: 36px; height: 40px; display: grid; place-items: center; color: var(--m-primary); }
+  .b-head .ic { width: 40px; height: 40px; display: grid; place-items: center; color: var(--m-on-sv); }
+  .b-head .ic .ms { font-size: 22px; }
+  .tip { fill: var(--m-on-surface); }
+  .tipt { fill: var(--m-surface); font-size: 10px; font-family: "Noto Sans KR", sans-serif; }
+
+  /* C */
+  .c-range { margin: 4px 0 12px; }
+  .c-range .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--m-on-sv); margin-bottom: 6px; }
+  .c-bar { position: relative; height: 8px; border-radius: 4px; background: var(--m-sch); }
+  .c-bar .avg { position: absolute; top: -4px; width: 2px; height: 16px; background: var(--m-outline); }
+  .c-bar .now { position: absolute; top: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--m-primary); border: 3px solid var(--m-surface); box-shadow: 0 0 0 1px var(--m-primary); transform: translateX(-50%); }
+  .c-range .ends { display: flex; justify-content: space-between; font-size: 12px; margin-top: 8px; }
+  .c-range .ends b { font-weight: 500; }
+  .c-verdict { margin: 0 0 10px; padding: 10px 12px; border-radius: 4px; background: var(--m-sc); font-size: 13px; line-height: 1.5; }
+  .c-verdict b { font-weight: 700; }
+  .c-spark { margin: 4px 0 0; }
+
+  .cmp { width: 100%; border-collapse: collapse; margin-top: 32px; font-size: 15px; }
+  .cmp th, .cmp td { padding: 14px 12px 14px 0; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+  .cmp th { font-size: 13px; color: var(--ink-3); font-weight: 500; }
+  .cmp td:first-child { font-weight: 600; width: 20%; }
+  .lv { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+  .lv.h { background: #146C2E; } .lv.m { background: #B26A00; } .lv.l { background: #BA1A1A; }
+  .row2 { display: flex; gap: 40px; align-items: flex-start; margin-top: 40px; flex-wrap: wrap; justify-content: center; }
+  .row2 .copy { flex: 1; min-width: 280px; }
+  @media (max-width: 1100px) {
+    .variants { grid-template-columns: 1fr; justify-items: center; }
+    .variant { max-width: 420px; }
+    .vhead p { min-height: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <b>Tripbler</b>
+    <nav>
+      <a href="#variants">시안 세 가지</a>
+      <a href="#touch">짚어 보기</a>
+      <a href="#compare">비교</a>
+      <a href="#dark">다크 모드</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero" style="padding-bottom:0">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="badge-plan">디자인 시안 · 환율 흐름 차트</span>
+        <h1>환전하기 전에<br><em>지금이 어느 쯤인지</em></h1>
+        <p class="lead">환율 차트 카드는 "지금 바꿀까, 조금 기다릴까"를 판단하려고 엽니다. 지금 카드는 금액 환산이 맨 위에 있고, 오늘 환율이 기간 동안 얼마나 움직였는지는 그래프를 읽어야 알 수 있습니다. 같은 데이터(USD/KRW, 1개월)로 세 시안을 비교합니다.</p>
+      </div>
+      <p class="hero-note">세 시안 모두 앱의 디자인 규칙(테마 색, 둥글기 4, 터치 영역 48 이상, 꾸밈 그라데이션 금지)을 따릅니다. 차트의 축·단위·툴팁, 손을 뗀 뒤 3초 유지 동작은 그대로 둡니다. 값은 예시입니다.</p>
+    </div>
+  </div>
+</section>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <path id="ln1m" d="M0,107.3 L12.5,116.7 25,98 37.5,88.7 50,102.7 62.5,79.3 75,70 87.5,84 100,93.3 112.5,74.7 125,60.7 137.5,65.3 150,51.3 162.5,70 175,79.3 187.5,60.7 200,42 212.5,32.7 225,46.7 237.5,56 250,37.3 262.5,23.3 275,32.7 287.5,42 300,45.7"/>
+    <path id="ar1m" d="M0,107.3 L12.5,116.7 25,98 37.5,88.7 50,102.7 62.5,79.3 75,70 87.5,84 100,93.3 112.5,74.7 125,60.7 137.5,65.3 150,51.3 162.5,70 175,79.3 187.5,60.7 200,42 212.5,32.7 225,46.7 237.5,56 250,37.3 262.5,23.3 275,32.7 287.5,42 300,45.7 L300,140 L0,140 Z"/>
+  </defs>
+</svg>
+
+<section id="variants" style="padding-top:24px">
+  <div class="wrap">
+    <div class="variants">
+
+      <!-- A -->
+      <div class="variant">
+        <div class="vhead">
+          <div class="tag">시안 A</div>
+          <h3>지금 화면</h3>
+          <p>기간 버튼이 카드들 위에 있고, 카드 안은 제목 → 통화쌍 → 금액 환산 → 갱신 시각 → 그래프 순입니다. 현재 환율은 환산 결과 아래 작은 글씨로 나옵니다.</p>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+            <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+            <div class="body">
+              <div class="sec-t">환율 흐름</div>
+              <div class="periods"><span>7D</span><span class="on">1M</span><span>3M</span><span>6M</span><span>1Y</span><span>2Y</span><span>5Y</span></div>
+              <div class="ccard">
+                <div class="ch-top"><span class="t">환율 차트</span><span class="ms">refresh</span><span class="ms">more_vert</span></div>
+                <div class="pairrow"><span class="pbtn"><span class="flag emoji">🇺🇸</span>USD<span class="ms">arrow_drop_down</span></span><span class="swapb ms">swap_horiz</span><span class="pbtn"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">arrow_drop_down</span></span></div>
+                <div class="conv"><div class="in">100<small>USD</small></div><div class="out">138,520 KRW<small>1 USD = 1,385.20 KRW</small></div></div>
+                <div class="stat">업데이트: 2026.11.13 09:30</div>
+                <svg class="chart" viewBox="0 0 304 172" role="img" aria-label="시안 A 그래프">
+                  <g class="grid"><line x1="0" y1="23.3" x2="262" y2="23.3"/><line x1="0" y1="70" x2="262" y2="70"/><line x1="0" y1="116.7" x2="262" y2="116.7"/></g>
+                  <g transform="scale(0.873,1)"><use href="#ar1m" class="area"/><use href="#ln1m" class="ln"/></g>
+                  <g class="ax"><text x="268" y="27">1,390</text><text x="268" y="74">1,380</text><text x="268" y="120">1,370</text><text x="0" y="160">10.14</text><text x="84" y="160">10.24</text><text x="168" y="160">11.03</text><text x="226" y="160">11.13</text></g>
+                </svg>
+              </div>
+              <div class="dots"><i class="on"></i><i></i><i></i></div>
+              <div class="handle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notes">
+          <div class="good"><h4>좋은 점</h4><ul><li>금액을 넣으면 바로 환산되고, 그래프를 짚으면 그날 환율로 비교됩니다.</li><li>여러 통화쌍을 옆으로 넘겨 볼 수 있습니다.</li></ul></div>
+          <div class="bad"><h4>아쉬운 점</h4><ul><li>오늘 환율과 기간 중 변화량이 한눈에 보이지 않습니다.</li><li>"환율 차트" 제목이 통화쌍과 같은 내용을 반복합니다.</li><li>기간 버튼이 카드 위에 떨어져 있어, 그래프를 보다가 손이 위로 가야 합니다.</li></ul></div>
+        </div>
+      </div>
+
+      <!-- B -->
+      <div class="variant">
+        <div class="vhead">
+          <div class="tag">시안 B<span class="rec">추천</span></div>
+          <h3>환율과 변화량을 맨 위에</h3>
+          <p>통화쌍을 제목으로 쓰고, 그 아래 오늘 환율을 크게, 기간 동안의 변화를 한 줄로 보여 줍니다. 기간 버튼은 그래프 바로 아래로, 금액 환산은 카드 맨 아래 한 줄로 옮깁니다.</p>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+            <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+            <div class="body">
+              <div class="sec-t">환율 흐름</div>
+              <div class="ccard">
+                <div class="b-head">
+                  <div class="pairs"><span class="pc"><span class="flag emoji">🇺🇸</span>USD<span class="ms">arrow_drop_down</span></span><span class="sw ms">swap_horiz</span><span class="pc"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">arrow_drop_down</span></span></div>
+                  <span class="ic"><span class="ms">refresh</span></span><span class="ic"><span class="ms">more_vert</span></span>
+                </div>
+                <div class="b-rate"><span class="v">1,385.20</span><span class="u">KRW / 1 USD</span></div>
+                <div class="b-delta"><span class="up">▲ 13.20 (0.96%)</span><span class="m">1개월 전보다 · 09:30 기준</span></div>
+                <svg class="chart" viewBox="0 0 304 160" role="img" aria-label="시안 B 그래프">
+                  <g class="grid"><line x1="0" y1="23.3" x2="262" y2="23.3"/><line x1="0" y1="70" x2="262" y2="70"/><line x1="0" y1="116.7" x2="262" y2="116.7"/></g>
+                  <g transform="scale(0.873,1)"><use href="#ar1m" class="area"/><use href="#ln1m" class="ln"/></g>
+                  <line x1="0" y1="107.3" x2="262" y2="107.3" stroke="var(--m-outline)" stroke-dasharray="2 3"/>
+                  <g class="ax"><text x="268" y="27">1,390</text><text x="268" y="74">1,380</text><text x="268" y="120">1,370</text><text x="0" y="154">10.14</text><text x="84" y="154">10.24</text><text x="168" y="154">11.03</text><text x="226" y="154">11.13</text></g>
+                </svg>
+                <div class="periods in"><span>7D</span><span class="on">1M</span><span>3M</span><span>6M</span><span>1Y</span><span>2Y</span><span>5Y</span></div>
+                <div class="b-conv"><span class="in">100</span><span>USD</span><span class="eq">=</span><span class="out">138,520 KRW</span></div>
+              </div>
+              <div class="dots"><i class="on"></i><i></i><i></i></div>
+              <div class="handle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notes">
+          <div class="good"><h4>좋은 점</h4><ul><li>오늘 환율과 "한 달 새 얼마나 올랐나"가 카드를 열자마자 읽힙니다.</li><li>기간 버튼이 그래프 바로 아래라 바꾸고 결과를 보는 거리가 짧습니다.</li><li>점선으로 기간 시작 값을 표시해 오르내림을 눈으로 비교합니다.</li></ul></div>
+          <div class="bad"><h4>아쉬운 점</h4><ul><li>기간 버튼이 카드마다 들어가 카드가 길어집니다. 넘겨 볼 때 기간은 카드끼리 함께 바뀌어야 합니다.</li><li>금액 환산이 아래로 내려가 위쪽 환율 목록과 역할이 겹쳐 보일 수 있습니다.</li></ul></div>
+        </div>
+      </div>
+
+      <!-- C -->
+      <div class="variant">
+        <div class="vhead">
+          <div class="tag">시안 C</div>
+          <h3>기간 중 위치를 막대로</h3>
+          <p>그래프 대신 "기간 최저~최고 중 지금이 어디인지"를 막대 하나로 먼저 보여 줍니다. 그래프는 작게 줄여 흐름만 보여 주고, 자세히 보려면 카드를 엽니다.</p>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+            <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+            <div class="body">
+              <div class="sec-t">환율 흐름</div>
+              <div class="periods"><span>7D</span><span class="on">1M</span><span>3M</span><span>6M</span><span>1Y</span><span>2Y</span><span>5Y</span></div>
+              <div class="ccard">
+                <div class="b-head">
+                  <div class="pairs"><span class="pc"><span class="flag emoji">🇺🇸</span>USD<span class="ms">arrow_drop_down</span></span><span class="sw ms">swap_horiz</span><span class="pc"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">arrow_drop_down</span></span></div>
+                  <span class="ic"><span class="ms">refresh</span></span><span class="ic"><span class="ms">more_vert</span></span>
+                </div>
+                <div class="b-rate"><span class="v">1,385.20</span><span class="u">KRW / 1 USD</span></div>
+                <div class="b-sub" style="margin-bottom:12px">11.13 09:30 기준</div>
+                <div class="c-range">
+                  <div class="lbl"><span>1개월 범위에서 지금 위치</span></div>
+                  <div class="c-bar"><span class="avg" style="left:53%"></span><span class="now" style="left:76%"></span></div>
+                  <div class="ends"><span>최저 <b>1,370.00</b><br><small style="color:var(--m-on-sv)">10.15</small></span><span style="text-align:center">평균 <b>1,380.60</b></span><span style="text-align:right">최고 <b>1,390.00</b><br><small style="color:var(--m-on-sv)">11.08</small></span></div>
+                </div>
+                <div class="c-verdict">한 달 평균보다 <b>4.60원 높고</b>, 최고보다 <b>4.80원 낮아요.</b></div>
+                <svg class="chart c-spark" viewBox="0 0 304 80" role="img" aria-label="시안 C 작은 그래프">
+                  <g transform="scale(1.013,0.55)"><use href="#ar1m" class="area"/><use href="#ln1m" class="ln"/></g>
+                </svg>
+                <div class="b-conv"><span class="in">100</span><span>USD</span><span class="eq">=</span><span class="out">138,520 KRW</span></div>
+              </div>
+              <div class="dots"><i class="on"></i><i></i><i></i></div>
+              <div class="handle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notes">
+          <div class="good"><h4>좋은 점</h4><ul><li>"지금이 싼 편인지"를 숫자를 읽지 않고 막대 위치로 압니다.</li><li>문장으로 평균·최고와의 차이를 알려 줍니다.</li></ul></div>
+          <div class="bad"><h4>아쉬운 점</h4><ul><li>작은 그래프에는 축이 없어, 날짜별 값을 짚어 보는 기능을 이 카드에서 쓰기 어렵습니다.</li><li>막대는 기간 안의 위치일 뿐이라 "싸다"는 판단으로 오해될 수 있습니다.</li><li>최저·최고·평균 계산과 새 화면 상태가 필요해 바꿀 범위가 큽니다.</li></ul></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="feature" id="touch" style="padding-top:96px">
+  <div class="wrap">
+    <div class="row2">
+      <div class="copy">
+        <div class="kicker">짚어 보기</div>
+        <h2>시안 B에서 그래프를 짚으면</h2>
+        <p>그래프를 누른 채 움직이면 맨 위 큰 숫자 자리가 그날 환율로 바뀌고, 변화량 줄은 "오늘과의 차이"로 바뀝니다. 지금처럼 손을 뗀 뒤 3초 동안 유지한 다음 오늘 값으로 돌아옵니다.</p>
+        <ul class="points">
+          <li><b>한 자리에서 읽기</b><span>지금은 선택일 값이 오른쪽 위, 비교가 그 아래 줄에 따로 뜹니다. B는 큰 숫자 한 자리만 바뀌어 눈이 덜 움직입니다.</span></li>
+          <li><b>툴팁은 작게</b><span>그래프 위 툴팁은 날짜만 보여 줘 선을 가리지 않습니다.</span></li>
+          <li><b>그대로 두는 것</b><span>축, 단위, 손 뗀 뒤 3초 유지, 금액 환산의 선택일 계산은 지금 동작을 따릅니다.</span></li>
+        </ul>
+      </div>
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar"><span>9:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+          <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+          <div class="body">
+            <div class="sec-t">환율 흐름</div>
+            <div class="ccard">
+              <div class="b-head">
+                <div class="pairs"><span class="pc"><span class="flag emoji">🇺🇸</span>USD<span class="ms">arrow_drop_down</span></span><span class="sw ms">swap_horiz</span><span class="pc"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">arrow_drop_down</span></span></div>
+                <span class="ic"><span class="ms">refresh</span></span><span class="ic"><span class="ms">more_vert</span></span>
+              </div>
+              <div class="b-rate"><span class="v">1,384.00</span><span class="u">KRW / 1 USD</span></div>
+              <div class="b-delta"><span style="font-weight:600">10.29 (목)</span><span class="m">오늘보다 1.20원 낮음</span></div>
+              <svg class="chart" viewBox="0 0 304 160" role="img" aria-label="짚어 본 그래프">
+                <g class="grid"><line x1="0" y1="23.3" x2="262" y2="23.3"/><line x1="0" y1="70" x2="262" y2="70"/><line x1="0" y1="116.7" x2="262" y2="116.7"/></g>
+                <g transform="scale(0.873,1)"><use href="#ar1m" class="area"/><use href="#ln1m" class="ln"/></g>
+                <line x1="131" y1="8" x2="131" y2="140" stroke="var(--m-on-sv)" stroke-dasharray="3 3"/>
+                <circle cx="131" cy="51.3" r="5" fill="var(--m-surface)" stroke="var(--m-primary)" stroke-width="2.5"/>
+                <rect class="tip" x="106" y="0" width="50" height="18" rx="4"/><text class="tipt" x="131" y="12.5" text-anchor="middle">10.29</text>
+                <g class="ax"><text x="268" y="27">1,390</text><text x="268" y="74">1,380</text><text x="268" y="120">1,370</text><text x="0" y="154">10.14</text><text x="84" y="154">10.24</text><text x="168" y="154">11.03</text><text x="226" y="154">11.13</text></g>
+              </svg>
+              <div class="periods in"><span>7D</span><span class="on">1M</span><span>3M</span><span>6M</span><span>1Y</span><span>2Y</span><span>5Y</span></div>
+              <div class="b-conv"><span class="in">100</span><span>USD</span><span class="eq">=</span><span class="out">138,400 KRW<br><small style="font-weight:400;font-size:11px;color:var(--m-on-sv)">10.29 환율 · 오늘보다 120원 적음</small></span></div>
+            </div>
+            <div class="handle"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="feature" id="compare" style="padding-top:96px">
+  <div class="wrap">
+    <div class="copy">
+      <div class="kicker">비교</div>
+      <h2>지금 고친다면 시안 B</h2>
+      <p>B는 지금 카드의 그래프·짚어 보기·환산 기능을 그대로 쓰면서, 오늘 환율과 기간 변화를 먼저 읽히게 순서만 바꿉니다. C의 범위 막대는 판단을 가장 빠르게 돕지만, 짚어 보기 기능이 약해지고 계산이 새로 필요합니다. B 위에 범위 막대만 덧붙이는 것도 나중에 해 볼 만합니다.</p>
+    </div>
+    <table class="cmp">
+      <thead><tr><th>기준</th><th>A 지금 화면</th><th>B 환율과 변화량을 맨 위에</th><th>C 기간 중 위치를 막대로</th></tr></thead>
+      <tbody>
+        <tr><td>오늘 환율이 한눈에</td><td><span class="lv l"></span>환산 아래 작은 글씨</td><td><span class="lv h"></span>카드 맨 위 큰 숫자</td><td><span class="lv h"></span>카드 맨 위 큰 숫자</td></tr>
+        <tr><td>기간 중 변화</td><td><span class="lv m"></span>그래프를 읽어야 함</td><td><span class="lv h"></span>변화량 한 줄 + 시작값 점선</td><td><span class="lv h"></span>최저·최고·평균 막대와 문장</td></tr>
+        <tr><td>날짜별 값 짚어 보기</td><td><span class="lv h"></span>그대로</td><td><span class="lv h"></span>그대로, 큰 숫자 자리에서 읽음</td><td><span class="lv l"></span>작은 그래프라 어려움</td></tr>
+        <tr><td>기간 바꾸기</td><td><span class="lv m"></span>카드 위 공통 버튼</td><td><span class="lv h"></span>그래프 바로 아래</td><td><span class="lv m"></span>카드 위 공통 버튼</td></tr>
+        <tr><td>바꿀 범위</td><td>없음</td><td><span class="lv h"></span>카드 머리·순서, 기간 버튼 위치</td><td><span class="lv l"></span>새 계산, 새 카드 구성, 짚어 보기 재설계</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="feature" id="dark" style="padding-top:96px">
+  <div class="wrap">
+    <div class="row2">
+      <div class="copy">
+        <div class="kicker">다크 모드</div>
+        <h2>시안 B를 어두운 화면에서</h2>
+        <p>오르면 초록, 내리면 빨강은 테마의 증감 색(gain·loss)을 그대로 씁니다. 다크 모드에서는 밝은 초록·분홍으로 바뀌어 어두운 배경에서도 읽힙니다.</p>
+        <ul class="points">
+          <li><b>내린 경우</b><span>예시는 7일 기준으로 내린 상태입니다. ▼와 색을 함께 써 색만으로 구분하지 않습니다.</span></li>
+          <li><b>오래된 값</b><span>갱신에 실패하면 지금처럼 "마지막 성공 데이터 · 갱신 지연"을 변화량 줄 아래에 적습니다.</span></li>
+        </ul>
+      </div>
+      <div class="phone dark">
+        <div class="screen">
+          <div class="statusbar"><span>21:10</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+          <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+          <div class="body">
+            <div class="sec-t">환율 흐름</div>
+            <div class="ccard">
+              <div class="b-head">
+                <div class="pairs"><span class="pc"><span class="flag emoji">🇯🇵</span>JPY<span class="ms">arrow_drop_down</span></span><span class="sw ms">swap_horiz</span><span class="pc"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">arrow_drop_down</span></span></div>
+                <span class="ic"><span class="ms">refresh</span></span><span class="ic"><span class="ms">more_vert</span></span>
+              </div>
+              <div class="b-rate"><span class="v">924.50</span><span class="u">KRW / 100 JPY</span></div>
+              <div class="b-delta"><span style="color:var(--m-loss);font-weight:600">▼ 6.80 (0.73%)</span><span class="m">7일 전보다 · 21:00 기준</span></div>
+              <div class="b-sub" style="margin:-4px 0 8px">마지막 성공 데이터 · 갱신 지연</div>
+              <svg class="chart" viewBox="0 0 304 160" role="img" aria-label="다크 모드 그래프">
+                <g class="grid"><line x1="0" y1="23.3" x2="262" y2="23.3"/><line x1="0" y1="70" x2="262" y2="70"/><line x1="0" y1="116.7" x2="262" y2="116.7"/></g>
+                <path class="ln" d="M0,57.9 L37,62 75,52 112,70 150,84 187,98 225,112 262,121.4"/>
+                <path class="area" d="M0,57.9 L37,62 75,52 112,70 150,84 187,98 225,112 262,121.4 L262,140 L0,140 Z"/>
+                <line x1="0" y1="57.9" x2="262" y2="57.9" stroke="var(--m-outline)" stroke-dasharray="2 3"/>
+                <g class="ax"><text x="268" y="27">935</text><text x="268" y="74">930</text><text x="268" y="120">925</text><text x="0" y="154">11.06</text><text x="110" y="154">11.09</text><text x="226" y="154">11.13</text></g>
+              </svg>
+              <div class="periods in"><span class="on">7D</span><span>1M</span><span>3M</span><span>6M</span><span>1Y</span><span>2Y</span><span>5Y</span></div>
+              <div class="b-conv"><span class="in">10,000</span><span>JPY</span><span class="eq">=</span><span class="out">92,450 KRW</span></div>
+            </div>
+            <div class="handle" style="border-color:rgba(158,202,255,.5)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Tripbler · 개인 프로젝트</span>
+    <span>환율 흐름 차트 디자인 시안이며, 표시된 값은 예시입니다.</span>
+  </div>
+</footer>
+</body>
+</html>
