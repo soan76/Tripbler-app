@@ -2,7 +2,8 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerState, ConsumerStatefulWidget;
 
 import '../providers/translation_provider.dart';
 import '../widgets/translation/initial_camera_permission_view.dart';
@@ -12,14 +13,14 @@ import '../widgets/translation/translation_result_view.dart';
 import '../widgets/translation/translation_state_views.dart';
 
 // 번역 화면을 구성하는 StatefulWidget
-class TranslationScreen extends StatefulWidget {
+class TranslationScreen extends ConsumerStatefulWidget {
   const TranslationScreen({super.key});
 
   @override
-  State<TranslationScreen> createState() => _TranslationScreenState();
+  ConsumerState<TranslationScreen> createState() => _TranslationScreenState();
 }
 
-class _TranslationScreenState extends State<TranslationScreen>
+class _TranslationScreenState extends ConsumerState<TranslationScreen>
     with WidgetsBindingObserver {
   final ImagePicker _imagePicker = ImagePicker();
 
@@ -49,6 +50,7 @@ class _TranslationScreenState extends State<TranslationScreen>
     _disposeCameraController();
     super.dispose();
   }
+
   // 앱 라이프사이클 상태 변경 시 카메라 권한 및 초기화 상태를 관리
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -62,13 +64,14 @@ class _TranslationScreenState extends State<TranslationScreen>
       _checkCameraPermissionOnEntry();
     }
   }
+
   // 카메라 권한 확인 및 초기화 로직을 별도의 메서드로 분리 1
   Future<void> _checkCameraPermissionOnEntry() async {
     if (!mounted) {
       return;
     }
 
-    final provider = context.read<TranslationProvider>();
+    final provider = ref.read(translationProvider.notifier);
     provider.setStatus(TranslationStatus.checkingPermission);
 
     final permissionStatus = await Permission.camera.status;
@@ -95,6 +98,7 @@ class _TranslationScreenState extends State<TranslationScreen>
       provider.setStatus(TranslationStatus.permissionRequired);
     }
   }
+
   // 카메라 권한 요청 및 초기화 로직을 별도의 메서드로 분리 2
   Future<void> _requestCameraPermission() async {
     if (!mounted) {
@@ -103,7 +107,7 @@ class _TranslationScreenState extends State<TranslationScreen>
 
     _hasRequestedCameraPermission = true;
 
-    final provider = context.read<TranslationProvider>();
+    final provider = ref.read(translationProvider.notifier);
     provider.setStatus(TranslationStatus.checkingPermission);
 
     final permissionStatus = await Permission.camera.request();
@@ -125,13 +129,14 @@ class _TranslationScreenState extends State<TranslationScreen>
       provider.setStatus(TranslationStatus.permissionDenied);
     }
   }
+
   // 카메라 초기화 및 상태 관리 로직을 별도의 메서드로 분리 3
   Future<void> _initializeCamera() async {
     if (!mounted || _isCameraInitializing) {
       return;
     }
-    // 카메라 초기화 중 상태를 관리하기 위해 TranslationProvider의 상태를 업데이트
-    final provider = context.read<TranslationProvider>();
+    // 카메라 초기화 중 상태를 관리하기 위해 번역 상태를 업데이트
+    final provider = ref.read(translationProvider.notifier);
     provider.setStatus(TranslationStatus.initializingCamera);
 
     _isCameraInitializing = true;
@@ -202,6 +207,7 @@ class _TranslationScreenState extends State<TranslationScreen>
       _isCameraInitializing = false;
     }
   }
+
   // 카메라 컨트롤러를 안전하게 종료하고 상태를 초기화하는 메서드
   Future<void> _disposeCameraController() async {
     final controller = _cameraController;
@@ -227,6 +233,7 @@ class _TranslationScreenState extends State<TranslationScreen>
 
     _isFlashOn = false;
   }
+
   // 사진 촬영 및 이미지 선택 로직을 별도의 메서드로 분리 4
   Future<void> _capturePhoto() async {
     final controller = _cameraController;
@@ -238,8 +245,8 @@ class _TranslationScreenState extends State<TranslationScreen>
     }
 
     _isTakingPicture = true;
-    // 사진 촬영 중 상태를 관리하기 위해 TranslationProvider의 상태를 업데이트
-    final provider = context.read<TranslationProvider>();
+    // 사진 촬영 중 상태를 관리하기 위해 번역 상태를 업데이트
+    final provider = ref.read(translationProvider.notifier);
     provider.setStatus(TranslationStatus.capturing);
 
     try {
@@ -270,10 +277,11 @@ class _TranslationScreenState extends State<TranslationScreen>
     } finally {
       _isTakingPicture = false;
     }
-  } 
+  }
+
   // 갤러리에서 이미지 선택 로직을 별도의 메서드로 분리 5
   Future<void> _pickImageFromGallery() async {
-    if (context.read<TranslationProvider>().isProcessing) {
+    if (ref.read(translationProvider).isProcessing) {
       return;
     }
     // 갤러리에서 이미지를 선택하고 처리하는 로직을 별도의 메서드로 분리
@@ -287,7 +295,9 @@ class _TranslationScreenState extends State<TranslationScreen>
         return;
       }
 
-      await context.read<TranslationProvider>().processImage(pickedImage.path);
+      await ref
+          .read(translationProvider.notifier)
+          .processImage(pickedImage.path);
     } catch (error, stackTrace) {
       debugPrint('이미지 선택 실패: $error');
       debugPrint('$stackTrace');
@@ -296,11 +306,12 @@ class _TranslationScreenState extends State<TranslationScreen>
         return;
       }
 
-      context.read<TranslationProvider>().setError(
-        message: '이미지를 선택하지 못했습니다.\n다시 시도해 주세요.',
-      );
+      ref
+          .read(translationProvider.notifier)
+          .setError(message: '이미지를 선택하지 못했습니다.\n다시 시도해 주세요.');
     }
   }
+
   // 플래시 토글 로직을 별도의 메서드로 분리 6
   Future<void> _toggleFlash() async {
     final controller = _cameraController;
@@ -332,17 +343,20 @@ class _TranslationScreenState extends State<TranslationScreen>
       ).showSnackBar(const SnackBar(content: Text('이 기기에서는 플래시를 사용할 수 없습니다.')));
     }
   }
+
   // 앱 설정 열기 로직을 별도의 메서드로 분리 7
   Future<void> _openSettings() async {
     await openAppSettings();
   }
+
   // 카메라 재시도 로직을 별도의 메서드로 분리 8
   Future<void> _retryCamera() async {
     await _checkCameraPermissionOnEntry();
   }
+
   // 사진 재촬영 로직을 별도의 메서드로 분리 9
   Future<void> _retake() async {
-    context.read<TranslationProvider>().resetForRetake();
+    ref.read(translationProvider.notifier).resetForRetake();
 
     final permissionStatus = await Permission.camera.status;
 
@@ -361,19 +375,18 @@ class _TranslationScreenState extends State<TranslationScreen>
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Consumer<TranslationProvider>(
-      builder: (context, provider, _) {
-        return Container(
-          width: double.infinity,
-          height: double.infinity,
-          color: colorScheme.surface,
-          child: SafeArea(child: _buildBody(provider)),
-        );
-      },
+    final provider = ref.watch(translationProvider);
+
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      color: colorScheme.surface,
+      child: SafeArea(child: _buildBody(provider)),
     );
   }
+
   // 번역 화면의 본문 영역을 구성하는 위젯을 반환하는 메서드
-  Widget _buildBody(TranslationProvider provider) {
+  Widget _buildBody(TranslationState provider) {
     if (provider.hasImage ||
         provider.status == TranslationStatus.recognizing ||
         provider.status == TranslationStatus.translating ||
@@ -431,8 +444,10 @@ class _TranslationScreenState extends State<TranslationScreen>
         return _buildResultView(provider);
     }
   }
+
   // 카메라 뷰를 구성하는 위젯을 반환하는 메서드
-  Widget _buildCameraView(TranslationProvider provider) {
+  Widget _buildCameraView(TranslationState provider) {
+    final notifier = ref.read(translationProvider.notifier);
     final colorScheme = Theme.of(context).colorScheme;
     final isCameraReady =
         _cameraController != null && _cameraController!.value.isInitialized;
@@ -446,9 +461,9 @@ class _TranslationScreenState extends State<TranslationScreen>
             sourceLanguageCode: provider.sourceLanguageCode,
             targetLanguageCode: provider.targetLanguageCode,
             languages: provider.languages,
-            onSourceLanguageChanged: provider.changeSourceLanguage,
-            onTargetLanguageChanged: provider.changeTargetLanguage,
-            onSwapLanguages: provider.swapLanguages,
+            onSourceLanguageChanged: notifier.changeSourceLanguage,
+            onTargetLanguageChanged: notifier.changeTargetLanguage,
+            onSwapLanguages: notifier.swapLanguages,
           ),
           const SizedBox(height: 18),
           TranslationCameraPreviewCard(
@@ -464,7 +479,9 @@ class _TranslationScreenState extends State<TranslationScreen>
           const SizedBox(height: 18),
           Text(
             '촬영하거나 갤러리에서 선택한 이미지는 OCR 처리를 위해 사용됩니다. 현재 OCR은 기기 내 ML Kit 기능을 사용하며, 번역 API는 아직 연결하지 않았습니다.',
-            style: TextStyle(fontSize: 13, height: 1.45, // 라이트/다크 모드에 맞는 보조 텍스트 색상
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.45, // 라이트/다크 모드에 맞는 보조 텍스트 색상
               color: colorScheme.onSurfaceVariant,
             ),
           ),
@@ -472,8 +489,11 @@ class _TranslationScreenState extends State<TranslationScreen>
       ),
     );
   }
+
   // 번역 결과 뷰를 구성하는 위젯을 반환하는 메서드
-  Widget _buildResultView(TranslationProvider provider) {
+  Widget _buildResultView(TranslationState provider) {
+    final notifier = ref.read(translationProvider.notifier);
+
     return TranslationResultView(
       status: provider.status,
       selectedImagePath: provider.selectedImagePath,
@@ -484,9 +504,9 @@ class _TranslationScreenState extends State<TranslationScreen>
       sourceLanguageCode: provider.sourceLanguageCode,
       targetLanguageCode: provider.targetLanguageCode,
       languages: provider.languages,
-      onSourceLanguageChanged: provider.changeSourceLanguage,
-      onTargetLanguageChanged: provider.changeTargetLanguage,
-      onSwapLanguages: provider.swapLanguages,
+      onSourceLanguageChanged: notifier.changeSourceLanguage,
+      onTargetLanguageChanged: notifier.changeTargetLanguage,
+      onSwapLanguages: notifier.swapLanguages,
       onRetake: _retake,
       onPickFromGallery: _pickImageFromGallery,
     );

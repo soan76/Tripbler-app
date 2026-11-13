@@ -1,17 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerState, ConsumerStatefulWidget;
 
 import '../../providers/account_recovery_provider.dart';
 import 'find_id_result_screen.dart';
 
-class FindIdScreen extends StatefulWidget {
+class FindIdScreen extends ConsumerStatefulWidget {
   const FindIdScreen({super.key});
 
   @override
-  State<FindIdScreen> createState() => _FindIdScreenState();
+  ConsumerState<FindIdScreen> createState() => _FindIdScreenState();
 }
 
-class _FindIdScreenState extends State<FindIdScreen> {
+class _FindIdScreenState extends ConsumerState<FindIdScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _codeController = TextEditingController();
 
@@ -277,16 +278,20 @@ class _FindIdScreenState extends State<FindIdScreen> {
       return;
     }
 
-    final recoveryProvider = context.read<AccountRecoveryProvider>();
+    final recoveryProvider = ref.read(accountRecoveryProvider.notifier);
 
-    final success = await recoveryProvider.sendFindIdVerificationCode(email: email);
+    final success = await recoveryProvider.sendFindIdVerificationCode(
+      email: email,
+    );
 
     if (!mounted) {
       return;
     }
 
     if (!success) {
-      _showMessage(recoveryProvider.errorMessage ?? '인증코드 전송에 실패했습니다.');
+      _showMessage(
+        ref.read(accountRecoveryProvider).errorMessage ?? '인증코드 전송에 실패했습니다.',
+      );
       return;
     }
 
@@ -312,16 +317,20 @@ class _FindIdScreenState extends State<FindIdScreen> {
       return;
     }
 
-    final recoveryProvider = context.read<AccountRecoveryProvider>();
+    final recoveryProvider = ref.read(accountRecoveryProvider.notifier);
 
-    final success = await recoveryProvider.sendFindIdVerificationCode(email: email);
+    final success = await recoveryProvider.sendFindIdVerificationCode(
+      email: email,
+    );
 
     if (!mounted) {
       return;
     }
 
     if (!success) {
-      _showMessage(recoveryProvider.errorMessage ?? '인증코드 재전송에 실패했습니다.');
+      _showMessage(
+        ref.read(accountRecoveryProvider).errorMessage ?? '인증코드 재전송에 실패했습니다.',
+      );
       return;
     }
 
@@ -346,7 +355,7 @@ class _FindIdScreenState extends State<FindIdScreen> {
       return;
     }
 
-    final recoveryProvider = context.read<AccountRecoveryProvider>();
+    final recoveryProvider = ref.read(accountRecoveryProvider.notifier);
 
     final loginId = await recoveryProvider.verifyFindIdVerificationCode(
       email: email,
@@ -358,7 +367,9 @@ class _FindIdScreenState extends State<FindIdScreen> {
     }
 
     if (loginId == null) {
-      _showMessage(recoveryProvider.errorMessage ?? '인증코드 확인에 실패했습니다.');
+      _showMessage(
+        ref.read(accountRecoveryProvider).errorMessage ?? '인증코드 확인에 실패했습니다.',
+      );
       return;
     }
 

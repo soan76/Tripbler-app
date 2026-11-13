@@ -1,7 +1,36 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show Notifier, NotifierProvider, Provider;
 
 import '../core/network/api_exception.dart';
 import '../repositories/auth/auth_repository.dart';
+
+/// 계정 복구 요청에 쓰는 저장소. 로그인 상태를 다루는 AuthProvider와는 별도 인스턴스다.
+final accountRecoveryRepositoryProvider = Provider<AuthRepository>((ref) {
+  final repository = AuthRepository();
+  ref.onDispose(repository.dispose);
+  return repository;
+});
+
+class AccountRecoveryState {
+  const AccountRecoveryState({this.isLoading = false, this.errorMessage});
+
+  final bool isLoading;
+  final String? errorMessage;
+
+  AccountRecoveryState copyWith({
+    bool? isLoading,
+    String? errorMessage,
+    bool clearErrorMessage = false,
+  }) {
+    return AccountRecoveryState(
+      isLoading: isLoading ?? this.isLoading,
+      errorMessage: clearErrorMessage
+          ? null
+          : errorMessage ?? this.errorMessage,
+    );
+  }
+}
 
 /// 로그인하지 않은 사용자의 계정 복구 상태와 동작을 관리한다.
 ///
@@ -9,27 +38,17 @@ import '../repositories/auth/auth_repository.dart';
 /// - 아이디 찾기 이메일 인증
 /// - 비밀번호 재설정 이메일 인증
 /// - resetToken 기반 비밀번호 변경
-class AccountRecoveryProvider extends ChangeNotifier {
-  AccountRecoveryProvider({AuthRepository? authRepository})
-    : _authRepository = authRepository ?? AuthRepository(),
-      _ownsRepository = authRepository == null;
+class AccountRecoveryNotifier extends Notifier<AccountRecoveryState> {
+  @override
+  AccountRecoveryState build() => const AccountRecoveryState();
 
-  final AuthRepository _authRepository;
-
-  /// 외부에서 Repository를 주입받은 경우 Provider가 임의로 dispose하지 않는다.
-  final bool _ownsRepository;
-
-  bool _isLoading = false;
-  String? _errorMessage;
-
-  bool get isLoading => _isLoading;
-  String? get errorMessage => _errorMessage;
+  AuthRepository get _repository => ref.read(accountRecoveryRepositoryProvider);
 
   /// 아이디 찾기 인증코드를 이메일로 전송한다.
   Future<bool> sendFindIdVerificationCode({required String email}) {
     return _runBoolAction(
       action: () {
-        return _authRepository.sendFindIdVerificationCode(email: email.trim());
+        return _repository.sendFindIdVerificationCode(email: email.trim());
       },
       debugLabel: '아이디 찾기 인증코드 전송 실패',
       fallbackMessage: '인증코드 전송 중 오류가 발생했습니다.',
@@ -45,7 +64,7 @@ class AccountRecoveryProvider extends ChangeNotifier {
   }) {
     return _runValueAction<String>(
       action: () {
-        return _authRepository.verifyFindIdVerificationCode(
+        return _repository.verifyFindIdVerificationCode(
           email: email.trim(),
           code: code.trim(),
         );
@@ -62,7 +81,7 @@ class AccountRecoveryProvider extends ChangeNotifier {
   }) {
     return _runBoolAction(
       action: () {
-        return _authRepository.sendPasswordResetVerificationCode(
+        return _repository.sendPasswordResetVerificationCode(
           loginId: loginId.trim(),
           email: email.trim(),
         );
@@ -82,7 +101,7 @@ class AccountRecoveryProvider extends ChangeNotifier {
   }) {
     return _runValueAction<String>(
       action: () {
-        return _authRepository.verifyPasswordResetVerificationCode(
+        return _repository.verifyPasswordResetVerificationCode(
           loginId: loginId.trim(),
           email: email.trim(),
           code: code.trim(),
@@ -100,7 +119,7 @@ class AccountRecoveryProvider extends ChangeNotifier {
   }) {
     return _runBoolAction(
       action: () {
-        return _authRepository.resetPassword(
+        return _repository.resetPassword(
           resetToken: resetToken,
           newPassword: newPassword,
         );
@@ -116,32 +135,16 @@ class AccountRecoveryProvider extends ChangeNotifier {
     required String debugLabel,
     required String fallbackMessage,
   }) async {
-    if (_isLoading) {
-      return false;
-    }
+    final result = await _runValueAction<bool>(
+      action: () async {
+        await action();
+        return true;
+      },
+      debugLabel: debugLabel,
+      fallbackMessage: fallbackMessage,
+    );
 
-    _errorMessage = null;
-    _setLoading(true);
-
-    try {
-      await action();
-
-      return true;
-    } on ApiException catch (error) {
-      debugPrint('$debugLabel: $error');
-
-      _errorMessage = error.message;
-
-      return false;
-    } catch (error) {
-      debugPrint('$debugLabel: $error');
-
-      _errorMessage = fallbackMessage;
-
-      return false;
-    } finally {
-      _setLoading(false);
-    }
+    return result ?? false;
   }
 
   /// 값을 반환하는 계정 복구 요청의 공통 처리.
@@ -150,56 +153,45 @@ class AccountRecoveryProvider extends ChangeNotifier {
     required String debugLabel,
     required String fallbackMessage,
   }) async {
-    if (_isLoading) {
+    if (state.isLoading) {
       return null;
     }
 
-    _errorMessage = null;
-    _setLoading(true);
+    state = state.copyWith(isLoading: true, clearErrorMessage: true);
+
+    String? failureMessage;
 
     try {
       return await action();
     } on ApiException catch (error) {
       debugPrint('$debugLabel: $error');
 
-      _errorMessage = error.message;
+      failureMessage = error.message;
 
       return null;
     } catch (error) {
       debugPrint('$debugLabel: $error');
 
-      _errorMessage = fallbackMessage;
+      failureMessage = fallbackMessage;
 
       return null;
     } finally {
-      _setLoading(false);
+      if (ref.mounted) {
+        state = state.copyWith(isLoading: false, errorMessage: failureMessage);
+      }
     }
   }
 
   void clearError() {
-    if (_errorMessage == null) {
+    if (state.errorMessage == null) {
       return;
     }
 
-    _errorMessage = null;
-    notifyListeners();
-  }
-
-  void _setLoading(bool value) {
-    if (_isLoading == value) {
-      return;
-    }
-
-    _isLoading = value;
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    if (_ownsRepository) {
-      _authRepository.dispose();
-    }
-
-    super.dispose();
+    state = state.copyWith(clearErrorMessage: true);
   }
 }
+
+final accountRecoveryProvider =
+    NotifierProvider<AccountRecoveryNotifier, AccountRecoveryState>(
+      AccountRecoveryNotifier.new,
+    );

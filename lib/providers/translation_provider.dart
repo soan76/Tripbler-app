@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show Notifier, NotifierProvider, Provider;
 
 import '../services/ocr_service.dart';
 import '../services/translation_service.dart';
@@ -25,153 +27,193 @@ class TranslationLanguage {
   const TranslationLanguage({required this.code, required this.label});
 }
 
-class TranslationProvider extends ChangeNotifier {
-  TranslationProvider({
-    OcrService? ocrService,
-    TranslationService? translationService,
-  }) : _ocrService = ocrService ?? OcrService(),
-       _translationService = translationService ?? TranslationService();
+/// 기기 안에서 글자를 인식하는 서비스.
+final ocrServiceProvider = Provider<OcrService>((ref) => OcrService());
 
-  final OcrService _ocrService;
-  final TranslationService _translationService;
+/// 서버 번역 API를 호출하는 서비스.
+final translationServiceProvider = Provider<TranslationService>((ref) {
+  final service = TranslationService();
+  ref.onDispose(service.dispose);
+  return service;
+});
 
-  TranslationStatus _status = TranslationStatus.checkingPermission;
+/// 번역 화면이 보여 주는 값.
+class TranslationState {
+  const TranslationState({
+    this.status = TranslationStatus.checkingPermission,
+    this.selectedImagePath,
+    this.recognizedText = '',
+    this.translatedText = '',
+    this.errorMessage,
+    this.sourceLanguageCode = 'auto',
+    this.targetLanguageCode = 'ko',
+  });
 
-  String? _selectedImagePath;
-  String _recognizedText = '';
-  String _translatedText = '';
-  String? _errorMessage;
+  static const List<TranslationLanguage> _languages = <TranslationLanguage>[
+    TranslationLanguage(code: 'auto', label: '자동 감지'),
+    TranslationLanguage(code: 'ko', label: '한국어'),
+    TranslationLanguage(code: 'en', label: '영어'),
+    TranslationLanguage(code: 'ja', label: '일본어'),
+    TranslationLanguage(code: 'zh', label: '중국어'),
+  ];
 
-  String _sourceLanguageCode = 'auto';
-  String _targetLanguageCode = 'ko';
+  final TranslationStatus status;
+  final String? selectedImagePath;
+  final String recognizedText;
+  final String translatedText;
+  final String? errorMessage;
+  final String sourceLanguageCode;
+  final String targetLanguageCode;
 
-  TranslationStatus get status => _status;
-  String? get selectedImagePath => _selectedImagePath;
-  String get recognizedText => _recognizedText;
-  String get translatedText => _translatedText;
-  String? get errorMessage => _errorMessage;
-  String get sourceLanguageCode => _sourceLanguageCode;
-  String get targetLanguageCode => _targetLanguageCode;
-
-  bool get hasImage => _selectedImagePath != null;
-  bool get hasRecognizedText => _recognizedText.trim().isNotEmpty;
-  bool get hasTranslatedText => _translatedText.trim().isNotEmpty;
+  bool get hasImage => selectedImagePath != null;
+  bool get hasRecognizedText => recognizedText.trim().isNotEmpty;
+  bool get hasTranslatedText => translatedText.trim().isNotEmpty;
 
   bool get isProcessing {
-    return _status == TranslationStatus.capturing ||
-        _status == TranslationStatus.recognizing ||
-        _status == TranslationStatus.translating;
+    return status == TranslationStatus.capturing ||
+        status == TranslationStatus.recognizing ||
+        status == TranslationStatus.translating;
   }
 
-  List<TranslationLanguage> get languages {
-    return const <TranslationLanguage>[
-      TranslationLanguage(code: 'auto', label: '자동 감지'),
-      TranslationLanguage(code: 'ko', label: '한국어'),
-      TranslationLanguage(code: 'en', label: '영어'),
-      TranslationLanguage(code: 'ja', label: '일본어'),
-      TranslationLanguage(code: 'zh', label: '중국어'),
-    ];
+  List<TranslationLanguage> get languages => _languages;
+
+  TranslationState copyWith({
+    TranslationStatus? status,
+    String? selectedImagePath,
+    bool clearSelectedImagePath = false,
+    String? recognizedText,
+    String? translatedText,
+    String? errorMessage,
+    bool clearErrorMessage = false,
+    String? sourceLanguageCode,
+    String? targetLanguageCode,
+  }) {
+    return TranslationState(
+      status: status ?? this.status,
+      selectedImagePath: clearSelectedImagePath
+          ? null
+          : selectedImagePath ?? this.selectedImagePath,
+      recognizedText: recognizedText ?? this.recognizedText,
+      translatedText: translatedText ?? this.translatedText,
+      errorMessage: clearErrorMessage
+          ? null
+          : errorMessage ?? this.errorMessage,
+      sourceLanguageCode: sourceLanguageCode ?? this.sourceLanguageCode,
+      targetLanguageCode: targetLanguageCode ?? this.targetLanguageCode,
+    );
   }
+}
+
+class TranslationNotifier extends Notifier<TranslationState> {
+  @override
+  TranslationState build() => const TranslationState();
 
   void setStatus(TranslationStatus status) {
-    if (_status == status) {
+    if (state.status == status) {
       return;
     }
 
-    _status = status;
-    notifyListeners();
+    state = state.copyWith(status: status);
   }
 
   void setError({
     required String message,
     TranslationStatus status = TranslationStatus.failed,
   }) {
-    _errorMessage = message;
-    _status = status;
-    notifyListeners();
+    state = state.copyWith(errorMessage: message, status: status);
   }
 
   void changeSourceLanguage(String languageCode) {
-    if (_sourceLanguageCode == languageCode) {
+    if (state.sourceLanguageCode == languageCode) {
       return;
     }
 
-    _sourceLanguageCode = languageCode;
-    _translatedText = '';
-    notifyListeners();
+    state = state.copyWith(
+      sourceLanguageCode: languageCode,
+      translatedText: '',
+    );
 
-    if (_recognizedText.trim().isNotEmpty) {
+    if (state.recognizedText.trim().isNotEmpty) {
       translateRecognizedText();
     }
   }
 
   void changeTargetLanguage(String languageCode) {
-    if (_targetLanguageCode == languageCode) {
+    if (state.targetLanguageCode == languageCode) {
       return;
     }
 
-    _targetLanguageCode = languageCode;
-    _translatedText = '';
-    notifyListeners();
+    state = state.copyWith(
+      targetLanguageCode: languageCode,
+      translatedText: '',
+    );
 
-    if (_recognizedText.trim().isNotEmpty) {
+    if (state.recognizedText.trim().isNotEmpty) {
       translateRecognizedText();
     }
   }
 
   void swapLanguages() {
-    if (_sourceLanguageCode == 'auto') {
+    if (state.sourceLanguageCode == 'auto') {
       return;
     }
 
-    final oldSource = _sourceLanguageCode;
-    _sourceLanguageCode = _targetLanguageCode;
-    _targetLanguageCode = oldSource;
-    _translatedText = '';
+    state = state.copyWith(
+      sourceLanguageCode: state.targetLanguageCode,
+      targetLanguageCode: state.sourceLanguageCode,
+      translatedText: '',
+    );
 
-    notifyListeners();
-
-    if (_recognizedText.trim().isNotEmpty) {
+    if (state.recognizedText.trim().isNotEmpty) {
       translateRecognizedText();
     }
   }
 
   Future<void> processImage(String imagePath) async {
-    if (_status == TranslationStatus.recognizing ||
-        _status == TranslationStatus.translating) {
+    if (state.status == TranslationStatus.recognizing ||
+        state.status == TranslationStatus.translating) {
       return;
     }
 
-    _selectedImagePath = imagePath;
-    _recognizedText = '';
-    _translatedText = '';
-    _errorMessage = null;
-    _status = TranslationStatus.recognizing;
-    notifyListeners();
+    state = state.copyWith(
+      selectedImagePath: imagePath,
+      recognizedText: '',
+      translatedText: '',
+      clearErrorMessage: true,
+      status: TranslationStatus.recognizing,
+    );
 
     try {
       debugPrint('=== OCR 시작 ===');
 
-      final text = await _ocrService.recognizeText(
-        imagePath: imagePath,
-        sourceLanguageCode: _sourceLanguageCode,
-      );
+      final text = await ref
+          .read(ocrServiceProvider)
+          .recognizeText(
+            imagePath: imagePath,
+            sourceLanguageCode: state.sourceLanguageCode,
+          );
+
+      if (!ref.mounted) {
+        return;
+      }
 
       debugPrint('=== OCR 완료 ===');
       debugPrint('OCR 결과: $text');
 
       if (text.trim().isEmpty) {
-        _recognizedText = '';
-        _translatedText = '';
-        _errorMessage = '이미지에서 번역할 문자를 찾지 못했습니다.\n문자가 선명하게 보이도록 다시 촬영해 주세요.';
-        _status = TranslationStatus.failed;
-        notifyListeners();
+        state = state.copyWith(
+          recognizedText: '',
+          translatedText: '',
+          errorMessage: '이미지에서 번역할 문자를 찾지 못했습니다.\n문자가 선명하게 보이도록 다시 촬영해 주세요.',
+          status: TranslationStatus.failed,
+        );
         return;
       }
 
-      _recognizedText = text.trim();
-      _status = TranslationStatus.translating;
-      notifyListeners();
+      state = state.copyWith(
+        recognizedText: text.trim(),
+        status: TranslationStatus.translating,
+      );
 
       debugPrint('=== 번역 시작 ===');
 
@@ -181,56 +223,81 @@ class TranslationProvider extends ChangeNotifier {
       debugPrint('OCR 처리 실패: $error');
       debugPrint('$stackTrace');
 
-      _errorMessage = '문자 인식 중 문제가 발생했습니다.\n이미지를 다시 촬영해 주세요.';
-      _status = TranslationStatus.failed;
-      notifyListeners();
+      if (!ref.mounted) {
+        return;
+      }
+
+      state = state.copyWith(
+        errorMessage: '문자 인식 중 문제가 발생했습니다.\n이미지를 다시 촬영해 주세요.',
+        status: TranslationStatus.failed,
+      );
     }
   }
 
   Future<void> translateRecognizedText() async {
-    final text = _recognizedText.trim();
+    final text = state.recognizedText.trim();
 
     if (text.isEmpty) {
       return;
     }
 
-    if (_sourceLanguageCode == _targetLanguageCode) {
-      _translatedText = text;
-      _status = TranslationStatus.completed;
-      notifyListeners();
+    if (state.sourceLanguageCode == state.targetLanguageCode) {
+      state = state.copyWith(
+        translatedText: text,
+        status: TranslationStatus.completed,
+      );
       return;
     }
 
-    _status = TranslationStatus.translating;
-    _errorMessage = null;
-    notifyListeners();
+    state = state.copyWith(
+      status: TranslationStatus.translating,
+      clearErrorMessage: true,
+    );
 
     try {
-      final translatedText = await _translationService.translate(
-        text: text,
-        sourceLanguageCode: _sourceLanguageCode,
-        targetLanguageCode: _targetLanguageCode,
-      );
+      final translatedText = await ref
+          .read(translationServiceProvider)
+          .translate(
+            text: text,
+            sourceLanguageCode: state.sourceLanguageCode,
+            targetLanguageCode: state.targetLanguageCode,
+          );
 
-      _translatedText = translatedText.trim();
-      _status = TranslationStatus.completed;
-      notifyListeners();
+      if (!ref.mounted) {
+        return;
+      }
+
+      state = state.copyWith(
+        translatedText: translatedText.trim(),
+        status: TranslationStatus.completed,
+      );
     } catch (error, stackTrace) {
       debugPrint('번역 처리 실패: $error');
       debugPrint('$stackTrace');
 
-      _errorMessage = '번역 중 문제가 발생했습니다.\n잠시 후 다시 시도해 주세요.';
-      _status = TranslationStatus.failed;
-      notifyListeners();
+      if (!ref.mounted) {
+        return;
+      }
+
+      state = state.copyWith(
+        errorMessage: '번역 중 문제가 발생했습니다.\n잠시 후 다시 시도해 주세요.',
+        status: TranslationStatus.failed,
+      );
     }
   }
 
   void resetForRetake() {
-    _selectedImagePath = null;
-    _recognizedText = '';
-    _translatedText = '';
-    _errorMessage = null;
-    _status = TranslationStatus.cameraReady;
-    notifyListeners();
+    state = state.copyWith(
+      clearSelectedImagePath: true,
+      recognizedText: '',
+      translatedText: '',
+      clearErrorMessage: true,
+      status: TranslationStatus.cameraReady,
+    );
   }
 }
+
+final translationProvider =
+    NotifierProvider<TranslationNotifier, TranslationState>(
+      TranslationNotifier.new,
+    );

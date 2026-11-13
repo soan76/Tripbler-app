@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerState, ConsumerStatefulWidget, ProviderListenableSelect;
 
 import '../../providers/account_recovery_provider.dart';
 import '../../widgets/auth/recovery/password_recovery_account_form.dart';
 import '../../widgets/auth/recovery/password_recovery_verification_section.dart';
 import 'reset_password_screen.dart';
 
-class FindPasswordScreen extends StatefulWidget {
+class FindPasswordScreen extends ConsumerStatefulWidget {
   const FindPasswordScreen({super.key});
 
   @override
-  State<FindPasswordScreen> createState() => _FindPasswordScreenState();
+  ConsumerState<FindPasswordScreen> createState() => _FindPasswordScreenState();
 }
 
-class _FindPasswordScreenState extends State<FindPasswordScreen> {
+class _FindPasswordScreenState extends ConsumerState<FindPasswordScreen> {
   /// Tripbler 로그인 아이디 입력 컨트롤러.
   final TextEditingController _loginIdController = TextEditingController();
 
@@ -147,7 +148,7 @@ class _FindPasswordScreenState extends State<FindPasswordScreen> {
 
     FocusScope.of(context).unfocus();
 
-    final recoveryProvider = context.read<AccountRecoveryProvider>();
+    final recoveryProvider = ref.read(accountRecoveryProvider.notifier);
 
     final success = await recoveryProvider.sendPasswordResetVerificationCode(
       loginId: _loginIdController.text.trim(),
@@ -159,7 +160,9 @@ class _FindPasswordScreenState extends State<FindPasswordScreen> {
     }
 
     if (!success) {
-      _showMessage(recoveryProvider.errorMessage ?? '인증코드 전송에 실패했습니다.');
+      _showMessage(
+        ref.read(accountRecoveryProvider).errorMessage ?? '인증코드 전송에 실패했습니다.',
+      );
       return;
     }
 
@@ -214,7 +217,7 @@ class _FindPasswordScreenState extends State<FindPasswordScreen> {
 
     FocusScope.of(context).unfocus();
 
-    final recoveryProvider = context.read<AccountRecoveryProvider>();
+    final recoveryProvider = ref.read(accountRecoveryProvider.notifier);
 
     final resetToken = await recoveryProvider
         .verifyPasswordResetVerificationCode(
@@ -228,7 +231,9 @@ class _FindPasswordScreenState extends State<FindPasswordScreen> {
     }
 
     if (resetToken == null) {
-      _showMessage(recoveryProvider.errorMessage ?? '인증코드 확인에 실패했습니다.');
+      _showMessage(
+        ref.read(accountRecoveryProvider).errorMessage ?? '인증코드 확인에 실패했습니다.',
+      );
       return;
     }
 
@@ -243,9 +248,9 @@ class _FindPasswordScreenState extends State<FindPasswordScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final recoveryProvider = context.watch<AccountRecoveryProvider>();
-
-    final isLoading = recoveryProvider.isLoading;
+    final isLoading = ref.watch(
+      accountRecoveryProvider.select((state) => state.isLoading),
+    );
 
     /// 인증코드가 정확히 6자리 입력된 경우에만
     /// 확인 버튼을 활성화한다.

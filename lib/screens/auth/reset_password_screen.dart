@@ -1,19 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerState, ConsumerStatefulWidget, ProviderListenableSelect;
 
 import '../../providers/account_recovery_provider.dart';
 import '../../utils/auth/reset_password_validator.dart';
 
-class ResetPasswordScreen extends StatefulWidget {
+class ResetPasswordScreen extends ConsumerStatefulWidget {
   final String resetToken;
 
   const ResetPasswordScreen({super.key, required this.resetToken});
 
   @override
-  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
-class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
+class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   final TextEditingController _passwordController = TextEditingController();
 
   final TextEditingController _passwordConfirmController =
@@ -64,7 +66,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
     FocusScope.of(context).unfocus();
 
-    final recoveryProvider = context.read<AccountRecoveryProvider>();
+    final recoveryProvider = ref.read(accountRecoveryProvider.notifier);
 
     final success = await recoveryProvider.resetPassword(
       resetToken: widget.resetToken,
@@ -76,7 +78,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     }
 
     if (!success) {
-      _showMessage(recoveryProvider.errorMessage ?? '비밀번호 재설정에 실패했습니다.');
+      _showMessage(
+        ref.read(accountRecoveryProvider).errorMessage ?? '비밀번호 재설정에 실패했습니다.',
+      );
 
       return;
     }
@@ -93,9 +97,10 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final recoveryProvider = context.watch<AccountRecoveryProvider>();
 
-    final isLoading = recoveryProvider.isLoading;
+    final isLoading = ref.watch(
+      accountRecoveryProvider.select((state) => state.isLoading),
+    );
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
