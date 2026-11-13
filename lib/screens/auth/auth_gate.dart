@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/auth_provider.dart';
 import '../main_screen.dart';
 
-class AuthGate extends StatefulWidget {
+class AuthGate extends ConsumerStatefulWidget {
   const AuthGate({super.key});
 
   @override
-  State<AuthGate> createState() => _AuthGateState();
+  ConsumerState<AuthGate> createState() => _AuthGateState();
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends ConsumerState<AuthGate> {
   @override
   void initState() {
     super.initState();
@@ -21,15 +21,17 @@ class _AuthGateState extends State<AuthGate> {
         return;
       }
 
-      context.read<AuthProvider>().restoreSession();
+      ref.read(authProvider.notifier).restoreSession();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
+    final isInitialized = ref.watch(
+      authProvider.select((auth) => auth.isInitialized),
+    );
 
-    if (!authProvider.isInitialized) {
+    if (!isInitialized) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/auth_provider.dart';
 import 'signup_form_label.dart';
@@ -28,8 +28,11 @@ class SignupLoginIdField extends StatelessWidget {
 
         const SizedBox(height: 6),
 
-        Consumer<AuthProvider>(
-          builder: (context, authProvider, child) {
+        Consumer(
+          builder: (context, ref, child) {
+            final auth = ref.watch(authProvider);
+            final notifier = ref.read(authProvider.notifier);
+
             return Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -38,9 +41,9 @@ class SignupLoginIdField extends StatelessWidget {
                     controller: controller,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
-                    enabled: !authProvider.isLoading,
+                    enabled: !auth.isLoading,
                     onChanged: (value) {
-                      authProvider.resetLoginIdAvailability();
+                      notifier.resetLoginIdAvailability();
                       onChanged(value);
                     },
                     decoration: buildSignupInputDecoration(
@@ -56,17 +59,14 @@ class SignupLoginIdField extends StatelessWidget {
                 SizedBox(
                   height: 56,
                   child: OutlinedButton(
-                    onPressed:
-                        authProvider.isCheckingLoginId || authProvider.isLoading
+                    onPressed: auth.isCheckingLoginId || auth.isLoading
                         ? null
                         : () {
                             FocusScope.of(context).unfocus();
 
-                            authProvider.checkLoginIdAvailability(
-                              controller.text,
-                            );
+                            notifier.checkLoginIdAvailability(controller.text);
                           },
-                    child: authProvider.isCheckingLoginId
+                    child: auth.isCheckingLoginId
                         ? const SizedBox(
                             width: 18,
                             height: 18,
@@ -83,15 +83,16 @@ class SignupLoginIdField extends StatelessWidget {
           },
         ),
 
-        Consumer<AuthProvider>(
-          builder: (context, authProvider, child) {
-            final message = authProvider.loginIdCheckMessage;
+        Consumer(
+          builder: (context, ref, child) {
+            final auth = ref.watch(authProvider);
+            final message = auth.loginIdCheckMessage;
 
             if (message == null) {
               return const SizedBox.shrink();
             }
 
-            final isAvailable = authProvider.isLoginIdAvailable == true;
+            final isAvailable = auth.isLoginIdAvailable == true;
 
             return Padding(
               padding: const EdgeInsets.only(top: 6, left: 2),

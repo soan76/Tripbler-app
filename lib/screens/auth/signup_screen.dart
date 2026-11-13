@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../utils/auth/signup_validator.dart';
@@ -8,14 +8,14 @@ import '../../widgets/auth/signup/signup_input_decoration.dart';
 import '../../widgets/auth/signup/signup_login_id_field.dart';
 import '../../widgets/auth/signup/signup_password_fields.dart';
 
-class SignupScreen extends StatefulWidget {
+class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
 
   @override
-  State<SignupScreen> createState() => _SignupScreenState();
+  ConsumerState<SignupScreen> createState() => _SignupScreenState();
 }
 
-class _SignupScreenState extends State<SignupScreen> {
+class _SignupScreenState extends ConsumerState<SignupScreen> {
   final TextEditingController _loginIdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _passwordConfirmController =
@@ -45,8 +45,6 @@ class _SignupScreenState extends State<SignupScreen> {
     final passwordConfirm = _passwordConfirmController.text;
     final nickname = _nicknameController.text.trim();
 
-    final authProvider = context.read<AuthProvider>();
-
     final validation = SignupValidator.validate(
       loginId: loginId,
       password: password,
@@ -69,7 +67,7 @@ class _SignupScreenState extends State<SignupScreen> {
     }
 
     // 아이디 중복확인
-    if (!authProvider.isLoginIdCheckedAndAvailable(loginId)) {
+    if (!ref.read(authProvider).isLoginIdCheckedAndAvailable(loginId)) {
       setState(() {
         _loginIdHasError = true;
       });
@@ -82,11 +80,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
     FocusScope.of(context).unfocus();
 
-    final success = await authProvider.signup(
-      loginId: loginId,
-      nickname: nickname.isEmpty ? null : nickname,
-      password: password,
-    );
+    final success = await ref
+        .read(authProvider.notifier)
+        .signup(
+          loginId: loginId,
+          nickname: nickname.isEmpty ? null : nickname,
+          password: password,
+        );
 
     if (!mounted) {
       return;
@@ -97,7 +97,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    final message = authProvider.errorMessage;
+    final message = ref.read(authProvider).errorMessage;
 
     if (message != null) {
       _showMessage(message);
@@ -232,12 +232,16 @@ class _SignupScreenState extends State<SignupScreen> {
                   const SizedBox(height: 36),
 
                   // 회원가입 버튼
-                  Consumer<AuthProvider>(
-                    builder: (context, authProvider, child) {
+                  Consumer(
+                    builder: (context, ref, child) {
+                      final isLoading = ref.watch(
+                        authProvider.select((auth) => auth.isLoading),
+                      );
+
                       return SizedBox(
                         height: 52,
                         child: ElevatedButton(
-                          onPressed: authProvider.isLoading ? null : _signup,
+                          onPressed: isLoading ? null : _signup,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: colorScheme.primary,
                             foregroundColor: colorScheme.onPrimary,
@@ -245,7 +249,7 @@ class _SignupScreenState extends State<SignupScreen> {
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
-                          child: authProvider.isLoading
+                          child: isLoading
                               ? SizedBox(
                                   width: 22,
                                   height: 22,

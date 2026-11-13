@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'
 import '../core/network/api_exception.dart';
 import '../repositories/auth/auth_repository.dart';
 
-/// 계정 복구 요청에 쓰는 저장소. 로그인 상태를 다루는 AuthProvider와는 별도 인스턴스다.
+/// 계정 복구 요청에 쓰는 저장소. 로그인 상태를 다루는 AuthNotifier와는 별도 인스턴스다.
 final accountRecoveryRepositoryProvider = Provider<AuthRepository>((ref) {
   final repository = AuthRepository();
   ref.onDispose(repository.dispose);

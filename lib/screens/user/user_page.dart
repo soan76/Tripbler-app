@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/auth_provider.dart';
 import '../../services/user/profile_image_picker_service.dart';
@@ -12,14 +12,14 @@ import '../../widgets/user/account_deletion_dialog.dart';
 import '../auth/find_password_screen.dart';
 import '../settings_screen.dart';
 
-class UserPage extends StatefulWidget {
+class UserPage extends ConsumerStatefulWidget {
   const UserPage({super.key});
 
   @override
-  State<UserPage> createState() => _UserPageState();
+  ConsumerState<UserPage> createState() => _UserPageState();
 }
 
-class _UserPageState extends State<UserPage> {
+class _UserPageState extends ConsumerState<UserPage> {
   final ProfileImagePickerService _profileImagePickerService =
       ProfileImagePickerService();
 
@@ -42,7 +42,7 @@ class _UserPageState extends State<UserPage> {
         return;
       }
 
-      context.read<AuthProvider>().loadLinkedSocialAccounts();
+      ref.read(authProvider.notifier).loadLinkedSocialAccounts();
     });
   }
 
@@ -61,18 +61,23 @@ class _UserPageState extends State<UserPage> {
   }
 
   /// 닉네임 수정 다이얼로그를 열고 변경 요청을 처리한다.
-  Future<void> _handleNicknameEdit(AuthProvider authProvider) async {
+  Future<void> _handleNicknameEdit() async {
+    final notifier = ref.read(authProvider.notifier);
+
     final success = await NicknameEditDialog.show(
       context,
-      initialNickname: authProvider.nickname,
+      initialNickname: ref.read(authProvider).nickname,
       onSubmit: (nickname) async {
-        final updated = await authProvider.updateNickname(nickname: nickname);
+        final updated = await notifier.updateNickname(nickname: nickname);
 
         if (updated) {
           return null;
         }
 
-        return authProvider.errorMessage ?? '닉네임 변경에 실패했습니다.';
+        // 화면이 닫혔으면 상태를 읽을 수 없으므로 기본 문구를 쓴다.
+        final message = mounted ? ref.read(authProvider).errorMessage : null;
+
+        return message ?? '닉네임 변경에 실패했습니다.';
       },
     );
 
@@ -84,8 +89,8 @@ class _UserPageState extends State<UserPage> {
   }
 
   /// 갤러리에서 프로필 이미지를 선택하고 변경한다.
-  Future<void> _handleProfileImageChange(AuthProvider authProvider) async {
-    if (authProvider.isLoading) {
+  Future<void> _handleProfileImageChange() async {
+    if (ref.read(authProvider).isLoading) {
       return;
     }
 
@@ -96,7 +101,9 @@ class _UserPageState extends State<UserPage> {
         return;
       }
 
-      final success = await authProvider.updateProfileImage(filePath: filePath);
+      final success = await ref
+          .read(authProvider.notifier)
+          .updateProfileImage(filePath: filePath);
 
       if (!mounted) {
         return;
@@ -107,7 +114,9 @@ class _UserPageState extends State<UserPage> {
         return;
       }
 
-      _showMessage(authProvider.errorMessage ?? '프로필 이미지 변경에 실패했습니다.');
+      _showMessage(
+        ref.read(authProvider).errorMessage ?? '프로필 이미지 변경에 실패했습니다.',
+      );
     } on ProfileImageException catch (error) {
       if (!mounted) {
         return;
@@ -126,12 +135,14 @@ class _UserPageState extends State<UserPage> {
   }
 
   /// 현재 프로필 이미지를 삭제한다.
-  Future<void> _handleProfileImageDelete(AuthProvider authProvider) async {
-    if (authProvider.isLoading || authProvider.profileImageUrl == null) {
+  Future<void> _handleProfileImageDelete() async {
+    final auth = ref.read(authProvider);
+
+    if (auth.isLoading || auth.profileImageUrl == null) {
       return;
     }
 
-    final success = await authProvider.deleteProfileImage();
+    final success = await ref.read(authProvider.notifier).deleteProfileImage();
 
     if (!mounted) {
       return;
@@ -142,16 +153,17 @@ class _UserPageState extends State<UserPage> {
       return;
     }
 
-    _showMessage(authProvider.errorMessage ?? '프로필 이미지 삭제에 실패했습니다.');
+    _showMessage(ref.read(authProvider).errorMessage ?? '프로필 이미지 삭제에 실패했습니다.');
   }
 
   /// Google 계정 연동 또는 연동 해제를 처리한다.
-  Future<void> _handleSocialAccountChange(AuthProvider authProvider) async {
-    final isLinked = authProvider.googleLinked == true;
+  Future<void> _handleSocialAccountChange() async {
+    final isLinked = ref.read(authProvider).googleLinked == true;
+    final notifier = ref.read(authProvider.notifier);
 
     final success = isLinked
-        ? await authProvider.unlinkGoogleAccount()
-        : await authProvider.linkGoogleAccount();
+        ? await notifier.unlinkGoogleAccount()
+        : await notifier.linkGoogleAccount();
 
     if (!mounted) {
       return;
@@ -164,15 +176,15 @@ class _UserPageState extends State<UserPage> {
     }
 
     final message =
-        authProvider.errorMessage ??
+        ref.read(authProvider).errorMessage ??
         (isLinked ? 'Google 계정 연동 해제에 실패했습니다.' : 'Google 계정 연동에 실패했습니다.');
 
     _showMessage(message);
   }
 
   /// 로그아웃을 처리한다.
-  Future<void> _handleLogout(AuthProvider authProvider) async {
-    await authProvider.logout();
+  Future<void> _handleLogout() async {
+    await ref.read(authProvider.notifier).logout();
 
     if (!mounted) {
       return;
@@ -184,7 +196,7 @@ class _UserPageState extends State<UserPage> {
   }
 
   /// 계정 탈퇴를 처리한다.
-  Future<void> _handleDeleteAccount(AuthProvider authProvider) async {
+  Future<void> _handleDeleteAccount() async {
     if (_isDeletingAccount) {
       return;
     }
@@ -209,7 +221,7 @@ class _UserPageState extends State<UserPage> {
 
     try {
       // API 요청과 최소 로딩 시간을 동시에 시작한다.
-      final deleteFuture = authProvider.deleteAccount();
+      final deleteFuture = ref.read(authProvider.notifier).deleteAccount();
 
       final minimumLoadingFuture = Future<void>.delayed(
         const Duration(seconds: 2),
@@ -240,7 +252,7 @@ class _UserPageState extends State<UserPage> {
     }
 
     if (!success) {
-      _showMessage(authProvider.errorMessage ?? '계정 탈퇴에 실패했습니다.');
+      _showMessage(ref.read(authProvider).errorMessage ?? '계정 탈퇴에 실패했습니다.');
 
       return;
     }
@@ -261,15 +273,15 @@ class _UserPageState extends State<UserPage> {
 
   @override
   Widget build(BuildContext context) {
-    final authProvider = context.watch<AuthProvider>();
+    final auth = ref.watch(authProvider);
 
     final colorScheme = Theme.of(context).colorScheme;
 
-    final nickname = authProvider.nickname;
+    final nickname = auth.nickname;
 
-    final loginId = authProvider.loginId;
+    final loginId = auth.loginId;
 
-    final profileImageUrl = authProvider.profileImageUrl?.trim();
+    final profileImageUrl = auth.profileImageUrl?.trim();
 
     final ImageProvider<Object>? profileImage =
         profileImageUrl != null && profileImageUrl.isNotEmpty
@@ -297,19 +309,19 @@ class _UserPageState extends State<UserPage> {
               UserInfoSection(
                 displayName: displayName,
                 loginId: displayLoginId,
-                isLoading: authProvider.isLoading,
+                isLoading: auth.isLoading,
                 profileImage: profileImage,
 
                 onChangeProfileImage: () {
-                  _handleProfileImageChange(authProvider);
+                  _handleProfileImageChange();
                 },
 
                 onDeleteProfileImage: () {
-                  _handleProfileImageDelete(authProvider);
+                  _handleProfileImageDelete();
                 },
 
                 onEditNickname: () {
-                  _handleNicknameEdit(authProvider);
+                  _handleNicknameEdit();
                 },
               ),
 
@@ -320,13 +332,13 @@ class _UserPageState extends State<UserPage> {
               const SizedBox(height: 24),
 
               UserAccountSection(
-                googleLinked: authProvider.googleLinked,
-                isLoading: authProvider.isLoading,
+                googleLinked: auth.googleLinked,
+                isLoading: auth.isLoading,
 
                 onChangePassword: _openFindPasswordScreen,
 
                 onChangeSocialAccount: () {
-                  _handleSocialAccountChange(authProvider);
+                  _handleSocialAccountChange();
                 },
               ),
 
@@ -345,12 +357,12 @@ class _UserPageState extends State<UserPage> {
               const SizedBox(height: 24),
 
               UserAccountActions(
-                isLoading: authProvider.isLoading || _isDeletingAccount,
+                isLoading: auth.isLoading || _isDeletingAccount,
                 onLogout: () {
-                  _handleLogout(authProvider);
+                  _handleLogout();
                 },
                 onDeleteAccount: () {
-                  _handleDeleteAccount(authProvider);
+                  _handleDeleteAccount();
                 },
               ),
 

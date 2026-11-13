@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
-import 'package:provider/provider.dart';
 
 import 'providers/settings_provider.dart';
-import 'providers/map_provider.dart';
-import 'providers/auth_provider.dart';
 import 'screens/auth/auth_gate.dart';
 import 'core/theme/app_theme.dart';
 
@@ -22,29 +19,7 @@ Widget buildAppScope({
 }
 
 void main() {
-  runApp(
-    buildAppScope(
-      child: MultiProvider(
-        providers: [
-          ChangeNotifierProvider(create: (_) => AuthProvider()),
-          // 장소 검색은 로그인이 필요하다. 토큰 첨부·재발급은 AuthProvider가 맡고,
-          // 로그인이 풀리면 MapProvider가 검색 상태를 비운다.
-          ChangeNotifierProvider(
-            create: (context) {
-              final authProvider = context.read<AuthProvider>();
-
-              return MapProvider(
-                authorizedRequest: authProvider.runAuthorizedRequest,
-                authState: authProvider,
-                isAuthenticated: () => authProvider.isAuthenticated,
-              );
-            },
-          ),
-        ],
-        child: const TripblerApp(),
-      ),
-    ),
-  );
+  runApp(buildAppScope(child: const TripblerApp()));
 }
 
 class TripblerApp extends ConsumerWidget {

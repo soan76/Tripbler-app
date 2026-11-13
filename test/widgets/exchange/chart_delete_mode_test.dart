@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
+import 'package:tripbler/main.dart' show buildAppScope;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/core/theme/app_theme.dart';
 import 'package:tripbler/models/chart_point.dart';
@@ -11,7 +11,6 @@ import 'package:tripbler/models/exchange_rate_history_model.dart';
 import 'package:tripbler/presentation/charts/chart_data_source.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
 import '../../helpers/chart_selection_handle.dart';
-import 'package:tripbler/providers/auth_provider.dart';
 import 'package:tripbler/screens/exchange_screen.dart';
 import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 import 'package:tripbler/widgets/charts/market_chart_delete_mode.dart';
@@ -801,8 +800,7 @@ void main() {
   ) async {
     // 실제 화면(MainScreen)과 같은 구조: 같은 route의 Scaffold에 AppDrawer를 둔다.
     await tester.pumpWidget(
-      ChangeNotifierProvider(
-        create: (_) => AuthProvider(),
+      buildAppScope(
         child: MaterialApp(
           home: Scaffold(
             drawer: const AppDrawer(),

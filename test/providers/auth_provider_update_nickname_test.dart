@@ -1,8 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/core/network/api_exception.dart';
 import 'package:tripbler/models/user/user_response.dart';
-import 'package:tripbler/providers/auth_provider.dart';
 import 'package:tripbler/repositories/auth/auth_repository.dart';
+
+import '../helpers/auth_handle.dart';
 
 class FakeNicknameAuthRepository extends AuthRepository {
   bool hasStoredTokens = true;
@@ -54,12 +55,12 @@ class FakeNicknameAuthRepository extends AuthRepository {
 
 void main() {
   late FakeNicknameAuthRepository repository;
-  late AuthProvider provider;
+  late AuthHandle provider;
 
   setUp(() {
     repository = FakeNicknameAuthRepository();
 
-    provider = AuthProvider(authRepository: repository);
+    provider = AuthHandle(repository);
   });
 
   tearDown(() {

@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/auth_provider.dart';
 import 'signup_screen.dart';
 import 'find_id_screen.dart';
 import 'find_password_screen.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _loginIdController  = TextEditingController();
+class _LoginScreenState extends ConsumerState<LoginScreen> {
+  final TextEditingController _loginIdController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  final FocusNode _loginIdFocusNode  = FocusNode();
+  final FocusNode _loginIdFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
 
   bool _obscurePassword = true;
@@ -60,12 +60,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     FocusScope.of(context).unfocus();
 
-    final authProvider = context.read<AuthProvider>();
-
-    final success = await authProvider.login(
-      loginId: loginId,
-      password: password,
-    );
+    final success = await ref
+        .read(authProvider.notifier)
+        .login(loginId: loginId, password: password);
 
     if (!mounted) {
       return;
@@ -81,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordHasError = true;
       });
 
-      final message = authProvider.errorMessage;
+      final message = ref.read(authProvider).errorMessage;
 
       if (message != null) {
         _showMessage(message);
@@ -101,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final authProvider = context.watch<AuthProvider>();
+    final isLoading = ref.watch(authProvider.select((auth) => auth.isLoading));
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
@@ -109,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: colorScheme.surface,
         elevation: 0,
         leading: IconButton(
-          onPressed: authProvider.isLoading
+          onPressed: isLoading
               ? null
               : () {
                   Navigator.of(context).pop();
@@ -146,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _loginIdController,
                     focusNode: _loginIdFocusNode,
-                    enabled: !authProvider.isLoading,
+                    enabled: !isLoading,
                     keyboardType: TextInputType.text,
                     textInputAction: TextInputAction.next,
                     autocorrect: false,
@@ -174,7 +171,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   TextField(
                     controller: _passwordController,
                     focusNode: _passwordFocusNode,
-                    enabled: !authProvider.isLoading,
+                    enabled: !isLoading,
                     obscureText: _obscurePassword,
                     textInputAction: TextInputAction.done,
                     autofillHints: const [AutofillHints.password],
@@ -186,7 +183,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                     },
                     onSubmitted: (_) {
-                      if (!authProvider.isLoading) {
+                      if (!ref.read(authProvider).isLoading) {
                         _login();
                       }
                     },
@@ -215,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   SizedBox(
                     height: 52,
                     child: ElevatedButton(
-                      onPressed: authProvider.isLoading ? null : _login,
+                      onPressed: isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: colorScheme.primary,
                         foregroundColor: colorScheme.onPrimary,
@@ -226,7 +223,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
-                      child: authProvider.isLoading
+                      child: isLoading
                           ? SizedBox(
                               width: 22,
                               height: 22,
@@ -251,7 +248,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: [
                       TextButton(
-                        onPressed: authProvider.isLoading
+                        onPressed: isLoading
                             ? null
                             : () {
                                 Navigator.of(context).push(
@@ -328,11 +325,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
 
                       GestureDetector(
-                        onTap: authProvider.isLoading
+                        onTap: isLoading
                             ? null
                             : () async {
-                                context.read<AuthProvider>().clearError();
-                                
+                                ref.read(authProvider.notifier).clearError();
+
                                 final success = await Navigator.of(context)
                                     .push<bool>(
                                       MaterialPageRoute(

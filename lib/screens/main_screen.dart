@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'
-    show ConsumerWidget, WidgetRef;
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/tab_item.dart';
 import '../providers/auth_provider.dart';
@@ -46,7 +44,7 @@ class MainScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tabState = ref.watch(tabProvider);
-    final authProvider = context.watch<AuthProvider>();
+    final auth = ref.watch(authProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     final selectedIndex = tabState.selectedIndex;
@@ -72,10 +70,12 @@ class MainScreen extends ConsumerWidget {
                 AppTopBar(title: screenTitle),
 
                 // 세션 만료가 확인되지 않은 오류로 세션 복구에 실패하면 상단 바 아래에서 다시 시도를 안내한다.
-                if (authProvider.sessionRestoreFailed)
+                if (auth.sessionRestoreFailed)
                   SessionRestoreBanner(
-                    isRetrying: authProvider.isLoading,
-                    onRetry: authProvider.retryRestoreSession,
+                    isRetrying: auth.isLoading,
+                    onRetry: ref
+                        .read(authProvider.notifier)
+                        .retryRestoreSession,
                   ),
 
                 Expanded(

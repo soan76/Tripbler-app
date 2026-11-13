@@ -38,7 +38,7 @@ class MapSearchViewRules {
   /// 검색 입력과 목록 펼침을 비워야 하는지.
   ///
   /// 검색할 수 있는 상태에서 벗어났거나(로그아웃·세션 만료), 비로그인·복구 대기로
-  /// 바뀐 순간이다. MapProvider가 검색 결과를 비우는 것과 맞춰 화면 상태도 비운다.
+  /// 바뀐 순간이다. MapNotifier가 검색 결과를 비우는 것과 맞춰 화면 상태도 비운다.
   static bool shouldResetSearchInput({
     required PlaceSearchAvailability previous,
     required PlaceSearchAvailability current,

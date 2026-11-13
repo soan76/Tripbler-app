@@ -1,14 +1,19 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderContainer;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:tripbler/core/network/api_exception.dart';
 import 'package:tripbler/models/place_model.dart';
+import 'package:tripbler/providers/auth_provider.dart';
 import 'package:tripbler/providers/map_provider.dart';
 import 'package:tripbler/repositories/auth/auth_repository.dart';
 import 'package:tripbler/services/place_api_service.dart';
 import 'package:tripbler/widgets/map/place_detail_card.dart';
+
+import '../helpers/fake_auth_notifier.dart';
+import '../helpers/map_handle.dart';
 
 PlaceModel _place(
   String id, {
@@ -108,11 +113,11 @@ class FakePlaceApiService extends PlaceApiService {
   }
 }
 
-/// AuthProvider.runAuthorizedRequest 대역.
+/// AuthNotifier.runAuthorizedRequest 대역.
 class FakeAuthorizedRunner {
   Object? error;
 
-  /// 오류를 던지기 직전에 실행한다(실제 AuthProvider는 만료를 확인하면 로그아웃한 뒤 던진다).
+  /// 오류를 던지기 직전에 실행한다(실제 AuthNotifier는 만료를 확인하면 로그아웃한 뒤 던진다).
   void Function()? beforeError;
 
   Future<T> run<T>(Future<T> Function(String authorizationHeader) request) {
@@ -127,28 +132,14 @@ class FakeAuthorizedRunner {
   }
 }
 
-class FakeAuthState extends ChangeNotifier {
-  bool isAuthenticated = true;
-
-  void signOut() {
-    isAuthenticated = false;
-    notifyListeners();
-  }
-
-  void signIn() {
-    isAuthenticated = true;
-    notifyListeners();
-  }
-}
-
 /// 마이크로태스크를 비워 await 뒤의 상태 갱신을 반영한다.
 Future<void> _flush() => Future<void>.delayed(Duration.zero);
 
 void main() {
   late FakePlaceApiService service;
   late FakeAuthorizedRunner runner;
-  late FakeAuthState authState;
-  late MapProvider provider;
+  late FakeAuthNotifier authState;
+  late MapHandle provider;
   late bool disposedInTest;
   late DateTime clock;
 
@@ -157,14 +148,17 @@ void main() {
   setUp(() {
     service = FakePlaceApiService();
     runner = FakeAuthorizedRunner();
-    authState = FakeAuthState();
+    authState = FakeAuthNotifier();
     clock = DateTime(2026, 1, 1, 12);
-    provider = MapProvider(
-      authorizedRequest: runner.run,
-      placeApiService: service,
-      authState: authState,
-      isAuthenticated: () => authState.isAuthenticated,
-      now: () => clock,
+    provider = MapHandle(
+      ProviderContainer.test(
+        overrides: [
+          authProvider.overrideWith(() => authState),
+          authorizedRequestRunnerProvider.overrideWithValue(runner.run),
+          placeApiServiceProvider.overrideWithValue(service),
+          clockProvider.overrideWithValue(() => clock),
+        ],
+      ),
     );
     disposedInTest = false;
   });
@@ -173,7 +167,6 @@ void main() {
     if (!disposedInTest) {
       provider.dispose();
     }
-    authState.dispose();
   });
 
   /// 검색을 시작하고 [results]로 성공시킨다.
@@ -933,7 +926,7 @@ void main() {
 
     test('상세 결과는 최대 50개까지 기억하고 오래된 것부터 지운다', () async {
       final places = [
-        for (var i = 0; i <= MapProvider.maxCachedPlaceDetails; i++)
+        for (var i = 0; i <= MapNotifier.maxCachedPlaceDetails; i++)
           _place('p$i'),
       ];
       await searchAndSucceed('많은 장소', places);
@@ -1215,7 +1208,7 @@ void main() {
       expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
 
       clock = clock.add(
-        MapProvider.placeDetailsCacheTtl - const Duration(seconds: 1),
+        MapNotifier.placeDetailsCacheTtl - const Duration(seconds: 1),
       );
       expect(provider.selectedPlaceDetailsStale, isFalse);
 
@@ -1423,7 +1416,7 @@ void main() {
       await loadDetails(_place('a', openNow: true));
 
       clock = clock.add(
-        MapProvider.placeDetailsCacheTtl - const Duration(seconds: 1),
+        MapNotifier.placeDetailsCacheTtl - const Duration(seconds: 1),
       );
       await provider.loadSelectedPlaceDetails();
       expect(service.detailCalls, ['a']);
@@ -1453,7 +1446,7 @@ void main() {
       await loadDetails(_place('a', rating: 4.6, openNow: true));
 
       clock = clock.add(
-        MapProvider.placeDetailsCacheTtl - const Duration(seconds: 1),
+        MapNotifier.placeDetailsCacheTtl - const Duration(seconds: 1),
       );
       await searchAndSucceed('경복궁 근처', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
@@ -1493,7 +1486,7 @@ void main() {
       final fetchedAt = clock;
       await loadDetails(_place('a', rating: 4.6, openNow: true));
 
-      clock = clock.add(MapProvider.placeDetailsCacheTtl);
+      clock = clock.add(MapNotifier.placeDetailsCacheTtl);
       final pending = provider.loadSelectedPlaceDetails();
 
       expect(provider.detailsStatus, PlaceDetailsStatus.loading);
@@ -1520,7 +1513,7 @@ void main() {
       final fetchedAt = clock;
       await loadDetails(_place('a', rating: 4.6, openNow: true));
 
-      clock = clock.add(MapProvider.placeDetailsCacheTtl);
+      clock = clock.add(MapNotifier.placeDetailsCacheTtl);
       provider.clearSelectedPlace();
       provider.selectSearchResult(provider.searchResults.single);
       expect(provider.selectedPlaceDetailsLoaded, isFalse);
@@ -1553,7 +1546,7 @@ void main() {
       provider.selectSearchResult(provider.searchResults.single);
       await loadDetails(_place('a', rating: 4.6, openNow: true));
 
-      clock = clock.add(MapProvider.placeDetailsCacheTtl);
+      clock = clock.add(MapNotifier.placeDetailsCacheTtl);
       final refreshedAt = clock;
       await loadDetails(_place('a'));
 
@@ -1722,7 +1715,7 @@ void main() {
       provider.selectSearchResult(provider.searchResults[1]);
       final afterSelect = notified;
 
-      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      await advance(tester, MapNotifier.placeDetailsCacheTtl);
       expect(notified, afterSelect);
     });
 
@@ -1731,7 +1724,7 @@ void main() {
       provider.selectSearchResult(provider.searchResults.single);
       await loadDetailsNow(_place('a', openNow: true));
 
-      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      await advance(tester, MapNotifier.placeDetailsCacheTtl);
       expect(provider.selectedPlaceDetailsStale, isTrue);
 
       await loadDetailsNow(_place('a', openNow: false));
@@ -1742,7 +1735,7 @@ void main() {
 
       await advance(
         tester,
-        MapProvider.placeDetailsCacheTtl - const Duration(seconds: 1),
+        MapNotifier.placeDetailsCacheTtl - const Duration(seconds: 1),
       );
       expect(notified, 0);
 
@@ -1763,7 +1756,7 @@ void main() {
 
       var notified = 0;
       provider.addListener(() => notified++);
-      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      await advance(tester, MapNotifier.placeDetailsCacheTtl);
       expect(notified, 0);
     });
 
@@ -1799,7 +1792,7 @@ void main() {
         var notified = 0;
         provider.addListener(() => notified++);
 
-        await advance(tester, MapProvider.placeDetailsCacheTtl);
+        await advance(tester, MapNotifier.placeDetailsCacheTtl);
         expect(notified, 0);
       });
     }
@@ -1835,7 +1828,7 @@ void main() {
 
       await advance(
         tester,
-        MapProvider.placeDetailsCacheTtl - const Duration(seconds: 1),
+        MapNotifier.placeDetailsCacheTtl - const Duration(seconds: 1),
       );
       expect(find.text(PlaceDetailCard.refreshLabel), findsNothing);
 
@@ -1879,7 +1872,7 @@ void main() {
       const sameDay = '${PlaceDetailCard.staleLabel} · 22:00 기준';
       const nextDay = '${PlaceDetailCard.staleLabel} · 11월 11일 22:00 기준';
 
-      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      await advance(tester, MapNotifier.placeDetailsCacheTtl);
       expect(clock, DateTime(2026, 11, 11, 22, 30));
       expect(find.text(sameDay), findsOneWidget);
 
@@ -1901,7 +1894,7 @@ void main() {
       await searchAndSucceed('경복궁', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
       await loadDetailsNow(_place('a', openNow: true));
-      await advance(tester, MapProvider.placeDetailsCacheTtl);
+      await advance(tester, MapNotifier.placeDetailsCacheTtl);
 
       provider.clearSelectedPlace();
 

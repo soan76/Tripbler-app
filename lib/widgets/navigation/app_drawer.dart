@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../screens/settings_screen.dart';
 import '../../screens/auth/login_screen.dart';
@@ -10,17 +10,17 @@ import '../../providers/auth_provider.dart';
 ///
 /// 위에는 계정(프로필 사진·이름·아이디), 구분선 아래 메뉴, 맨 아래 로그아웃을 둔다.
 /// 로그인하지 않았으면 계정 자리에 로그인 진입을 두고 로그아웃은 보이지 않는다.
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key});
 
   static const double _avatarSize = 56;
   static const EdgeInsets _sidePadding = EdgeInsets.symmetric(horizontal: 24);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
-    final authProvider = context.watch<AuthProvider>();
-    final isAuthenticated = authProvider.isAuthenticated;
+    final auth = ref.watch(authProvider);
+    final isAuthenticated = auth.isAuthenticated;
 
     return Drawer(
       backgroundColor: colorScheme.surface,
@@ -32,7 +32,7 @@ class AppDrawer extends StatelessWidget {
             SliverList.list(
               children: [
                 if (isAuthenticated)
-                  _buildUserEntry(context, authProvider)
+                  _buildUserEntry(context, auth)
                 else
                   _buildLoginEntry(context),
 
@@ -58,7 +58,11 @@ class AppDrawer extends StatelessWidget {
               child: Align(
                 alignment: Alignment.bottomLeft,
                 child: isAuthenticated
-                    ? _buildLogout(context, authProvider)
+                    ? _buildLogout(
+                        context,
+                        auth,
+                        ref.read(authProvider.notifier),
+                      )
                     : const SizedBox.shrink(),
               ),
             ),
@@ -141,15 +145,15 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildUserEntry(BuildContext context, AuthProvider authProvider) {
-    final nickname = authProvider.nickname?.trim();
-    final loginId = authProvider.loginId?.trim();
+  Widget _buildUserEntry(BuildContext context, AuthState auth) {
+    final nickname = auth.nickname?.trim();
+    final loginId = auth.loginId?.trim();
     final hasNickname = nickname != null && nickname.isNotEmpty;
     final hasLoginId = loginId != null && loginId.isNotEmpty;
 
     return _buildAccountHeader(
       context,
-      avatar: _buildUserAvatar(context, authProvider),
+      avatar: _buildUserAvatar(context, auth),
       // 닉네임이 있으면 이름으로, 아이디는 그 아래 보조 글자로 쓴다.
       title: hasNickname ? nickname : (hasLoginId ? loginId : '사용자'),
       subtitle: hasNickname && hasLoginId ? loginId : null,
@@ -189,14 +193,20 @@ class AppDrawer extends StatelessWidget {
   }
 
   /// 서랍 맨 아래의 로그아웃. 실수로 누르지 않게 메뉴와 떨어뜨리고 위험 색으로 구분한다.
-  Widget _buildLogout(BuildContext context, AuthProvider authProvider) {
+  ///
+  /// 서랍은 닫히면 트리에서 빠지므로 로그아웃은 미리 받아 둔 [notifier]로 부른다.
+  Widget _buildLogout(
+    BuildContext context,
+    AuthState auth,
+    AuthNotifier notifier,
+  ) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
       child: TextButton(
-        onPressed: authProvider.isLoading
+        onPressed: auth.isLoading
             ? null
             : () async {
                 // 서랍은 닫힘 애니메이션이 끝나면 트리에서 빠지므로, 로그아웃이 끝난 뒤에도
@@ -205,7 +215,7 @@ class AppDrawer extends StatelessWidget {
 
                 Navigator.pop(context);
 
-                await authProvider.logout();
+                await notifier.logout();
 
                 if (!messenger.mounted) {
                   return;
@@ -235,8 +245,8 @@ class AppDrawer extends StatelessWidget {
     );
   }
 
-  Widget _buildUserAvatar(BuildContext context, AuthProvider authProvider) {
-    final profileImageUrl = authProvider.profileImageUrl?.trim();
+  Widget _buildUserAvatar(BuildContext context, AuthState auth) {
+    final profileImageUrl = auth.profileImageUrl?.trim();
 
     if (profileImageUrl == null || profileImageUrl.isEmpty) {
       return _defaultAvatar(context);

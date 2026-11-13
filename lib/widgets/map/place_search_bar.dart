@@ -17,7 +17,7 @@ enum PlaceSearchAvailability {
 /// 지도 상단 장소 검색창.
 ///
 /// 검색 버튼이나 키보드 검색 키로 제출한다. 검색어 판정은 [SearchQueryNormalizer]
-/// (MapProvider와 같은 기준)를 쓰며, 100자를 넘으면 안내 문구를 보이고 제출하지 않는다.
+/// (MapNotifier와 같은 기준)를 쓰며, 100자를 넘으면 안내 문구를 보이고 제출하지 않는다.
 class PlaceSearchBar extends StatelessWidget {
   const PlaceSearchBar({
     super.key,

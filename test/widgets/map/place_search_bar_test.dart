@@ -94,7 +94,7 @@ void main() {
     await tester.testTextInput.receiveAction(TextInputAction.search);
     expect(harness.submitted, isEmpty);
 
-    // 앞뒤 공백은 길이에 넣지 않는다(MapProvider와 같은 기준).
+    // 앞뒤 공백은 길이에 넣지 않는다(MapNotifier와 같은 기준).
     await tester.enterText(find.byType(TextField), '  ${'가' * 100}  ');
     await tester.pump();
     expect(find.text(PlaceSearchBar.tooLongMessage), findsNothing);

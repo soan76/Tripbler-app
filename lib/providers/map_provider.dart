@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/network/api_exception.dart';
 import '../models/place_model.dart';
-import '../providers/auth_provider.dart';
+import 'auth_provider.dart';
 import '../repositories/auth/auth_repository.dart';
 import '../services/place_api_service.dart';
 import '../utils/map/place_distance.dart';
@@ -70,110 +71,79 @@ class _SearchRequest {
   int get hashCode => Object.hash(query, center);
 }
 
-/// 지도 화면에서 주변 장소, 장소 검색, 선택한 장소를 관리하는 Provider 클래스
-class MapProvider extends ChangeNotifier {
-  /// [authorizedRequest]: 로그인이 필요한 검색 요청을 토큰과 함께 실행한다
-  /// (보통 [AuthProvider.runAuthorizedRequest]).
-  /// [authState]와 [isAuthenticated]를 주면 로그인이 풀릴 때 검색 상태를 비운다.
-  /// [now]는 상세 캐시 만료 판단에 쓰는 현재 시각이다(테스트용, 기본 [DateTime.now]).
-  MapProvider({
-    required AuthorizedRequestRunner authorizedRequest,
-    PlaceApiService? placeApiService,
-    Listenable? authState,
-    bool Function()? isAuthenticated,
-    DateTime Function()? now,
-  }) : _authorizedRequest = authorizedRequest,
-       _placeApiService = placeApiService ?? PlaceApiService(),
-       _authState = authState,
-       _isAuthenticated = isAuthenticated,
-       _now = now ?? DateTime.now {
-    _authState?.addListener(_handleAuthStateChanged);
-  }
+/// 장소 검색·상세 조회 서버 API.
+final placeApiServiceProvider = Provider<PlaceApiService>((ref) {
+  final service = PlaceApiService();
+  ref.onDispose(service.dispose);
+  return service;
+});
 
-  /// 상세 결과를 기억해 두는 최대 장소 수. 넘으면 오래된 것부터 지운다.
-  static const int maxCachedPlaceDetails = 50;
+/// 상세 캐시 만료 판단에 쓰는 현재 시각. 테스트에서 바꾼다.
+final clockProvider = Provider<DateTime Function()>((_) => DateTime.now);
 
-  /// 상세 결과(영업 여부 등)를 재사용하는 시간. 지나면 다시 조회한다.
-  static const Duration placeDetailsCacheTtl = Duration(minutes: 30);
+/// 지도 화면이 보여 주는 값. [MapNotifier]가 알릴 때마다 새로 만든다.
+class MapState {
+  const MapState({
+    this.searchStatus = MapSearchStatus.idle,
+    this.searchResults = const [],
+    this.searchResultsOrigin,
+    this.searchError,
+    this.lastSearchQuery,
+    this.canRetrySearch = false,
+    this.hasSessionExpiryNotice = false,
+    this.detailsStatus = PlaceDetailsStatus.idle,
+    this.detailsErrorMessage,
+    this.selectedPlaceDetailsFetchedAt,
+    this.status = MapPlaceStatus.idle,
+    this.places = const [],
+    this.selectedPlace,
+    this.errorMessage,
+    required this.clock,
+    required this.onPlaceMarkerTap,
+    required this.onSearchResultMarkerTap,
+  });
 
-  final AuthorizedRequestRunner _authorizedRequest;
-  final PlaceApiService _placeApiService;
-  final Listenable? _authState;
-  final bool Function()? _isAuthenticated;
-  final DateTime Function() _now;
-
-  bool _isDisposed = false;
-
-  // ----- 장소 검색 상태 -----
-  MapSearchStatus _searchStatus = MapSearchStatus.idle;
-  List<PlaceModel> _searchResults = const [];
-  MapSearchError? _searchError;
-  String? _lastSearchQuery;
-
-  /// 지금 화면에 있는 검색 결과의 조건.
-  _SearchRequest? _resultsRequest;
-
-  /// 마지막으로 실패한 검색 요청. [retrySearch]가 같은 조건으로 다시 보낸다.
-  _SearchRequest? _lastFailedRequest;
-
-  /// 가장 최근 검색 요청 번호. 이보다 앞선 요청의 응답은 버린다.
-  int _searchRequestId = 0;
-
-  /// 가장 최근에 보낸 검색 조건. [_searchRequestId]가 아직 진행 중일 때만 중복 판단에 쓴다.
-  _SearchRequest? _currentSearchRequest;
-
-  // ----- 세션 만료 안내 -----
-  // 사용자 검색에서 만료가 확정됐을 때만, 만료된 세션당 한 번 안내한다.
-  // 검색 중 만료되면 AuthProvider가 로그인 상태를 먼저 해제하고 그 알림으로 검색 상태가
-  // 비워진 뒤에 만료 예외가 도착한다. 그래서 로그인이 풀린 순간 진행 중이던 검색 요청을
-  // 따로 기억해 두고, 그 요청이 만료로 끝나면 안내한다.
-
-  /// 응답을 기다리는 검색 요청 번호들(최신이 아닌 요청 포함).
-  final Set<int> _inFlightSearchIds = <int>{};
-
-  /// 로그인이 풀린 순간 진행 중이던 검색 요청 번호들.
-  final Set<int> _signedOutSearchIds = <int>{};
-
-  /// 이미 안내했거나 안내를 기다리는 만료 세션 번호들.
-  final Set<int> _noticedExpiredSessionIds = <int>{};
-
-  bool _hasSessionExpiryNotice = false;
-
-  // ----- 상세 조회 상태 -----
-  PlaceDetailsStatus _detailsStatus = PlaceDetailsStatus.idle;
-  String? _detailsErrorMessage;
-  int _detailsRequestId = 0;
-  final LinkedHashMap<String, _CachedPlaceDetails> _detailsCache =
-      LinkedHashMap<String, _CachedPlaceDetails>();
-
-  // 선택한 장소의 상세 표시가 바뀌는 순간(만료, 오래된 정보의 날짜 표시가 바뀌는
-  // 자정) 화면에 알리는 타이머
-  Timer? _detailsDisplayTimer;
-
-  // 지금 열린 카드에서 사용자가 "평점·영업 정보"를 누른 장소 id. 카드를 새로 열 때
-  // (닫기, 다른 장소 선택) 비워, 받아 둔 결과가 있어도 버튼부터 다시 보이게 한다.
-  String? _detailsRevealedPlaceId;
-
-  MapSearchStatus get searchStatus => _searchStatus;
+  final MapSearchStatus searchStatus;
 
   /// 검색 결과. 검색할 때 기기 위치를 알았으면 가까운 순, 몰랐으면 서버가 준 순서다.
-  List<PlaceModel> get searchResults => List.unmodifiable(_searchResults);
+  final List<PlaceModel> searchResults;
 
   /// 지금 결과를 정렬한 기기 위치. 결과의 거리 표시도 이 위치를 기준으로 한다.
   /// 검색할 때 위치를 몰랐으면 null이다.
-  LatLng? get searchResultsOrigin => _resultsRequest?.origin;
-  MapSearchError? get searchError => _searchError;
-  String? get lastSearchQuery => _lastSearchQuery;
-  bool get isSearching => _searchStatus == MapSearchStatus.loading;
-  bool get hasSearchResults => _searchResults.isNotEmpty;
-  bool get canRetrySearch => _lastFailedRequest != null;
+  final LatLng? searchResultsOrigin;
+  final MapSearchError? searchError;
+  final String? lastSearchQuery;
+
+  /// 마지막으로 실패한 검색이 있어 [MapNotifier.retrySearch]를 쓸 수 있는지.
+  final bool canRetrySearch;
 
   /// 표시를 기다리는 세션 만료 안내가 있는지. 지도 탭이 활성일 때만 표시하고
-  /// [consumeSessionExpiryNotice]로 소비한다.
-  bool get hasSessionExpiryNotice => _hasSessionExpiryNotice;
+  /// [MapNotifier.consumeSessionExpiryNotice]로 소비한다.
+  final bool hasSessionExpiryNotice;
 
-  PlaceDetailsStatus get detailsStatus => _detailsStatus;
-  String? get detailsErrorMessage => _detailsErrorMessage;
+  final PlaceDetailsStatus detailsStatus;
+  final String? detailsErrorMessage;
+
+  /// 선택한 장소의 상세 결과를 받은 시각(기기 현지 시간). 지금 열린 카드에서 버튼을
+  /// 누르기 전이거나 받은 적이 없으면 null.
+  final DateTime? selectedPlaceDetailsFetchedAt;
+
+  final MapPlaceStatus status;
+  final List<PlaceModel> places;
+  final PlaceModel? selectedPlace;
+  final String? errorMessage;
+
+  /// 만료 판단에 쓰는 현재 시각([MapNotifier.now]와 같은 시계).
+  final DateTime Function() clock;
+
+  /// 주변 장소 마커를 눌렀을 때([MapNotifier.selectPlace]).
+  final void Function(PlaceModel place) onPlaceMarkerTap;
+
+  /// 검색 결과 마커를 눌렀을 때([MapNotifier.selectSearchResult]).
+  final void Function(PlaceModel place) onSearchResultMarkerTap;
+
+  bool get isSearching => searchStatus == MapSearchStatus.loading;
+  bool get hasSearchResults => searchResults.isNotEmpty;
 
   /// 지금 열린 카드에서 버튼을 눌렀고, 선택한 장소의 상세 결과를 받아 둔 적이
   /// 있는지(만료된 결과 포함). 카드를 새로 열면 버튼을 누르기 전까지 false다.
@@ -181,33 +151,79 @@ class MapProvider extends ChangeNotifier {
   /// 평점·영업 여부가 둘 다 없는 성공 응답도 받아 둔 것으로 본다. true면 카드가
   /// [selectedPlace]의 평점·영업 여부를 표시한다. 만료됐는지는
   /// [selectedPlaceDetailsStale]로 구분한다.
-  bool get selectedPlaceDetailsLoaded => _selectedCacheEntry != null;
+  bool get selectedPlaceDetailsLoaded => selectedPlaceDetailsFetchedAt != null;
 
-  /// 선택한 장소의 상세 결과가 30분이 지나 오래된 정보인지.
+  /// 선택한 장소의 상세 결과가 30분이 지나 오래된 정보인지. 읽는 순간의 [clock]으로
+  /// 판단한다.
   ///
   /// 오래돼도 값은 지우지 않는다. 새로 고침하는 동안과 새로 고침이 실패했을 때도
   /// 마지막 성공값과 [selectedPlaceDetailsFetchedAt]을 그대로 보여준다.
   bool get selectedPlaceDetailsStale {
-    final entry = _selectedCacheEntry;
-    return entry != null && _isExpired(entry);
+    final fetchedAt = selectedPlaceDetailsFetchedAt;
+    return fetchedAt != null &&
+        clock().difference(fetchedAt) >= MapNotifier.placeDetailsCacheTtl;
   }
 
-  /// 이 Provider가 만료 판단에 쓰는 현재 시각. 카드의 날짜 표시도 같은 시계를 쓴다.
-  DateTime now() => _now();
+  bool get isLoading => status == MapPlaceStatus.loading;
+  bool get hasPlaces => places.isNotEmpty;
 
-  /// 선택한 장소의 상세 결과를 받은 시각(기기 현지 시간). 받은 적이 없으면 null.
-  DateTime? get selectedPlaceDetailsFetchedAt => _selectedCacheEntry?.storedAt;
-
-  /// 지금 열린 카드에 보여줄 상세 결과. 이 카드에서 버튼을 누르기 전이면 받아 둔
-  /// 결과가 있어도 null이다.
-  _CachedPlaceDetails? get _selectedCacheEntry {
-    final selectedId = _selectedPlace?.id;
-
-    if (selectedId == null || selectedId != _detailsRevealedPlaceId) {
-      return null;
-    }
-
-    return _detailsCache[selectedId];
+  MapState copyWith({
+    MapSearchStatus? searchStatus,
+    List<PlaceModel>? searchResults,
+    LatLng? searchResultsOrigin,
+    bool clearSearchResultsOrigin = false,
+    MapSearchError? searchError,
+    bool clearSearchError = false,
+    String? lastSearchQuery,
+    bool clearLastSearchQuery = false,
+    bool? canRetrySearch,
+    bool? hasSessionExpiryNotice,
+    PlaceDetailsStatus? detailsStatus,
+    String? detailsErrorMessage,
+    bool clearDetailsErrorMessage = false,
+    DateTime? selectedPlaceDetailsFetchedAt,
+    bool clearSelectedPlaceDetailsFetchedAt = false,
+    MapPlaceStatus? status,
+    List<PlaceModel>? places,
+    PlaceModel? selectedPlace,
+    bool clearSelectedPlace = false,
+    String? errorMessage,
+    bool clearErrorMessage = false,
+  }) {
+    return MapState(
+      searchStatus: searchStatus ?? this.searchStatus,
+      searchResults: searchResults == null
+          ? this.searchResults
+          : List.unmodifiable(searchResults),
+      searchResultsOrigin: clearSearchResultsOrigin
+          ? null
+          : searchResultsOrigin ?? this.searchResultsOrigin,
+      searchError: clearSearchError ? null : searchError ?? this.searchError,
+      lastSearchQuery: clearLastSearchQuery
+          ? null
+          : lastSearchQuery ?? this.lastSearchQuery,
+      canRetrySearch: canRetrySearch ?? this.canRetrySearch,
+      hasSessionExpiryNotice:
+          hasSessionExpiryNotice ?? this.hasSessionExpiryNotice,
+      detailsStatus: detailsStatus ?? this.detailsStatus,
+      detailsErrorMessage: clearDetailsErrorMessage
+          ? null
+          : detailsErrorMessage ?? this.detailsErrorMessage,
+      selectedPlaceDetailsFetchedAt: clearSelectedPlaceDetailsFetchedAt
+          ? null
+          : selectedPlaceDetailsFetchedAt ?? this.selectedPlaceDetailsFetchedAt,
+      status: status ?? this.status,
+      places: places == null ? this.places : List.unmodifiable(places),
+      selectedPlace: clearSelectedPlace
+          ? null
+          : selectedPlace ?? this.selectedPlace,
+      errorMessage: clearErrorMessage
+          ? null
+          : errorMessage ?? this.errorMessage,
+      clock: clock,
+      onPlaceMarkerTap: onPlaceMarkerTap,
+      onSearchResultMarkerTap: onSearchResultMarkerTap,
+    );
   }
 
   /// 좌표가 있는 검색 결과를 모두 감싸는 범위. 카메라 이동은 화면이 맡는다.
@@ -223,7 +239,7 @@ class MapProvider extends ChangeNotifier {
     double? north;
     final longitudes = <double>[];
 
-    for (final place in _searchResults) {
+    for (final place in searchResults) {
       if (!place.hasCoordinates) {
         continue;
       }
@@ -262,25 +278,12 @@ class MapProvider extends ChangeNotifier {
     );
   }
 
-  MapPlaceStatus _status = MapPlaceStatus.idle;
-  List<PlaceModel> _places = [];
-  PlaceModel? _selectedPlace;
-  String? _errorMessage;
-
-  MapPlaceStatus get status => _status;
-  List<PlaceModel> get places => List.unmodifiable(_places);
-  PlaceModel? get selectedPlace => _selectedPlace;
-  String? get errorMessage => _errorMessage;
-
-  bool get isLoading => _status == MapPlaceStatus.loading;
-  bool get hasPlaces => _places.isNotEmpty;
-
   // 주변 장소 마커 + 현재 선택한 장소 마커
   Set<Marker> get markers {
     final markers = <Marker>{};
 
     // Nearby API로 받아온 장소 마커
-    for (final place in _places) {
+    for (final place in places) {
       // 좌표가 없는 장소는 지도에 표시할 수 없으므로 건너뜀.
       // (place_model의 좌표 파싱 실패 시 더 이상 (0,0)으로 대체하지 않고
       // null을 반환하므로, 여기서 명시적으로 걸러줘야 함)
@@ -294,7 +297,7 @@ class MapProvider extends ChangeNotifier {
           position: LatLng(place.latitude!, place.longitude!),
           infoWindow: InfoWindow(title: place.name, snippet: place.address),
           onTap: () {
-            selectPlace(place);
+            onPlaceMarkerTap(place);
           },
         ),
       );
@@ -302,9 +305,9 @@ class MapProvider extends ChangeNotifier {
 
     // 검색 결과 마커. 탭하면 그 결과를 선택하고, 선택된 마커는 색과 겹침 순서로 구분한다.
     // 모양은 화면 디자인 단계에서 다듬는다.
-    final selectedId = _selectedPlace?.id;
+    final selectedId = selectedPlace?.id;
 
-    for (final place in _searchResults) {
+    for (final place in searchResults) {
       if (!place.hasCoordinates) {
         continue;
       }
@@ -320,13 +323,145 @@ class MapProvider extends ChangeNotifier {
               : BitmapDescriptor.defaultMarker,
           zIndexInt: isSelected ? 2 : 1,
           onTap: () {
-            selectSearchResult(place);
+            onSearchResultMarkerTap(place);
           },
         ),
       );
     }
 
     return markers;
+  }
+}
+
+/// 지도 화면에서 주변 장소, 장소 검색, 선택한 장소를 관리한다.
+///
+/// 검색·상세 요청은 [authorizedRequestRunnerProvider]로 토큰과 함께 실행한다.
+/// 로그인 세션이 바뀌면([AuthState.sessionId]) 검색 결과·선택·상세 캐시를 비운다.
+///
+/// 작업 중인 값은 이 Notifier의 필드에 두고, 알릴 때마다 [MapState]를 새로 만든다.
+class MapNotifier extends Notifier<MapState> {
+  /// 상세 결과를 기억해 두는 최대 장소 수. 넘으면 오래된 것부터 지운다.
+  static const int maxCachedPlaceDetails = 50;
+
+  /// 상세 결과(영업 여부 등)를 재사용하는 시간. 지나면 다시 조회한다.
+  static const Duration placeDetailsCacheTtl = Duration(minutes: 30);
+
+  late AuthorizedRequestRunner _authorizedRequest;
+  late PlaceApiService _placeApiService;
+  late DateTime Function() _now;
+
+  @override
+  MapState build() {
+    _authorizedRequest = ref.read(authorizedRequestRunnerProvider);
+    _placeApiService = ref.read(placeApiServiceProvider);
+    _now = ref.read(clockProvider);
+
+    // 화면 밖에서 구독이 멈추면 중간 전이(로그아웃→재로그인)가 마지막 값 하나로
+    // 합쳐질 수 있다. 그래서 로그인 여부만이 아니라 세션 번호가 바뀌었는지를 본다.
+    ref.listen(
+      authProvider.select((auth) => (auth.sessionId, auth.isAuthenticated)),
+      _onAuthChanged,
+    );
+
+    ref.onDispose(() {
+      _detailsDisplayTimer?.cancel();
+      _detailsDisplayTimer = null;
+    });
+
+    return _snapshot();
+  }
+
+  // ----- 장소 검색 상태 -----
+  MapSearchStatus _searchStatus = MapSearchStatus.idle;
+  List<PlaceModel> _searchResults = const [];
+  MapSearchError? _searchError;
+  String? _lastSearchQuery;
+
+  /// 지금 화면에 있는 검색 결과의 조건.
+  _SearchRequest? _resultsRequest;
+
+  /// 마지막으로 실패한 검색 요청. [retrySearch]가 같은 조건으로 다시 보낸다.
+  _SearchRequest? _lastFailedRequest;
+
+  /// 가장 최근 검색 요청 번호. 이보다 앞선 요청의 응답은 버린다.
+  int _searchRequestId = 0;
+
+  /// 가장 최근에 보낸 검색 조건. [_searchRequestId]가 아직 진행 중일 때만 중복 판단에 쓴다.
+  _SearchRequest? _currentSearchRequest;
+
+  // ----- 세션 만료 안내 -----
+  // 사용자 검색에서 만료가 확정됐을 때만, 만료된 세션당 한 번 안내한다.
+  // 검색 중 만료되면 AuthNotifier가 로그인 상태를 먼저 해제하고 그 알림으로 검색 상태가
+  // 비워진 뒤에 만료 예외가 도착한다. 그래서 로그인이 풀린 순간 진행 중이던 검색 요청을
+  // 따로 기억해 두고, 그 요청이 만료로 끝나면 안내한다.
+
+  /// 응답을 기다리는 검색 요청 번호들(최신이 아닌 요청 포함).
+  final Set<int> _inFlightSearchIds = <int>{};
+
+  /// 로그인이 풀린 순간 진행 중이던 검색 요청 번호들.
+  final Set<int> _signedOutSearchIds = <int>{};
+
+  /// 이미 안내했거나 안내를 기다리는 만료 세션 번호들.
+  final Set<int> _noticedExpiredSessionIds = <int>{};
+
+  bool _hasSessionExpiryNotice = false;
+
+  // ----- 상세 조회 상태 -----
+  PlaceDetailsStatus _detailsStatus = PlaceDetailsStatus.idle;
+  String? _detailsErrorMessage;
+  int _detailsRequestId = 0;
+  final LinkedHashMap<String, _CachedPlaceDetails> _detailsCache =
+      LinkedHashMap<String, _CachedPlaceDetails>();
+
+  // 선택한 장소의 상세 표시가 바뀌는 순간(만료, 오래된 정보의 날짜 표시가 바뀌는
+  // 자정) 화면에 알리는 타이머
+  Timer? _detailsDisplayTimer;
+
+  // 지금 열린 카드에서 사용자가 "평점·영업 정보"를 누른 장소 id. 카드를 새로 열 때
+  // (닫기, 다른 장소 선택) 비워, 받아 둔 결과가 있어도 버튼부터 다시 보이게 한다.
+  String? _detailsRevealedPlaceId;
+
+  /// 이 Notifier가 만료 판단에 쓰는 현재 시각. 카드의 날짜 표시도 같은 시계를 쓴다.
+  DateTime now() => _now();
+
+  /// 지금 열린 카드에 보여줄 상세 결과. 이 카드에서 버튼을 누르기 전이면 받아 둔
+  /// 결과가 있어도 null이다.
+  _CachedPlaceDetails? get _selectedCacheEntry {
+    final selectedId = _selectedPlace?.id;
+
+    if (selectedId == null || selectedId != _detailsRevealedPlaceId) {
+      return null;
+    }
+
+    return _detailsCache[selectedId];
+  }
+
+  MapPlaceStatus _status = MapPlaceStatus.idle;
+  List<PlaceModel> _places = [];
+  PlaceModel? _selectedPlace;
+  String? _errorMessage;
+
+  /// 지금 값으로 화면에 줄 상태를 만든다.
+  MapState _snapshot() {
+    return MapState(
+      searchStatus: _searchStatus,
+      searchResults: List.unmodifiable(_searchResults),
+      searchResultsOrigin: _resultsRequest?.origin,
+      searchError: _searchError,
+      lastSearchQuery: _lastSearchQuery,
+      canRetrySearch: _lastFailedRequest != null,
+      hasSessionExpiryNotice: _hasSessionExpiryNotice,
+      detailsStatus: _detailsStatus,
+      detailsErrorMessage: _detailsErrorMessage,
+      selectedPlaceDetailsFetchedAt: _selectedCacheEntry?.storedAt,
+      status: _status,
+      places: List.unmodifiable(_places),
+      selectedPlace: _selectedPlace,
+      errorMessage: _errorMessage,
+      clock: _now,
+      onPlaceMarkerTap: selectPlace,
+      onSearchResultMarkerTap: selectSearchResult,
+    );
   }
 
   Future<void> loadNearbyPlaces({
@@ -338,7 +473,7 @@ class MapProvider extends ChangeNotifier {
     _status = MapPlaceStatus.loading;
     _errorMessage = null;
     _clearSelectionState();
-    notifyListeners();
+    _notify();
 
     try {
       final places = await _placeApiService.fetchNearbyPlaces(
@@ -350,7 +485,7 @@ class MapProvider extends ChangeNotifier {
 
       _places = places;
       _status = MapPlaceStatus.success;
-      notifyListeners();
+      _notify();
     } catch (error, stackTrace) {
       debugPrint('주변 장소 불러오기 실패: $error');
       debugPrint('$stackTrace');
@@ -359,7 +494,7 @@ class MapProvider extends ChangeNotifier {
       _clearSelectionState();
       _errorMessage = error.toString();
       _status = MapPlaceStatus.failure;
-      notifyListeners();
+      _notify();
     }
   }
 
@@ -451,7 +586,7 @@ class MapProvider extends ChangeNotifier {
           _isCurrentSearch(requestId) ||
           _signedOutSearchIds.contains(requestId);
 
-      if (!_isDisposed && confirmedBySearch) {
+      if (ref.mounted && confirmedBySearch) {
         _raiseSessionExpiryNotice(error.sessionId);
       }
 
@@ -459,7 +594,7 @@ class MapProvider extends ChangeNotifier {
         return;
       }
 
-      // 로그인 상태는 AuthProvider가 해제한다(앱은 비로그인으로도 쓸 수 있어 화면은 그대로).
+      // 로그인 상태는 AuthNotifier가 해제한다(앱은 비로그인으로도 쓸 수 있어 화면은 그대로).
       _resetSearchState();
       _notify();
     } on SessionChangedException {
@@ -496,12 +631,13 @@ class MapProvider extends ChangeNotifier {
     }
   }
 
-  bool get _isSignedIn => _isAuthenticated?.call() ?? true;
+  /// 지금 로그인돼 있는지. 화면 밖에서 구독이 멈춰 있어도 현재 값을 읽는다.
+  bool get _isSignedIn => ref.read(authProvider).isAuthenticated;
 
   /// 만료된 세션의 안내를 한 번만 대기시킨다.
   /// 이미 다시 로그인했다면(이전 세션의 늦은 예외) 새 화면에 띄우지 않는다.
   void _raiseSessionExpiryNotice(int? sessionId) {
-    if (_isAuthenticated?.call() ?? false) {
+    if (_isSignedIn) {
       return;
     }
 
@@ -528,7 +664,7 @@ class MapProvider extends ChangeNotifier {
   }
 
   bool _isCurrentSearch(int requestId) {
-    return !_isDisposed && requestId == _searchRequestId;
+    return ref.mounted && requestId == _searchRequestId;
   }
 
   MapSearchError _toSearchError(Object error) {
@@ -587,24 +723,27 @@ class MapProvider extends ChangeNotifier {
     _lastFailedRequest = null;
   }
 
-  void _handleAuthStateChanged() {
-    final isAuthenticated = _isAuthenticated;
+  /// 로그인 세션이나 로그인 여부가 바뀌었을 때.
+  ///
+  /// 지도 화면이 다른 탭에 있어 구독이 멈춘 동안 로그아웃→재로그인이 일어나면
+  /// 두 전이가 하나로 합쳐져 도착할 수 있다. 세션 번호가 다르면 그 사이에
+  /// 로그아웃이 있었던 것이므로 이전 세션의 값을 비운다.
+  void _onAuthChanged((int, bool)? previous, (int, bool) next) {
+    final (sessionId, isAuthenticated) = next;
 
-    if (isAuthenticated == null) {
-      return;
+    if (previous != null && previous.$1 != sessionId) {
+      _onSessionChanged();
     }
 
-    if (isAuthenticated()) {
-      // 새로 로그인했다: 아직 표시하지 않은 이전 세션의 만료 안내는 무효다.
-      if (_hasSessionExpiryNotice) {
-        _hasSessionExpiryNotice = false;
-        _notify();
-      }
-
-      return;
+    // 새로 로그인했다: 아직 표시하지 않은 이전 세션의 만료 안내는 무효다.
+    if (isAuthenticated && _hasSessionExpiryNotice) {
+      _hasSessionExpiryNotice = false;
+      _notify();
     }
+  }
 
-    // 로그인이 풀린 순간 진행 중이던 검색: 만료로 끝나면 사용자 검색이 만료를 확정한 것이다.
+  void _onSessionChanged() {
+    // 세션이 바뀐 순간 진행 중이던 검색: 만료로 끝나면 사용자 검색이 만료를 확정한 것이다.
     _signedOutSearchIds.addAll(_inFlightSearchIds);
 
     // 로그아웃·세션 만료: 다음 사용자에게 이전 검색과 상세 결과가 남지 않게 비운다.
@@ -680,8 +819,8 @@ class MapProvider extends ChangeNotifier {
       _syncDetailsDisplayTimer();
       _notify();
     } on SessionExpiredException catch (error) {
-      // 재발급까지 실패해 세션이 끝났다. 로그인 해제는 AuthProvider가 했다.
-      if (!_isDisposed) {
+      // 재발급까지 실패해 세션이 끝났다. 로그인 해제는 AuthNotifier가 했다.
+      if (ref.mounted) {
         _raiseSessionExpiryNotice(error.sessionId);
       }
 
@@ -717,7 +856,7 @@ class MapProvider extends ChangeNotifier {
   }
 
   bool _isCurrentDetails(int requestId, String placeId) {
-    return !_isDisposed &&
+    return ref.mounted &&
         requestId == _detailsRequestId &&
         _selectedPlace?.id == placeId;
   }
@@ -755,7 +894,7 @@ class MapProvider extends ChangeNotifier {
 
     final entry = _selectedCacheEntry;
 
-    if (_isDisposed || entry == null) {
+    if (!ref.mounted || entry == null) {
       return;
     }
 
@@ -786,7 +925,7 @@ class MapProvider extends ChangeNotifier {
     _detailsDisplayTimer = Timer(delay, () {
       _detailsDisplayTimer = null;
 
-      if (_isDisposed) {
+      if (!ref.mounted) {
         return;
       }
 
@@ -865,7 +1004,7 @@ class MapProvider extends ChangeNotifier {
     _selectedPlace = _withCachedDetails(place);
     _detailsRevealedPlaceId = null;
     _resetDetailsState();
-    notifyListeners();
+    _notify();
   }
 
   /// 상세 카드만 닫는다. 검색 결과는 그대로 둔다.
@@ -875,7 +1014,7 @@ class MapProvider extends ChangeNotifier {
     }
 
     _clearSelectionState();
-    notifyListeners();
+    _notify();
   }
 
   void _clearSelectionState() {
@@ -884,9 +1023,10 @@ class MapProvider extends ChangeNotifier {
     _resetDetailsState();
   }
 
+  /// 지금 값으로 상태를 새로 내보낸다. 상태 객체가 폐기된 뒤에는 하지 않는다.
   void _notify() {
-    if (!_isDisposed) {
-      notifyListeners();
+    if (ref.mounted) {
+      state = _snapshot();
     }
   }
 
@@ -897,16 +1037,8 @@ class MapProvider extends ChangeNotifier {
       _status = MapPlaceStatus.idle;
     }
 
-    notifyListeners();
-  }
-
-  @override
-  void dispose() {
-    _isDisposed = true;
-    _detailsDisplayTimer?.cancel();
-    _detailsDisplayTimer = null;
-    _authState?.removeListener(_handleAuthStateChanged);
-    _placeApiService.dispose();
-    super.dispose();
+    _notify();
   }
 }
+
+final mapProvider = NotifierProvider<MapNotifier, MapState>(MapNotifier.new);

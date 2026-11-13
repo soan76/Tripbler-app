@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
+import 'package:tripbler/main.dart' show buildAppScope;
 import 'package:tripbler/providers/auth_provider.dart';
 import 'package:tripbler/screens/auth/login_screen.dart';
 import 'package:tripbler/screens/settings_screen.dart';
@@ -12,7 +12,7 @@ import 'package:tripbler/screens/user/user_page.dart';
 import 'package:tripbler/widgets/navigation/app_drawer.dart';
 
 /// 서랍이 읽는 값만 흉내 내는 대역.
-class _FakeAuth extends ChangeNotifier implements AuthProvider {
+class _FakeAuth extends AuthNotifier {
   _FakeAuth({
     this.isAuthenticated = true,
     this.nickname,
@@ -22,37 +22,38 @@ class _FakeAuth extends ChangeNotifier implements AuthProvider {
     this.logoutGate,
   });
 
-  @override
-  bool isAuthenticated;
-  @override
+  final bool isAuthenticated;
   final String? nickname;
-  @override
   final String? loginId;
-  @override
   final String? profileImageUrl;
-  @override
-  bool isLoading;
+  final bool isLoading;
 
   /// 주어지면 로그아웃이 이 Future가 끝날 때까지 기다린다(느린 연결 흉내).
   final Future<void>? logoutGate;
 
   int logoutCount = 0;
 
-  /// 실제 [AuthProvider.logout]처럼 진행 중에는 [isLoading]을 켜고,
+  @override
+  AuthState build() {
+    return AuthState(
+      isInitialized: true,
+      isAuthenticated: isAuthenticated,
+      nickname: nickname,
+      loginId: loginId,
+      profileImageUrl: profileImageUrl,
+      isLoading: isLoading,
+    );
+  }
+
+  /// 실제 [AuthNotifier.logout]처럼 진행 중에는 [AuthState.isLoading]을 켜고,
   /// 끝나면 로그인 상태를 지운다.
   @override
   Future<void> logout() async {
     logoutCount++;
-    isLoading = true;
-    notifyListeners();
+    state = state.copyWith(isLoading: true);
     await logoutGate;
-    isAuthenticated = false;
-    isLoading = false;
-    notifyListeners();
+    state = state.withoutUser().copyWith(isLoading: false);
   }
-
-  @override
-  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 /// 서랍이 밀어 넣은 화면을 기록하고, 대상 화면이 요구하는 Provider 없이 시험하도록
@@ -84,8 +85,8 @@ Future<void> _openDrawer(
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
   await tester.pumpWidget(
-    ChangeNotifierProvider<AuthProvider>.value(
-      value: auth,
+    buildAppScope(
+      overrides: [authProvider.overrideWith(() => auth)],
       child: MaterialApp(
         theme: theme,
         navigatorObservers: [?observer],

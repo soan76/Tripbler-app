@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'
-    show ConsumerState, ConsumerStatefulWidget;
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/place_model.dart';
 import '../providers/auth_provider.dart';
@@ -77,12 +75,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // 가장 최근 검색 제출 번호(늦게 끝난 이전 제출의 카메라 이동을 막는다)
   int _searchSubmitId = 0;
 
-  // 구독하는 Provider(로그인 해제·장소 선택 순간을 감지한다)
-  late final AuthProvider _authProvider;
-  late final MapProvider _mapProvider;
-
-  // 마지막으로 확인한 검색 가능 상태와 선택 장소 id
+  // 마지막으로 확인한 검색 가능 상태, 로그인 세션 번호, 선택 장소 id
+  // (로그인 해제·장소 선택 순간을 감지한다)
   late PlaceSearchAvailability _lastAvailability;
+  late int _lastSessionId;
   String? _lastSelectedPlaceId;
 
   // 현재 위치와 방향 상태를 관리하는 Controller
@@ -119,20 +115,20 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     // 위치 또는 방향 상태 변경 시 화면 갱신
     _locationController.addListener(_onLocationStateChanged);
 
-    _authProvider = context.read<AuthProvider>();
-    _mapProvider = context.read<MapProvider>();
-    _lastAvailability = _availabilityOf(_authProvider);
-    _lastSelectedPlaceId = _mapProvider.selectedPlace?.id;
-    _authProvider.addListener(_onAuthStateChanged);
-    _mapProvider.addListener(_onMapStateChanged);
+    final auth = ref.read(authProvider);
+    _lastAvailability = _availabilityOf(auth);
+    _lastSessionId = auth.sessionId;
+    _lastSelectedPlaceId = ref.read(mapProvider).selectedPlace?.id;
+
+    // 구독은 화면이 사라질 때 함께 닫힌다.
+    ref.listenManual(authProvider, (_, auth) => _onAuthStateChanged(auth));
+    ref.listenManual(mapProvider, (_, map) => _onMapStateChanged(map));
   }
 
   @override
   void dispose() {
     // Controller Listener 해제
     _locationController.removeListener(_onLocationStateChanged);
-    _authProvider.removeListener(_onAuthStateChanged);
-    _mapProvider.removeListener(_onMapStateChanged);
 
     // 위치 Stream, Compass Stream, Timer 등을
     // MapLocationController 내부에서 정리함.
@@ -380,30 +376,40 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   // ----- 장소 검색 -----
 
-  bool _isMapTabActive(BuildContext context) {
+  bool _isMapTabActive() {
     return ref.read(tabProvider).selectedIndex == _mapTabIndex;
   }
 
-  PlaceSearchAvailability _availabilityOf(AuthProvider authProvider) {
+  PlaceSearchAvailability _availabilityOf(AuthState auth) {
     return MapSearchViewRules.availabilityOf(
-      isAuthenticated: authProvider.isAuthenticated,
-      sessionRestoreFailed: authProvider.sessionRestoreFailed,
+      isAuthenticated: auth.isAuthenticated,
+      sessionRestoreFailed: auth.sessionRestoreFailed,
     );
   }
 
-  /// 로그아웃·세션 만료·비로그인 확인 순간: MapProvider가 검색 결과를 비우므로
+  /// 로그아웃·세션 만료·비로그인 확인 순간: MapNotifier가 검색 결과를 비우므로
   /// 화면의 검색어·목록 펼침도 비우고, 진행 중이던 제출의 카메라 이동을 막는다.
   /// 비로그인 검색창은 읽기 전용이라 남은 검색어를 사용자가 지울 수 없기 때문이다.
-  void _onAuthStateChanged() {
-    final availability = _availabilityOf(_authProvider);
+  ///
+  /// 다른 탭에 있는 동안 로그아웃→재로그인이 하나로 합쳐져 도착하면 검색 가능 상태는
+  /// 그대로지만 세션 번호가 바뀐다. 이때도 이전 사용자의 검색어를 비운다.
+  void _onAuthStateChanged(AuthState auth) {
+    final availability = _availabilityOf(auth);
     final previous = _lastAvailability;
+    final sessionChanged = auth.sessionId != _lastSessionId;
     _lastAvailability = availability;
+    _lastSessionId = auth.sessionId;
 
-    if (!mounted ||
-        !MapSearchViewRules.shouldResetSearchInput(
+    final shouldReset =
+        MapSearchViewRules.shouldResetSearchInput(
           previous: previous,
           current: availability,
-        )) {
+        ) ||
+        (sessionChanged &&
+            previous == PlaceSearchAvailability.ready &&
+            availability == PlaceSearchAvailability.ready);
+
+    if (!mounted || !shouldReset) {
       return;
     }
 
@@ -420,8 +426,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   /// 장소가 새로 선택된 순간(목록 항목, 검색 결과 마커)에만 결과 목록을 접는다.
   /// 카드가 열린 채 사용자가 손잡이로 다시 펼친 목록은 그대로 둔다.
-  void _onMapStateChanged() {
-    final selectedId = _mapProvider.selectedPlace?.id;
+  void _onMapStateChanged(MapState map) {
+    final selectedId = map.selectedPlace?.id;
     final previousId = _lastSelectedPlaceId;
     _lastSelectedPlaceId = selectedId;
 
@@ -441,9 +447,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   /// 검색을 쓸 수 없는 상태에서 검색창을 누르거나 제출했을 때 안내한다.
   void _onSearchUnavailable() {
-    final authProvider = context.read<AuthProvider>();
-
-    if (authProvider.sessionRestoreFailed) {
+    if (ref.read(authProvider).sessionRestoreFailed) {
       _showMapSnackBar('로그인 정보를 확인하지 못해 검색할 수 없습니다. 위쪽 배너의 다시 시도를 눌러 주세요.');
       return;
     }
@@ -483,7 +487,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return;
     }
 
-    final mapProvider = context.read<MapProvider>();
+    final mapNotifier = ref.read(mapProvider.notifier);
     final submitId = ++_searchSubmitId;
 
     // 지도가 준비되지 않았으면 중심 좌표 없이 검색한다.
@@ -494,7 +498,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     });
 
     // 결과를 가까운 순으로 정렬하고 거리를 표시할 기준. 위치를 아직 모르면 서버 순서.
-    await mapProvider.search(
+    await mapNotifier.search(
       text,
       center: center,
       userLocation: _locationController.currentPosition,
@@ -504,31 +508,35 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return;
     }
 
-    if (mapProvider.searchStatus == MapSearchStatus.success &&
-        mapProvider.lastSearchQuery == normalizedQuery) {
-      await _fitCameraToResults(mapProvider);
+    final mapState = ref.read(mapProvider);
+
+    if (mapState.searchStatus == MapSearchStatus.success &&
+        mapState.lastSearchQuery == normalizedQuery) {
+      await _fitCameraToResults(mapState);
     }
   }
 
   Future<void> _retrySearch() async {
-    final mapProvider = context.read<MapProvider>();
+    final mapNotifier = ref.read(mapProvider.notifier);
     final submitId = ++_searchSubmitId;
 
-    await mapProvider.retrySearch();
+    await mapNotifier.retrySearch();
 
     if (!mounted || submitId != _searchSubmitId) {
       return;
     }
 
-    if (mapProvider.searchStatus == MapSearchStatus.success) {
-      await _fitCameraToResults(mapProvider);
+    final mapState = ref.read(mapProvider);
+
+    if (mapState.searchStatus == MapSearchStatus.success) {
+      await _fitCameraToResults(mapState);
     }
   }
 
   void _clearSearch() {
     _searchSubmitId++;
     _searchController.clear();
-    context.read<MapProvider>().clearSearch();
+    ref.read(mapProvider.notifier).clearSearch();
 
     setState(() {
       _resultsExpanded = false;
@@ -536,9 +544,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   /// 결과 전체가 보이게 카메라를 맞춘다. 결과가 1개면 그 장소로 이동한다.
-  Future<void> _fitCameraToResults(MapProvider mapProvider) async {
+  Future<void> _fitCameraToResults(MapState mapState) async {
     final controller = _mapController;
-    final bounds = mapProvider.searchResultBounds;
+    final bounds = mapState.searchResultBounds;
 
     if (controller == null || bounds == null) {
       return;
@@ -565,7 +573,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     // 키보드가 열려 있으면 상세 카드가 숨겨지므로, 장소를 고르면 키보드를 내린다.
     _searchFocusNode.unfocus();
 
-    context.read<MapProvider>().selectSearchResult(place);
+    ref.read(mapProvider.notifier).selectSearchResult(place);
 
     setState(() {
       _resultsExpanded = false;
@@ -594,21 +602,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// 지도 빈 곳 탭: 키보드를 내리고 열린 카드만 닫는다. 검색 결과는 유지한다.
   void _onMapTapped() {
     _searchFocusNode.unfocus();
-    context.read<MapProvider>().clearSelectedPlace();
+    ref.read(mapProvider.notifier).clearSelectedPlace();
   }
 
   /// Android 뒤로가기: 카드 닫기 → 목록 접기 → 검색 해제 → 기본 동작.
   /// 지도 탭이 선택돼 있을 때만 가로챈다(다른 탭에서는 MapScreen이 숨어 있어도 살아 있음).
-  bool _hasBackStep(MapProvider mapProvider) {
-    return mapProvider.selectedPlace != null ||
+  bool _hasBackStep(MapState mapState) {
+    return mapState.selectedPlace != null ||
         _resultsExpanded ||
-        mapProvider.searchStatus != MapSearchStatus.idle ||
+        mapState.searchStatus != MapSearchStatus.idle ||
         _searchController.text.isNotEmpty;
   }
 
-  void _handleBack(MapProvider mapProvider) {
-    if (mapProvider.selectedPlace != null) {
-      mapProvider.clearSelectedPlace();
+  void _handleBack() {
+    if (ref.read(mapProvider).selectedPlace != null) {
+      ref.read(mapProvider.notifier).clearSelectedPlace();
       return;
     }
 
@@ -624,13 +632,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final mapProvider = context.watch<MapProvider>();
-    final authProvider = context.watch<AuthProvider>();
+    final mapState = ref.watch(mapProvider);
+    final auth = ref.watch(authProvider);
+    final mapNotifier = ref.read(mapProvider.notifier);
     final isMapTabActive = ref.watch(tabProvider).selectedIndex == _mapTabIndex;
 
     // 현재 선택된 장소
-    final selectedPlace = mapProvider.selectedPlace;
-    final hasSearch = mapProvider.searchStatus != MapSearchStatus.idle;
+    final selectedPlace = mapState.selectedPlace;
+    final hasSearch = mapState.searchStatus != MapSearchStatus.idle;
 
     // 현재 위치 마커
     final currentLocationMarker = _buildCurrentLocationMarker();
@@ -648,18 +657,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         final expandedHeight = constraints.maxHeight * _expandedPanelFraction;
 
         return PopScope(
-          canPop: !(isMapTabActive && _hasBackStep(mapProvider)),
+          canPop: !(isMapTabActive && _hasBackStep(mapState)),
           onPopInvokedWithResult: (didPop, _) {
-            if (didPop || !_isMapTabActive(context)) {
+            if (didPop || !_isMapTabActive()) {
               return;
             }
 
-            _handleBack(context.read<MapProvider>());
+            _handleBack();
           },
           child: SessionExpiryNoticeListener(
             isActive: isMapTabActive,
-            hasNotice: mapProvider.hasSessionExpiryNotice,
-            onConsume: context.read<MapProvider>().consumeSessionExpiryNotice,
+            hasNotice: mapState.hasSessionExpiryNotice,
+            onConsume: mapNotifier.consumeSessionExpiryNotice,
             onLogin: _openLogin,
             child: Stack(
               children: [
@@ -670,7 +679,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   onMapCreated: _onMapCreated,
 
                   markers: {
-                    ...mapProvider.markers,
+                    ...mapState.markers,
 
                     if (currentLocationMarker != null) currentLocationMarker,
                   },
@@ -698,8 +707,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     searchBar: PlaceSearchBar(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
-                      availability: _availabilityOf(authProvider),
-                      isSearching: mapProvider.isSearching,
+                      availability: _availabilityOf(auth),
+                      isSearching: mapState.isSearching,
                       onSubmitted: _submitSearch,
                       onCleared: _clearSearch,
                       onUnavailable: _onSearchUnavailable,
@@ -733,11 +742,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     ),
                     resultsPanel: hasSearch
                         ? PlaceSearchResultsPanel(
-                            status: mapProvider.searchStatus,
-                            results: mapProvider.searchResults,
-                            distanceOrigin: mapProvider.searchResultsOrigin,
-                            error: mapProvider.searchError,
-                            canRetry: mapProvider.canRetrySearch,
+                            status: mapState.searchStatus,
+                            results: mapState.searchResults,
+                            distanceOrigin: mapState.searchResultsOrigin,
+                            error: mapState.searchError,
+                            canRetry: mapState.canRetrySearch,
                             expanded: _resultsExpanded,
                             expandedHeight: expandedHeight,
                             selectedPlaceId: selectedPlace?.id,
@@ -755,28 +764,22 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     detailCard: selectedPlace != null
                         ? PlaceDetailCard(
                             place: selectedPlace,
-                            detailsStatus: mapProvider.detailsStatus,
-                            detailsLoaded:
-                                mapProvider.selectedPlaceDetailsLoaded,
-                            detailsStale: mapProvider.selectedPlaceDetailsStale,
+                            detailsStatus: mapState.detailsStatus,
+                            detailsLoaded: mapState.selectedPlaceDetailsLoaded,
+                            detailsStale: mapState.selectedPlaceDetailsStale,
                             detailsFetchedAt:
-                                mapProvider.selectedPlaceDetailsFetchedAt,
+                                mapState.selectedPlaceDetailsFetchedAt,
 
                             // 만료 판단과 같은 시계로 날짜 표시를 정한다.
-                            now: mapProvider.now,
-                            detailsErrorMessage:
-                                mapProvider.detailsErrorMessage,
+                            now: mapNotifier.now,
+                            detailsErrorMessage: mapState.detailsErrorMessage,
 
                             // 장소 선택 해제
-                            onClose: context
-                                .read<MapProvider>()
-                                .clearSelectedPlace,
+                            onClose: mapNotifier.clearSelectedPlace,
 
                             // 평점·영업 정보 조회와 다시 시도
                             onDetailPressed: () {
-                              context
-                                  .read<MapProvider>()
-                                  .loadSelectedPlaceDetails();
+                              mapNotifier.loadSelectedPlaceDetails();
                             },
 
                             // Google 지도 길찾기 열기

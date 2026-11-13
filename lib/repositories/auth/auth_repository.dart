@@ -40,7 +40,7 @@ class AuthRepository {
   /// 로그인(새 토큰 저장)과 세션 종료(로그아웃·탈퇴·토큰 삭제) 때만 바뀌고,
   /// 같은 세션에서 Access Token만 재발급할 때는 그대로다.
   /// 인증 요청은 시작할 때 이 번호를 기록해 두고, 재시도·토큰 저장·만료 처리를
-  /// 원래 세션에만 적용한다. AuthProvider도 같은 번호를 참조한다.
+  /// 원래 세션에만 적용한다. AuthNotifier도 같은 번호를 참조한다.
   int _sessionId = 0;
 
   int get sessionId => _sessionId;
@@ -635,7 +635,7 @@ class TokenStorageException implements Exception {
 
 /// 세션 만료가 확인되어 로그인 상태를 해제했음을 알리는 예외.
 ///
-/// AuthProvider.runAuthorizedRequest가 던진다. 앱은 비로그인으로도 쓸 수 있어 화면은
+/// AuthNotifier.runAuthorizedRequest가 던진다. 앱은 비로그인으로도 쓸 수 있어 화면은
 /// 그대로 남으므로, 안내가 필요하면 호출한 화면이 맡는다(예: 지도 검색의 만료 안내).
 class SessionExpiredException implements Exception {
   const SessionExpiredException([this.sessionId]);

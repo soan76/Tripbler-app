@@ -9,6 +9,8 @@ import 'package:tripbler/models/user/user_response.dart';
 import 'package:tripbler/providers/auth_provider.dart';
 import 'package:tripbler/repositories/auth/auth_repository.dart';
 
+import '../helpers/auth_handle.dart';
+
 class FakeAuthRepository implements AuthRepository {
   FakeAuthRepository({this.hasStoredTokens = true, UserResponse? currentUser})
     : currentUser =
@@ -300,11 +302,11 @@ class FakeAuthRepository implements AuthRepository {
 
 void main() {
   late FakeAuthRepository repository;
-  late AuthProvider provider;
+  late AuthHandle provider;
 
   setUp(() {
     repository = FakeAuthRepository();
-    provider = AuthProvider(authRepository: repository);
+    provider = AuthHandle(repository);
   });
 
   tearDown(() {
@@ -646,9 +648,7 @@ void main() {
     test('요청 중 dispose되면 알림 예외 없이 SessionExpiredException만 전달한다', () async {
       // tearDown의 provider.dispose()와 겹치지 않게 별도 인스턴스를 쓴다.
       final disposableRepository = FakeAuthRepository();
-      final disposableProvider = AuthProvider(
-        authRepository: disposableRepository,
-      );
+      final disposableProvider = AuthHandle(disposableRepository);
 
       await disposableProvider.restoreSession();
 
@@ -879,6 +879,32 @@ void main() {
       );
 
       expect(repository.sessionId, before + 1);
+    });
+
+    test('로그인·로그아웃·만료마다 sessionId가 저장소와 같다', () async {
+      final c = provider.container;
+      expect(c.read(authProvider).sessionId, repository.sessionId);
+
+      await provider.login(loginId: 'testuser01', password: 'password');
+      expect(c.read(authProvider).isAuthenticated, isTrue);
+      expect(c.read(authProvider).sessionId, repository.sessionId);
+
+      await provider.logout();
+      expect(c.read(authProvider).isAuthenticated, isFalse);
+      expect(c.read(authProvider).sessionId, repository.sessionId);
+
+      await provider.login(loginId: 'testuser01', password: 'password');
+      repository.authorizedRequestError = const ApiException(
+        statusCode: 401,
+        code: 'EXPIRED_REFRESH_TOKEN',
+        message: 'Refresh Token이 만료되었습니다.',
+      );
+      await expectLater(
+        provider.runAuthorizedRequest<String>((_) async => 'unused'),
+        throwsA(isA<SessionExpiredException>()),
+      );
+      expect(c.read(authProvider).isAuthenticated, isFalse);
+      expect(c.read(authProvider).sessionId, repository.sessionId);
     });
   });
 }
