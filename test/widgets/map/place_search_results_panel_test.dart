@@ -1,16 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:tripbler/models/place_model.dart';
 import 'package:tripbler/providers/map_provider.dart';
 import 'package:tripbler/widgets/map/place_search_results_panel.dart';
 
-PlaceModel _place(String id, {String? name, String category = 'museum'}) {
+PlaceModel _place(
+  String id, {
+  String? name,
+  String category = 'museum',
+  double? latitude = 37.5,
+  double? longitude = 126.9,
+  String? address,
+}) {
   return PlaceModel(
     id: id,
     name: name ?? '장소 $id',
-    latitude: 37.5,
-    longitude: 126.9,
-    address: '서울특별시 종로구 $id',
+    latitude: latitude,
+    longitude: longitude,
+    address: address ?? '서울특별시 종로구 $id',
     rating: null,
     category: category,
     openNow: null,
@@ -29,6 +37,7 @@ class _Harness {
     bool canRetry = false,
     bool expanded = true,
     double width = 400,
+    LatLng? distanceOrigin,
   }) {
     return MaterialApp(
       home: Scaffold(
@@ -39,6 +48,7 @@ class _Harness {
             child: PlaceSearchResultsPanel(
               status: status,
               results: results,
+              distanceOrigin: distanceOrigin,
               error: error,
               canRetry: canRetry,
               expanded: expanded,
@@ -248,5 +258,91 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+  });
+  group('거리 표시', () {
+    const origin = LatLng(37.5, 126.9);
+    final distancePattern = RegExp(r'^\d+(\.\d)?(m|km)$');
+
+    testWidgets('기준 위치가 있으면 항목 오른쪽 아래에 거리를 보여준다', (tester) async {
+      final semantics = tester.ensureSemantics();
+      final places = [
+        _place('near', latitude: 37.5027, longitude: 126.9),
+        _place('far', latitude: 37.5, longitude: 127.0),
+      ];
+      await tester.pumpWidget(
+        harness.build(
+          status: MapSearchStatus.success,
+          results: places,
+          distanceOrigin: origin,
+        ),
+      );
+
+      expect(find.text('300m'), findsOneWidget);
+      expect(find.text('8.8km'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('현재 위치에서 300m')), findsOneWidget);
+      semantics.dispose();
+
+      // 주소 오른쪽, 이름 아래에 놓인다.
+      final address = tester.getRect(find.text('서울특별시 종로구 near'));
+      final distance = tester.getRect(find.text('300m'));
+      final name = tester.getRect(find.text('장소 near'));
+      expect(distance.left, greaterThanOrEqualTo(address.right));
+      expect(distance.top, greaterThanOrEqualTo(name.bottom));
+    });
+
+    testWidgets('기준 위치가 없거나 장소 좌표가 없으면 거리를 숨긴다', (tester) async {
+      await tester.pumpWidget(
+        harness.build(status: MapSearchStatus.success, results: [_place('a')]),
+      );
+      expect(find.textContaining(distancePattern), findsNothing);
+
+      await tester.pumpWidget(
+        harness.build(
+          status: MapSearchStatus.success,
+          results: [_place('b', latitude: null, longitude: null)],
+          distanceOrigin: origin,
+        ),
+      );
+      expect(find.textContaining(distancePattern), findsNothing);
+    });
+
+    testWidgets('주소가 없어도 거리는 보여준다', (tester) async {
+      await tester.pumpWidget(
+        harness.build(
+          status: MapSearchStatus.success,
+          results: [_place('a', address: '', latitude: 37.5027)],
+          distanceOrigin: origin,
+        ),
+      );
+
+      expect(find.text('300m'), findsOneWidget);
+    });
+
+    testWidgets('좁은 화면에서 긴 주소와 큰 글자에도 넘치지 않는다', (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+          child: harness.build(
+            status: MapSearchStatus.success,
+            width: 320,
+            results: [
+              _place(
+                'a',
+                address: '서울특별시 종로구 사직로 161 경복궁 ' * 4,
+                latitude: 37.6,
+              ),
+            ],
+            distanceOrigin: origin,
+          ),
+        ),
+      );
+
+      expect(find.text('11km'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

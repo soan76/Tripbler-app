@@ -208,4 +208,70 @@ void main() {
     expect(field.controller!.text, '—');
     expect(tester.takeException(), isNull);
   });
+  Future<String> rowText(
+    WidgetTester tester,
+    DisplayCurrency currency,
+    double amount, {
+    int? decimalPlaces,
+  }) async {
+    final settings = SettingsProvider();
+    if (decimalPlaces != null) settings.changeDecimalPlaces(decimalPlaces);
+    await tester.pumpWidget(
+      ChangeNotifierProvider.value(
+        value: settings,
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 360,
+              child: CurrencyRow(
+                currency: currency,
+                amount: amount,
+                onCurrencyTap: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    return tester.widget<TextField>(find.byType(TextField)).controller!.text;
+  }
+
+  testWidgets('자동 자릿수: 국가 통화는 소수 2자리, 코인은 5자리까지 표시', (tester) async {
+    final usd = DisplayCurrency.fromFiat(findCurrencyByCode('USD')!);
+    final btc = coins.firstWhere((e) => e.code == 'BTC');
+
+    expect(await rowText(tester, usd, 1234.56789), '1,234.57');
+    expect(await rowText(tester, base, 1500), '1,500');
+    expect(await rowText(tester, btc, 0.0123456789), '0.01235');
+    expect(await rowText(tester, btc, 2), '2');
+  });
+
+  testWidgets('자동 자릿수: 입력도 국가 통화 2자리, 코인 5자리까지만 받는다', (tester) async {
+    final usd = DisplayCurrency.fromFiat(findCurrencyByCode('USD')!);
+    final btc = coins.firstWhere((e) => e.code == 'BTC');
+
+    await rowText(tester, usd, 0);
+    await tester.enterText(find.byType(TextField), '1.23');
+    await tester.enterText(find.byType(TextField), '1.234');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '1.23',
+    );
+
+    await rowText(tester, btc, 0);
+    await tester.enterText(find.byType(TextField), '0.12345');
+    await tester.enterText(find.byType(TextField), '0.123456');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      '0.12345',
+    );
+  });
+
+  testWidgets('직접 고른 자릿수는 국가 통화와 코인에 똑같이 적용', (tester) async {
+    final usd = DisplayCurrency.fromFiat(findCurrencyByCode('USD')!);
+    final btc = coins.firstWhere((e) => e.code == 'BTC');
+
+    expect(await rowText(tester, usd, 1.23456, decimalPlaces: 3), '1.235');
+    expect(await rowText(tester, btc, 1.23456, decimalPlaces: 3), '1.235');
+  });
 }

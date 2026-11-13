@@ -362,7 +362,8 @@ class ControlledSource implements ChartDataSource {
 class LoadingPage {
   LoadingPage(this.tester);
 
-  static const offset = 300.0;
+  // 기간 버튼이 카드 위(높이 32 + 간격 12)에서 카드 안으로 옮겨 가 카드가 44만큼 올라왔다.
+  static const offset = 256.0;
 
   final WidgetTester tester;
   final field = FocusNode(debugLabel: 'amount');

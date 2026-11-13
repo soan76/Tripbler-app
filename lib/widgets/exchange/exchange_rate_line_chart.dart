@@ -201,6 +201,19 @@ class _ExchangeRateLineChartState extends State<ExchangeRateLineChart> {
 
         borderData: FlBorderData(show: false),
 
+        // 기간 첫 값을 점선으로 그어, 그 뒤로 올랐는지 내렸는지를 선과 비교해 보게 한다.
+        extraLinesData: ExtraLinesData(
+          horizontalLines: [
+            if (data.spots.length > 1)
+              HorizontalLine(
+                y: data.spots.first.y,
+                color: colorScheme.outline,
+                strokeWidth: 1,
+                dashArray: const [3, 3],
+              ),
+          ],
+        ),
+
         // 차트의 축과 레이블을 설정
         titlesData: ExchangeChartAxisHelper.buildTitles(
           history: history,

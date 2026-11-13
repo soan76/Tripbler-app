@@ -379,6 +379,111 @@ void main() {
     });
   });
 
+  group('검색 결과 거리순 정렬', () {
+    const here = LatLng(37.5663, 126.9779);
+    final far = _place('far', latitude: 37.60, longitude: 126.9779);
+    final near = _place('near', latitude: 37.567, longitude: 126.9779);
+    final noCoord = _place('noCoord', latitude: null, longitude: null);
+
+    Future<void> searchFrom(
+      LatLng? userLocation,
+      List<PlaceModel> results, {
+      String query = '경복궁',
+    }) async {
+      final pending = provider.search(
+        query,
+        center: center,
+        userLocation: userLocation,
+      );
+      service.searchCalls.last.completer.complete(results);
+      await pending;
+    }
+
+    test('기기 위치가 있으면 가까운 순으로 정렬하고 그 위치를 기준으로 남긴다', () async {
+      await searchFrom(here, [noCoord, far, near]);
+
+      expect(provider.searchResults.map((p) => p.id), [
+        'near',
+        'far',
+        'noCoord',
+      ]);
+      expect(provider.searchResultsOrigin, here);
+    });
+
+    test('기기 위치는 서버로 보내지 않는다(검색 기준은 지도 중심)', () async {
+      await searchFrom(here, [far]);
+
+      expect(service.searchCalls.single.latitude, center.latitude);
+      expect(service.searchCalls.single.longitude, center.longitude);
+    });
+
+    test('기기 위치를 모르면 서버 순서 그대로이고 기준도 없다', () async {
+      await searchFrom(null, [far, near]);
+
+      expect(provider.searchResults.map((p) => p.id), ['far', 'near']);
+      expect(provider.searchResultsOrigin, isNull);
+    });
+
+    test('같은 조건이 실패해 이전 결과를 유지하면 정렬과 기준도 유지한다', () async {
+      await searchFrom(here, [far, near]);
+
+      final pending = provider.search(
+        '경복궁',
+        center: center,
+        userLocation: const LatLng(35.1, 129.0),
+      );
+      service.searchCalls.last.completer.completeError(
+        const ApiException(message: '연결 실패'),
+      );
+      await pending;
+
+      expect(provider.searchStatus, MapSearchStatus.failure);
+      expect(provider.searchResults.map((p) => p.id), ['near', 'far']);
+      expect(provider.searchResultsOrigin, here);
+    });
+
+    test('다시 시도는 처음 검색할 때의 기기 위치로 정렬한다', () async {
+      final failing = provider.search(
+        '경복궁',
+        center: center,
+        userLocation: here,
+      );
+      service.searchCalls.last.completer.completeError(
+        const ApiException(message: '연결 실패'),
+      );
+      await failing;
+      expect(provider.searchResultsOrigin, isNull);
+
+      final retry = provider.retrySearch();
+      service.searchCalls.last.completer.complete([far, near]);
+      await retry;
+
+      expect(provider.searchResults.map((p) => p.id), ['near', 'far']);
+      expect(provider.searchResultsOrigin, here);
+    });
+
+    test('검색을 지우면 기준 위치도 지운다', () async {
+      await searchFrom(here, [far]);
+
+      provider.clearSearch();
+
+      expect(provider.searchResultsOrigin, isNull);
+    });
+
+    test('상세 조회 결과를 반영해도 정렬 순서는 그대로다', () async {
+      await searchFrom(here, [far, near]);
+      provider.selectSearchResult(provider.searchResults.last);
+      final loading = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(
+        _place('far', latitude: 37.60, longitude: 126.9779, rating: 4.5),
+      );
+      await loading;
+
+      expect(provider.searchResults.map((p) => p.id), ['near', 'far']);
+      expect(provider.searchResults.last.rating, 4.5);
+    });
+  });
+
   group('실패 시 이전 결과', () {
     test('같은 조건(검색어·중심 좌표)이 실패하면 이전 결과를 유지한다', () async {
       await searchAndSucceed('경복궁', [_place('a')], at: center);

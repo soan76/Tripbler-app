@@ -70,7 +70,10 @@ class _CurrencyRowState extends State<CurrencyRow> {
     final colorScheme = theme.colorScheme;
 
     // 설정 화면에서 선택한 자릿수 설정을 가져옴
-    final decimalPlaces = context.watch<SettingsProvider>().decimalPlaces;
+    // 자동이면 국가 통화 2자리, 암호화폐 5자리
+    final decimalPlaces = context.watch<SettingsProvider>().decimalPlacesFor(
+      isCrypto: widget.currency.isCrypto,
+    );
 
     final layout = widget.layout;
     // 강조 배경 위에 놓이는지. 자국 통화 칸만 강조 배경을 쓴다.

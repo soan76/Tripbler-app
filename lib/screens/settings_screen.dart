@@ -150,7 +150,9 @@ class SettingsScreen extends StatelessWidget {
         return SimpleDialog(
           title: const Text('자릿수 제한'),
           children: decimalOptions.map((decimal) {
-            final label = decimal == -1 ? '자동' : '$decimal';
+            final label = decimal == -1
+                ? SettingsProvider.autoDecimalPlacesLabel
+                : '$decimal';
 
             return RadioListTile<int>(
               title: Text(label),

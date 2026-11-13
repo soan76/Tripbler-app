@@ -19,6 +19,7 @@ import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 import 'package:tripbler/widgets/charts/market_chart_card.dart';
 import 'package:tripbler/widgets/charts/market_chart_carousel.dart';
 import 'package:tripbler/widgets/exchange/exchange_chart_axis_helper.dart';
+import 'package:tripbler/widgets/exchange/exchange_chart_period_selector.dart';
 import 'package:tripbler/widgets/exchange/exchange_chart_tooltip.dart';
 import 'package:tripbler/widgets/exchange/exchange_rate_line_chart.dart';
 
@@ -1849,6 +1850,18 @@ void main() {
       find.byKey(const ValueKey('market-chart-pick-crypto:OLD')),
       findsOneWidget,
     );
+    // 기간 버튼은 다른 카드와 같은 자리에 두되 꺼 둔다.
+    final periodButtons = find.descendant(
+      of: find.byType(ExchangeChartPeriodSelector),
+      matching: find.byType(TextButton),
+    );
+    expect(periodButtons, findsNWidgets(ChartPeriod.values.length));
+    for (final button in tester.widgetList<TextButton>(periodButtons)) {
+      expect(button.onPressed, isNull);
+    }
+    await tester.tap(find.text('3M'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(sources['OLD']?.loads ?? const [], isEmpty);
 
     // 목록을 못 받았거나 비어 있으면 판단하지 않고 지금처럼 조회한다.
     await tester.pumpWidget(app([krw]));
@@ -1856,6 +1869,9 @@ void main() {
     expect(find.text(ChartPairCarousel.unsupportedCoinText), findsNothing);
     expect(sources['OLD']!.loads, hasLength(1));
     expect(amountField('OLD'), findsOneWidget);
+    for (final button in tester.widgetList<TextButton>(periodButtons)) {
+      expect(button.onPressed, isNotNull);
+    }
     await tester.pumpWidget(const SizedBox());
   });
 }

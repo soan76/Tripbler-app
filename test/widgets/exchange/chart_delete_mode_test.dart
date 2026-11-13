@@ -94,7 +94,8 @@ class _ChartsState extends State<Charts> {
 class FieldPage {
   FieldPage(this.tester);
 
-  static const offset = 300.0;
+  // 기간 버튼이 카드 위(높이 32 + 간격 12)에서 카드 안으로 옮겨 가 카드가 44만큼 올라왔다.
+  static const offset = 256.0;
 
   final WidgetTester tester;
   final field = FocusNode(debugLabel: 'amount');
@@ -205,6 +206,30 @@ final removeAnywhere = find.byKey(
   const ValueKey('market-chart-remove'),
   skipOffstage: false,
 );
+
+/// 지금 보이는 카드의 [label] 기간 버튼.
+Finder periodButton(String label) => find.text(label).hitTestable();
+
+/// 지금 보이는 카드의 [label] 기간 버튼 초점 노드.
+FocusNode periodFocus(WidgetTester tester, String label) =>
+    Focus.of(tester.element(periodButton(label)));
+
+/// 지금 보이는 카드에서 [label] 기간이 선택돼 있으면 true.
+bool periodSelected(WidgetTester tester, String label) => tester
+    .widget<Semantics>(
+      find
+          .ancestor(
+            of: periodButton(label),
+            matching: find.byWidgetPredicate(
+              (w) =>
+                  w is Semantics &&
+                  w.properties.inMutuallyExclusiveGroup == true,
+            ),
+          )
+          .first,
+    )
+    .properties
+    .selected!;
 
 Future<void> press(WidgetTester tester, LogicalKeyboardKey key) async {
   await tester.sendKeyEvent(key);
@@ -871,7 +896,20 @@ void main() {
   testWidgets('Tab out of the layer closes the mode where focus went', (
     tester,
   ) async {
-    await tester.pumpWidget(app(const [usd, jpy]));
+    // 카드 밖에도 초점을 받을 곳이 있어야 Tab으로 층을 벗어날 수 있다.
+    // 기간 버튼이 카드 안으로 들어가 카드 밖의 버튼을 따로 둔다.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Column(
+            children: [
+              const Charts(pairs: [usd, jpy]),
+              TextButton(onPressed: () {}, child: const Text('카드 밖 버튼')),
+            ],
+          ),
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     final more = moreNode(tester);
     await open(tester);
@@ -1438,6 +1476,104 @@ void main() {
       await tester.pumpAndSettle();
       page.expectStayed(pixels: 150);
       page.expectFocusReleased();
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('changing the period from the keyboard keeps focus on it', (
+      tester,
+    ) async {
+      final page = FieldPage(tester);
+      await page.pump();
+      await page.tapField();
+      await page.scrollTo(150);
+
+      expect(await tabReaches(tester, periodFocus(tester, '3M')), isTrue);
+      await press(tester, LogicalKeyboardKey.enter);
+      expect(periodSelected(tester, '3M'), isTrue);
+      expect(periodSelected(tester, '1M'), isFalse);
+      // 새로 만든 카드의 선택된 버튼에 초점이 있어 다음 Tab이 이어진다.
+      expect(periodFocus(tester, '3M').hasPrimaryFocus, isTrue);
+      expect(page.field.hasFocus, isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+
+      // 한 번 더 바꿔도 초점이 따라간다.
+      await press(tester, LogicalKeyboardKey.tab);
+      expect(periodFocus(tester, '6M').hasPrimaryFocus, isTrue);
+      await press(tester, LogicalKeyboardKey.enter);
+      expect(periodSelected(tester, '6M'), isTrue);
+      expect(periodFocus(tester, '6M').hasPrimaryFocus, isTrue);
+      expect(page.field.hasFocus, isFalse);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('touching a period with focus on another period button', (
+      tester,
+    ) async {
+      final page = FieldPage(tester);
+      await page.pump();
+      await page.tapField();
+      await page.scrollTo(150);
+      periodFocus(tester, '7D').requestFocus();
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('3M').hitTestable());
+      await tester.pumpAndSettle();
+      expect(periodSelected(tester, '3M'), isTrue);
+      page.expectStayed(pixels: 150);
+      page.expectFocusReleased();
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('period buttons take no focus while the mode is open', (
+      tester,
+    ) async {
+      await tester.pumpWidget(app(const [usd, jpy]));
+      await tester.pumpAndSettle();
+      final node = periodFocus(tester, '3M');
+      expect(node.canRequestFocus, isTrue);
+
+      await open(tester);
+      expect(node.canRequestFocus, isFalse);
+      node.requestFocus();
+      await tester.pumpAndSettle();
+      expect(node.hasFocus, isFalse);
+      expect(await tabReaches(tester, node), isFalse);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('period buttons of the next card take no focus mid-swipe', (
+      tester,
+    ) async {
+      await tester.pumpWidget(app(const [usd, jpy]));
+      await tester.pumpAndSettle();
+      // 그래프 위에서 끌면 그래프가 날짜를 고르므로 카드 아래쪽 빈 자리에서 끈다.
+      final gesture = await tester.startGesture(
+        tester.getBottomLeft(find.byType(PageView)) + const Offset(400, -2),
+      );
+      await gesture.moveBy(const Offset(-60, 0));
+      await gesture.moveBy(const Offset(-60, 0));
+      await tester.pump();
+      final next = find.descendant(
+        of: find.byKey(ValueKey(jpy.id)),
+        matching: find.text('3M'),
+      );
+      expect(next, findsOneWidget);
+      final node = Focus.of(tester.element(next));
+      expect(node.canRequestFocus, isFalse);
+      node.requestFocus();
+      await tester.pump();
+      expect(node.hasFocus, isFalse);
+      // 지금 카드의 버튼은 그대로 초점을 받을 수 있다.
+      final current = find.descendant(
+        of: find.byKey(ValueKey(usd.id)),
+        matching: find.text('3M'),
+      );
+      expect(Focus.of(tester.element(current)).canRequestFocus, isTrue);
+      await gesture.moveBy(const Offset(120, 0));
+      await gesture.up();
+      await tester.pumpAndSettle();
       await tester.pumpWidget(const SizedBox());
     });
 

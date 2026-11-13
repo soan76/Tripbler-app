@@ -8,7 +8,10 @@ import '../../presentation/charts/chart_load_state.dart';
 import '../../presentation/charts/chart_snapshot_store.dart';
 import '../../presentation/charts/market_chart_provider.dart';
 import '../../presentation/exchange/display_currency.dart';
+import '../exchange/exchange_chart_period_selector.dart';
 import 'chart_amount_converter.dart';
+import 'chart_period_scope.dart';
+import 'chart_rate_summary.dart';
 import 'currency_swap_pair.dart';
 import 'market_chart_body.dart';
 import 'market_chart_delete_mode.dart';
@@ -230,6 +233,8 @@ class _MarketChartCardState extends State<MarketChartCard>
     final colorScheme = Theme.of(context).colorScheme;
     final onPick = widget.onPickCurrency;
     final unavailable = widget.unavailableText != null;
+    // 기간 버튼은 그래프 바로 아래에 둔다. 기간은 캐러셀이 카드끼리 함께 들고 있다.
+    final periodScope = ChartPeriodScope.maybeOf(context);
 
     return Container(
       decoration: BoxDecoration(
@@ -270,6 +275,18 @@ class _MarketChartCardState extends State<MarketChartCard>
                 onPickShownTarget: onPick == null
                     ? null
                     : () => onPick(base: widget.swapped),
+              ),
+              summary: ChartRateSummary(
+                rate: unavailable
+                    ? null
+                    : widget.swapped
+                    ? ChartInversion.rate(state.currentRate)
+                    : state.currentRate,
+                history: unavailable ? const [] : _shownHistory(state.history),
+                historicalRate: !unavailable && state.historicalRate,
+                period: widget.period,
+                baseCode: _shownBase.code,
+                targetCode: _shownTarget.code,
               ),
               converterBuilder: (status) => ChartAmountConverter(
                 rate: widget.swapped
@@ -323,7 +340,20 @@ class _MarketChartCardState extends State<MarketChartCard>
             ),
           ),
 
-          const SizedBox(height: 8),
+          // 기간 버튼은 위아래 8씩 눌리는 영역을 품고 있다. 그래서 위 간격 없이 붙이고
+          // 아래는 4만 두어, 보이는 간격은 그래프와 8, 카드 아래 끝과 12가 된다.
+          if (periodScope != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              // 조회할 수 없는 카드도 카드끼리 배치가 같도록 버튼을 두되 끈다.
+              child: ExchangeChartPeriodSelector(
+                selectedPeriod: periodScope.period,
+                onPeriodChanged: unavailable ? null : periodScope.onChanged,
+                focusSelected: periodScope.focusSelected,
+              ),
+            )
+          else
+            const SizedBox(height: 8),
         ],
       ),
     );

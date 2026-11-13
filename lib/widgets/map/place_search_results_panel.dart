@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../models/place_model.dart';
 import '../../providers/map_provider.dart';
 import '../../utils/map/place_category_labels.dart';
+import '../../utils/map/place_distance.dart';
 
 /// 지도 하단의 접을 수 있는 장소 검색 결과 목록.
 ///
@@ -19,6 +21,7 @@ class PlaceSearchResultsPanel extends StatelessWidget {
     super.key,
     required this.status,
     required this.results,
+    this.distanceOrigin,
     required this.error,
     required this.canRetry,
     required this.expanded,
@@ -34,6 +37,9 @@ class PlaceSearchResultsPanel extends StatelessWidget {
 
   final MapSearchStatus status;
   final List<PlaceModel> results;
+
+  /// 거리 표시 기준인 기기 위치(검색할 때의 위치). null이면 거리를 표시하지 않는다.
+  final LatLng? distanceOrigin;
   final MapSearchError? error;
   final bool canRetry;
   final bool expanded;
@@ -167,6 +173,8 @@ class PlaceSearchResultsPanel extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final category = PlaceCategoryLabels.labelFor(place.category);
     final isSelected = place.id == selectedPlaceId;
+    final meters = PlaceDistance.metersTo(distanceOrigin, place);
+    final distance = meters == null ? null : PlaceDistance.format(meters);
 
     // 선택한 항목은 배경색과 글자색으로 구분한다.
     final nameColor = isSelected
@@ -217,13 +225,39 @@ class PlaceSearchResultsPanel extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (place.address.isNotEmpty) ...[
+                if (place.address.isNotEmpty || distance != null) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    place.address,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.bodySmall?.copyWith(color: secondaryColor),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          place.address,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: secondaryColor,
+                          ),
+                        ),
+                      ),
+                      // 기기 위치에서의 직선거리. 항목 오른쪽 아래(주소 마지막 줄)에 둔다.
+                      // 분류 라벨과 같은 크기로 오른쪽 열을 맞추되, 고를 때 비교하는
+                      // 값이라 장소명과 같은 진한 색으로 분류보다 한 단계 앞세운다.
+                      // 숫자 폭을 고정해 목록을 내려가며 거리를 비교하기 쉽게 한다.
+                      if (distance != null) ...[
+                        const SizedBox(width: 12),
+                        Text(
+                          distance,
+                          semanticsLabel: '현재 위치에서 $distance',
+                          maxLines: 1,
+                          softWrap: false,
+                          style: textTheme.labelMedium?.copyWith(
+                            color: nameColor,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ],

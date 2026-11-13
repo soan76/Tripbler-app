@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-/// 차트 카드 위쪽의 제목, 통화쌍, 금액 환산, 갱신 상태, 새로고침·더보기 버튼.
-/// 버튼은 제목 줄 오른쪽 끝에 두고, 통화쌍은 그 아래에서 카드 폭을 모두 쓴다.
+/// 차트 카드 위쪽의 통화쌍, 현재 환율 요약, 금액 환산, 갱신 상태, 새로고침·더보기 버튼.
+/// 통화쌍이 제목 자리를 쓰고 버튼은 같은 줄 오른쪽 끝에 둔다. [title]은 화면에 쓰지 않고
+/// 화면 낭독기가 통화쌍 앞에 읽는다.
 class MarketChartHeader extends StatelessWidget {
   const MarketChartHeader({
     super.key,
     required this.title,
     required this.pair,
+    this.summary,
     this.converterBuilder,
     required this.isLoading,
     required this.showsOldData,
@@ -20,6 +22,9 @@ class MarketChartHeader extends StatelessWidget {
 
   final String title;
   final Widget pair;
+
+  /// 통화쌍 아래의 현재 환율과 기간 변화.
+  final Widget? summary;
 
   /// 통화쌍 아래의 금액 환산 줄. 그래프 선택 중에 증감 표시가 갱신 상태 자리를 쓰므로
   /// 갱신 상태 위젯을 받아 함께 배치한다.
@@ -113,10 +118,7 @@ class MarketChartHeader extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text(
-                title,
-                style: textTheme.titleSmall?.copyWith(color: mutedColor),
-              ),
+              child: Semantics(container: true, label: title, child: pair),
             ),
             // 화면 낭독기에는 조회 중에 라벨 없이 꺼진 버튼으로 읽힌다.
             Semantics(
@@ -167,7 +169,11 @@ class MarketChartHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              pair,
+              if (summary case final summary?) ...[
+                const SizedBox(height: 4),
+                summary,
+                const SizedBox(height: 8),
+              ],
               if (converterBuilder case final build?)
                 build(status)
               else ...[

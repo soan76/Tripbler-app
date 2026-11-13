@@ -491,7 +491,12 @@ class _MapScreenState extends State<MapScreen> {
       _resultsExpanded = true;
     });
 
-    await mapProvider.search(text, center: center);
+    // 결과를 가까운 순으로 정렬하고 거리를 표시할 기준. 위치를 아직 모르면 서버 순서.
+    await mapProvider.search(
+      text,
+      center: center,
+      userLocation: _locationController.currentPosition,
+    );
 
     if (!mounted || submitId != _searchSubmitId) {
       return;
@@ -729,6 +734,7 @@ class _MapScreenState extends State<MapScreen> {
                         ? PlaceSearchResultsPanel(
                             status: mapProvider.searchStatus,
                             results: mapProvider.searchResults,
+                            distanceOrigin: mapProvider.searchResultsOrigin,
                             error: mapProvider.searchError,
                             canRetry: mapProvider.canRetrySearch,
                             expanded: _resultsExpanded,

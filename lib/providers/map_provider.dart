@@ -9,6 +9,7 @@ import '../models/place_model.dart';
 import '../providers/auth_provider.dart';
 import '../repositories/auth/auth_repository.dart';
 import '../services/place_api_service.dart';
+import '../utils/map/place_distance.dart';
 import '../utils/map/search_query_normalizer.dart';
 
 enum MapPlaceStatus { idle, loading, success, failure }
@@ -50,12 +51,16 @@ class _CachedPlaceDetails {
 }
 
 /// 검색 요청 조건. 정리된 검색어와 실제로 보낸 중심 좌표가 모두 같아야 같은 조건이다.
+///
+/// [origin]은 결과를 거리순으로 정렬할 기기 위치다. 서버에 보내지 않으므로 같은 조건
+/// 판단에는 쓰지 않는다(다시 시도는 처음 검색할 때의 위치를 그대로 쓴다).
 @immutable
 class _SearchRequest {
-  const _SearchRequest({required this.query, this.center});
+  const _SearchRequest({required this.query, this.center, this.origin});
 
   final String query;
   final LatLng? center;
+  final LatLng? origin;
 
   @override
   bool operator ==(Object other) =>
@@ -150,7 +155,13 @@ class MapProvider extends ChangeNotifier {
   String? _detailsRevealedPlaceId;
 
   MapSearchStatus get searchStatus => _searchStatus;
+
+  /// 검색 결과. 검색할 때 기기 위치를 알았으면 가까운 순, 몰랐으면 서버가 준 순서다.
   List<PlaceModel> get searchResults => List.unmodifiable(_searchResults);
+
+  /// 지금 결과를 정렬한 기기 위치. 결과의 거리 표시도 이 위치를 기준으로 한다.
+  /// 검색할 때 위치를 몰랐으면 null이다.
+  LatLng? get searchResultsOrigin => _resultsRequest?.origin;
   MapSearchError? get searchError => _searchError;
   String? get lastSearchQuery => _lastSearchQuery;
   bool get isSearching => _searchStatus == MapSearchStatus.loading;
@@ -357,9 +368,14 @@ class MapProvider extends ChangeNotifier {
   /// 검색어로 장소를 검색한다.
   ///
   /// [center]는 검색 버튼을 누른 순간의 지도 중심이다. 없으면 좌표 없이 검색한다.
+  /// [userLocation]은 그 순간의 기기 위치다. 있으면 결과를 가까운 순으로 정렬한다.
   /// 검색어를 정리한 뒤 비었거나 100자를 넘으면 서버를 호출하지 않는다.
   /// 새 검색은 기존 선택과 상세 카드를 해제한다.
-  Future<void> search(String query, {LatLng? center}) async {
+  Future<void> search(
+    String query, {
+    LatLng? center,
+    LatLng? userLocation,
+  }) async {
     final normalizedQuery = SearchQueryNormalizer.normalize(query);
 
     if (normalizedQuery == null) {
@@ -371,7 +387,13 @@ class MapProvider extends ChangeNotifier {
       return;
     }
 
-    await _runSearch(_SearchRequest(query: normalizedQuery, center: center));
+    await _runSearch(
+      _SearchRequest(
+        query: normalizedQuery,
+        center: center,
+        origin: userLocation,
+      ),
+    );
   }
 
   /// 마지막으로 실패한 검색을 같은 조건으로 다시 보낸다.
@@ -417,7 +439,7 @@ class MapProvider extends ChangeNotifier {
         return;
       }
 
-      _searchResults = places;
+      _searchResults = PlaceDistance.sortByDistance(places, request.origin);
       _resultsRequest = request;
       _lastFailedRequest = null;
       _searchStatus = MapSearchStatus.success;

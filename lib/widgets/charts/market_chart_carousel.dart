@@ -4,9 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'chart_period_scope.dart';
 import '../../models/exchange_rate_history_model.dart';
 import '../../presentation/charts/chart_swap_store.dart';
-import '../exchange/exchange_chart_period_selector.dart';
 import 'chart_amount_converter.dart';
 import 'currency_swap_pair.dart';
 
@@ -248,6 +248,49 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
   int get _pageCount =>
       widget.itemIds.length + (widget.trailing == null ? 0 : 1);
 
+  // 키보드로 기간을 바꿔 새 카드의 선택된 기간 버튼에 초점을 줘야 하는지. 새 카드를 만드는
+  // 프레임에만 true로 두어, 뒤에 다른 이유로 만들어지는 카드가 초점을 가져가지 않게 한다.
+  bool _focusSelectedPeriod = false;
+
+  /// 기본 글자 크기에서의 카드 높이.
+  static const cardHeight = 450.0;
+
+  /// 글자 배율이 1 늘 때 카드 위쪽(통화쌍·환율 요약·금액 환산·갱신 상태·기간 버튼)이
+  /// 늘어나는 높이. 360dp 폭에서 200%일 때 위쪽이 약 191px 늘어 그래프 자리가 없어지고
+  /// 19px 넘쳤다(2026-11-14 측정). 이만큼 카드를 키워 큰 글자에서도 그래프가
+  /// 기본 크기와 비슷한 높이로 남게 한다. 요약·기간 버튼은 글자 배율에 상한이 있어
+  /// 중간 배율에서는 실제보다 조금 넉넉하게 늘어난다.
+  static const _growthPerTextScale = 191.0;
+
+  /// 글자 배율에 맞춘 카드 높이. 기본 크기 이하에서는 [cardHeight] 그대로다.
+  static double cardHeightFor(TextScaler textScaler) {
+    // 비선형 배율(Android 14+)도 있어 본문 크기 하나를 기준으로 배율을 잰다.
+    final scale = textScaler.scale(14) / 14;
+    // 소수 높이는 안쪽 배치(가운데 맞춤 등)에 미세한 오차를 남기므로 정수로 맞춘다.
+    return (cardHeight + math.max(0, scale - 1) * _growthPerTextScale)
+        .roundToDouble();
+  }
+
+  void _changePeriod(ChartPeriod period, {required bool focused}) {
+    if (period == _selectedPeriod) return;
+    // 기간을 바꾸면 카드가 새로 만들어져 안에 있던 초점이 사라진다. 사라지기 전에 풀어
+    // 전에 쓴 입력칸으로 돌아가지 않게 한다.
+    _releasePageFocus();
+    // 키보드로 눌렀으면(누른 버튼에 초점이 있었으면) 새 카드의 선택된 버튼으로 초점을
+    // 이어 준다. 터치로 눌렀으면 초점을 푼 채로 둔다.
+    if (focused) {
+      _focusSelectedPeriod = true;
+      // 넘길 때 처음 만들어지는 카드는 캐러셀을 다시 그리지 않고 범위 값을 읽으므로
+      // setState로 범위까지 되돌린다.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _focusSelectedPeriod = false);
+      });
+    }
+    setState(() {
+      _selectedPeriod = period;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.itemIds.isEmpty) {
@@ -257,76 +300,67 @@ class _MarketChartCarouselState extends State<MarketChartCarousel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: ExchangeChartPeriodSelector(
-            selectedPeriod: _selectedPeriod,
-            onPeriodChanged: (period) {
-              // 기간을 바꾸면 카드가 새로 만들어져 안에 있던 초점이 사라진다.
-              _releasePageFocus();
-              setState(() {
-                _selectedPeriod = period;
-              });
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        SizedBox(
-          height: 450,
-          child: Focus(
-            focusNode: _pagesFocus,
-            includeSemantics: false,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: _pageCount,
-              // 카드가 자리를 옮겨도 받아 둔 데이터와 상태를 그대로 쓰게 한다.
-              findChildIndexCallback: (key) {
-                if (key is! ValueKey<String>) return null;
-                final index = widget.itemIds.indexOf(key.value);
-                return index < 0 ? null : index;
-              },
-              onPageChanged: (index) {
-                _releasePageFocus();
-                setState(() {
-                  currentPage = index;
-                });
-              },
-              itemBuilder: (context, index) {
-                if (index >= widget.itemIds.length) {
+        // 기간 버튼은 각 카드 안 그래프 아래에 있다. 기간은 카드끼리 같아 여기서 들고 있는다.
+        ChartPeriodScope(
+          period: _selectedPeriod,
+          onChanged: _changePeriod,
+          focusSelected: _focusSelectedPeriod,
+          child: SizedBox(
+            height: cardHeightFor(MediaQuery.textScalerOf(context)),
+            child: Focus(
+              focusNode: _pagesFocus,
+              includeSemantics: false,
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: _pageCount,
+                // 카드가 자리를 옮겨도 받아 둔 데이터와 상태를 그대로 쓰게 한다.
+                findChildIndexCallback: (key) {
+                  if (key is! ValueKey<String>) return null;
+                  final index = widget.itemIds.indexOf(key.value);
+                  return index < 0 ? null : index;
+                },
+                onPageChanged: (index) {
+                  _releasePageFocus();
+                  setState(() {
+                    currentPage = index;
+                  });
+                },
+                itemBuilder: (context, index) {
+                  if (index >= widget.itemIds.length) {
+                    return KeyedSubtree(
+                      key: const ValueKey('market-chart-trailing'),
+                      child: widget.trailing!,
+                    );
+                  }
+                  final id = widget.itemIds[index];
                   return KeyedSubtree(
-                    key: const ValueKey('market-chart-trailing'),
-                    child: widget.trailing!,
-                  );
-                }
-                final id = widget.itemIds[index];
-                return KeyedSubtree(
-                  key: ValueKey(id),
-                  // 항상 두어 값이 바뀌어도 카드의 위치(상태)가 그대로다.
-                  // 넘겨 둔 카드는 상태를 유지한 채 화면 밖에 남으므로, 키보드로 조작되지 않게
-                  // 초점에서 뺀다. 조회 여부(shouldLoad)와 달리 active에 묶지 않아, 조회만
-                  // 꺼 둔 캐러셀에서도 지금 보이는 카드는 초점을 받는다.
-                  child: ExcludeFocus(
-                    excluding: index != currentPage,
-                    child: InstantSwapScope(
-                      instant: id == _instantSwapId,
-                      child: ChartAmountScope(
-                        text: _amounts[id] ?? '',
-                        onChanged: (text) => _amounts[id] = text,
-                        child: widget.cardBuilder(
-                          context,
-                          index,
-                          _selectedPeriod,
-                          widget.active && currentPage == index,
-                          _swappedIds.contains(id) ||
-                              (_pendingSwaps[id] ?? false),
-                          _swapLoaded ? () => _toggleSwap(id) : null,
+                    key: ValueKey(id),
+                    // 항상 두어 값이 바뀌어도 카드의 위치(상태)가 그대로다.
+                    // 넘겨 둔 카드는 상태를 유지한 채 화면 밖에 남으므로, 키보드로 조작되지 않게
+                    // 초점에서 뺀다. 조회 여부(shouldLoad)와 달리 active에 묶지 않아, 조회만
+                    // 꺼 둔 캐러셀에서도 지금 보이는 카드는 초점을 받는다.
+                    child: ExcludeFocus(
+                      excluding: index != currentPage,
+                      child: InstantSwapScope(
+                        instant: id == _instantSwapId,
+                        child: ChartAmountScope(
+                          text: _amounts[id] ?? '',
+                          onChanged: (text) => _amounts[id] = text,
+                          child: widget.cardBuilder(
+                            context,
+                            index,
+                            _selectedPeriod,
+                            widget.active && currentPage == index,
+                            _swappedIds.contains(id) ||
+                                (_pendingSwaps[id] ?? false),
+                            _swapLoaded ? () => _toggleSwap(id) : null,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ),
