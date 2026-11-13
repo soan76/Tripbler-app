@@ -114,6 +114,9 @@ class MapProvider extends ChangeNotifier {
   /// 가장 최근 검색 요청 번호. 이보다 앞선 요청의 응답은 버린다.
   int _searchRequestId = 0;
 
+  /// 가장 최근에 보낸 검색 조건. [_searchRequestId]가 아직 진행 중일 때만 중복 판단에 쓴다.
+  _SearchRequest? _currentSearchRequest;
+
   // ----- 세션 만료 안내 -----
   // 사용자 검색에서 만료가 확정됐을 때만, 만료된 세션당 한 번 안내한다.
   // 검색 중 만료되면 AuthProvider가 로그인 상태를 먼저 해제하고 그 알림으로 검색 상태가
@@ -383,7 +386,15 @@ class MapProvider extends ChangeNotifier {
   }
 
   Future<void> _runSearch(_SearchRequest request) async {
+    // 같은 검색어·같은 지도 중심의 최신 검색이 아직 진행 중이면 다시 보내지 않는다
+    // (버튼 연타 등으로 같은 Google 호출이 반복되지 않게). 다른 검색은 그대로 보낸다.
+    if (_currentSearchRequest == request &&
+        _inFlightSearchIds.contains(_searchRequestId)) {
+      return;
+    }
+
     final requestId = ++_searchRequestId;
+    _currentSearchRequest = request;
 
     _lastSearchQuery = request.query;
     _searchStatus = MapSearchStatus.loading;
@@ -617,6 +628,11 @@ class MapProvider extends ChangeNotifier {
       return;
     }
 
+    // 상세 조회는 로그인이 필요하다. 로그인이 풀렸으면 보내지 않는다(안내는 화면이 맡는다).
+    if (!_isSignedIn) {
+      return;
+    }
+
     final requestId = ++_detailsRequestId;
 
     _detailsStatus = PlaceDetailsStatus.loading;
@@ -624,8 +640,11 @@ class MapProvider extends ChangeNotifier {
     _notify();
 
     try {
-      final detailPlace = await _placeApiService.fetchPlaceDetails(
-        placeId: selectedPlace.id,
+      final detailPlace = await _authorizedRequest<PlaceModel>(
+        (authorizationHeader) => _placeApiService.fetchPlaceDetails(
+          placeId: selectedPlace.id,
+          authorizationHeader: authorizationHeader,
+        ),
       );
 
       if (!_isCurrentDetails(requestId, selectedPlace.id)) {
@@ -638,7 +657,28 @@ class MapProvider extends ChangeNotifier {
       _detailsStatus = PlaceDetailsStatus.idle;
       _syncDetailsDisplayTimer();
       _notify();
+    } on SessionExpiredException catch (error) {
+      // 재발급까지 실패해 세션이 끝났다. 로그인 해제는 AuthProvider가 했다.
+      if (!_isDisposed) {
+        _raiseSessionExpiryNotice(error.sessionId);
+      }
+
+      if (!_isCurrentDetails(requestId, selectedPlace.id)) {
+        return;
+      }
+
+      _resetDetailsState();
+      _notify();
+    } on SessionChangedException {
+      // 이전 세션에서 시작한 조회: 결과를 반영하지 않고 로딩만 거둔다.
+      if (!_isCurrentDetails(requestId, selectedPlace.id)) {
+        return;
+      }
+
+      _resetDetailsState();
+      _notify();
     } catch (error, stackTrace) {
+      // 429, 네트워크 오류, 5xx, 재발급 뒤 다시 받은 401 등: 로그인은 유지하고 카드에 실패를 보인다.
       debugPrint('장소 상세 조회 실패: $error');
       debugPrint('$stackTrace');
 
@@ -647,7 +687,7 @@ class MapProvider extends ChangeNotifier {
       }
 
       _detailsStatus = PlaceDetailsStatus.failure;
-      _detailsErrorMessage = error is PlaceApiException
+      _detailsErrorMessage = error is ApiException
           ? error.message
           : '장소 상세 정보를 불러오지 못했습니다.';
       _notify();

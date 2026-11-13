@@ -3,7 +3,8 @@ package com.tripbler.backend.place.controller;
 import java.math.BigDecimal;
 import java.util.List;
 
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -56,6 +57,7 @@ public class PlaceController {
         this.placeService = placeService;
     }
 
+    // 외부 접근은 SecurityConfig에서 막혀 있다(denyAll). 다시 열 때는 로그인과 사용자별 호출 제한을 함께 둔다.
     @GetMapping("/nearby")
     public List<PlaceResponse> searchNearby(
         @RequestParam("lat")
@@ -89,37 +91,12 @@ public class PlaceController {
         );
     }
 
-    @GetMapping("/nearest")
-    public ResponseEntity<PlaceResponse> getNearestPlace(
-        @RequestParam("lat")
-        @DecimalMin(value = "-90", message = LATITUDE_MESSAGE)
-        @DecimalMax(value = "90", message = LATITUDE_MESSAGE)
-        BigDecimal latitude,
-
-        @RequestParam("lng")
-        @DecimalMin(value = "-180", message = LONGITUDE_MESSAGE)
-        @DecimalMax(value = "180", message = LONGITUDE_MESSAGE)
-        BigDecimal longitude,
-
-        @RequestParam(defaultValue = "40")
-        @Min(value = 1, message = RADIUS_MESSAGE)
-        @Max(value = 50000, message = RADIUS_MESSAGE)
-        int radius
-    ) {
-        return placeService.findNearestPlace(
-                latitude.doubleValue(),
-                longitude.doubleValue(),
-                radius
-            )
-            .map(ResponseEntity::ok)
-            .orElseGet(() -> ResponseEntity.noContent().build());
-    }
-
     // 로그인이 필요하다(SecurityConfig).
     // 좌표는 둘 다 보내거나 둘 다 생략한다. 좌표가 있으면 그 주변 결과를 우선한다.
     // 고정 경로라서 /{placeId}보다 먼저 선택된다.
     @GetMapping("/search")
     public List<PlaceResponse> searchText(
+        @AuthenticationPrincipal Jwt jwt,
         @RequestParam("query") String query,
 
         @RequestParam(value = "lat", required = false)
@@ -142,6 +119,7 @@ public class PlaceController {
         }
 
         return placeService.searchText(
+            jwt.getSubject(),
             normalizedQuery,
             latitude != null ? latitude.doubleValue() : null,
             longitude != null ? longitude.doubleValue() : null
@@ -203,10 +181,12 @@ public class PlaceController {
         return Character.getType(codePoint) == Character.FORMAT;
     }
 
+    // 로그인이 필요하다(SecurityConfig). 사용자별 호출 제한은 서비스가 판정한다.
     @GetMapping("/{placeId}")
     public PlaceResponse getPlaceDetails(
+        @AuthenticationPrincipal Jwt jwt,
         @PathVariable String placeId
     ) {
-        return placeService.getPlaceDetails(placeId);
+        return placeService.getPlaceDetails(jwt.getSubject(), placeId);
     }
 }

@@ -20,7 +20,7 @@
 
 - **환율**: 국가 통화 환율 조회와 기간별 시세(차트용)
 - **암호화폐**: 지원 코인 목록, 현재가, 기간별 시세(CoinGecko)
-- **장소**: 텍스트 검색(로그인 필요), 주변 장소, 가장 가까운 장소, 장소 상세(Google Places)
+- **장소**: 텍스트 검색과 장소 상세(로그인 필요, 사용자별 호출 제한), Google Places. 주변 장소 API는 코드만 남기고 외부 접근을 막았습니다.
 - **번역**: 텍스트 번역(Google Translation). 앱은 기기에서 OCR을 수행하고 인식된 텍스트만 보냅니다.
 - **회원 / 인증**: 회원가입, 로그인, 토큰 재발급, 로그아웃, 이메일 인증 코드로 아이디 찾기·비밀번호 재설정, 닉네임·비밀번호 변경, 프로필 이미지 업로드·삭제, 구글 계정 연동·해제, 회원 탈퇴
 
@@ -39,8 +39,8 @@
 | 헬스 체크 | `GET /health` | 공개 |
 | 환율 | `GET /exchange/rates`, `GET /exchange/history` | 공개 |
 | 암호화폐 | `GET /crypto/coins`, `GET /crypto/price`, `GET /crypto/history` | 공개 |
-| 장소 검색 | `GET /places/search` | **필요** |
-| 장소 조회 | `GET /places/nearby`, `GET /places/nearest`, `GET /places/{placeId}` | 공개 |
+| 장소 검색 / 상세 | `GET /places/search`, `GET /places/{placeId}` | **필요** (사용자별 호출 제한) |
+| 주변 장소 | `GET /places/nearby` | 차단 |
 | 번역 | `POST /translation` | 공개 |
 | 회원가입 / 아이디 중복 확인 | `POST /users`, `GET /users/check-login-id` | 공개 |
 | 인증 | `POST /auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/find-id/send-code`, `/auth/find-id/verify-code`, `/auth/password-reset/send-code` → `/auth/password-reset/verify-code` → `/auth/password-reset` | 공개 |

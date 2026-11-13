@@ -97,78 +97,6 @@ class GooglePlacesClientTest {
     }
 
     @Test
-    void 최근접_장소가_없으면_null을_반환한다() {
-        // Google은 결과가 없으면 places 필드를 생략한 빈 객체를 준다.
-        mockServer.expect(requestTo(NEARBY_URL))
-            .andExpect(method(HttpMethod.POST))
-            .andRespond(
-                withSuccess("{}", MediaType.APPLICATION_JSON)
-            );
-
-        assertNull(
-            client.findNearestPlace(37.5665, 126.9780, 40)
-        );
-
-        mockServer.verify();
-    }
-
-    @Test
-    void 최근접_후보가_빈_배열이면_null을_반환한다() {
-        mockServer.expect(requestTo(NEARBY_URL))
-            .andRespond(
-                withSuccess("{\"places\":[]}", MediaType.APPLICATION_JSON)
-            );
-
-        assertNull(
-            client.findNearestPlace(37.5665, 126.9780, 40)
-        );
-
-        mockServer.verify();
-    }
-
-    @Test
-    void 최근접_응답_본문이_없으면_503_예외를_던진다() {
-        // 본문 누락은 빈 결과(204)가 아니라 제공자 장애다.
-        mockServer.expect(requestTo(NEARBY_URL))
-            .andRespond(withSuccess());
-
-        PlacesProviderException exception = assertThrows(
-            PlacesProviderException.class,
-            () -> client.findNearestPlace(37.5665, 126.9780, 40)
-        );
-
-        assertEquals(
-            ErrorCode.PLACES_PROVIDER_UNAVAILABLE,
-            exception.getErrorCode()
-        );
-
-        mockServer.verify();
-    }
-
-    @Test
-    void 최근접은_좌표가_없는_후보를_제외한다() {
-        // 위치 없는 후보가 (0, 0)으로 계산되거나 선택되면 안 된다.
-        String body = """
-            {"places":[
-              {"id":"no-location","displayName":{"text":"위치 없음"}},
-              {"id":"far","displayName":{"text":"먼 곳"},
-               "location":{"latitude":37.5700,"longitude":126.9800}},
-              {"id":"near","displayName":{"text":"가까운 곳"},
-               "location":{"latitude":37.5666,"longitude":126.9781}}]}
-            """;
-
-        mockServer.expect(requestTo(NEARBY_URL))
-            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
-
-        assertEquals(
-            "near",
-            client.findNearestPlace(37.5665, 126.9780, 40).id()
-        );
-
-        mockServer.verify();
-    }
-
-    @Test
     void 빈_location_객체나_한쪽_좌표만_있으면_좌표를_null로_둔다() {
         // 원시 double로 받으면 빈 location이 (0, 0)이 되어 대서양 한가운데 마커가 생긴다.
         mockServer.expect(requestTo(SEARCH_TEXT_URL))
@@ -188,40 +116,6 @@ class GooglePlacesClientTest {
             assertNull(place.latitude());
             assertNull(place.longitude());
         }
-
-        mockServer.verify();
-    }
-
-    @Test
-    void 최근접은_빈_location_객체_후보를_제외한다() {
-        mockServer.expect(requestTo(NEARBY_URL))
-            .andRespond(withSuccess(
-                """
-                {"places":[
-                  {"id":"empty","displayName":{"text":"빈 위치"},"location":{}},
-                  {"id":"far","displayName":{"text":"먼 곳"},
-                   "location":{"latitude":37.5700,"longitude":126.9800}}]}
-                """,
-                MediaType.APPLICATION_JSON
-            ));
-
-        assertEquals("far", client.findNearestPlace(37.5665, 126.9780, 1000).id());
-
-        mockServer.verify();
-    }
-
-    @Test
-    void 최근접_후보가_모두_좌표가_없으면_null을_반환한다() {
-        String body = """
-            {"places":[{"id":"no-location","displayName":{"text":"위치 없음"}}]}
-            """;
-
-        mockServer.expect(requestTo(NEARBY_URL))
-            .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
-
-        assertNull(
-            client.findNearestPlace(37.5665, 126.9780, 40)
-        );
 
         mockServer.verify();
     }
@@ -276,18 +170,6 @@ class GooglePlacesClientTest {
     }
 
     @Test
-    void 최근접_조회도_한국어_결과를_요청한다() {
-        mockServer.expect(requestTo(NEARBY_URL))
-            .andExpect(method(HttpMethod.POST))
-            .andExpect(jsonPath("$.languageCode").value("ko"))
-            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
-
-        client.findNearestPlace(37.5665, 126.9780, 40);
-
-        mockServer.verify();
-    }
-
-    @Test
     void 주변_검색_결과가_없으면_빈_목록을_반환한다() {
         mockServer.expect(requestTo(NEARBY_URL))
             .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
@@ -296,30 +178,6 @@ class GooglePlacesClientTest {
             client.searchNearby(
                 37.5665, 126.9780, "tourist_attraction", 1000
             ).isEmpty()
-        );
-
-        mockServer.verify();
-    }
-
-    @Test
-    void 최근접_조회가_시간_초과되면_503_예외를_던진다() {
-        // 시간 초과는 빈 결과(204)로 바뀌지 않고 제공자 장애가 되어야 한다.
-        mockServer.expect(requestTo(NEARBY_URL))
-            .andExpect(method(HttpMethod.POST))
-            .andRespond(
-                withException(
-                    new SocketTimeoutException("Read timed out")
-                )
-            );
-
-        PlacesProviderException exception = assertThrows(
-            PlacesProviderException.class,
-            () -> client.findNearestPlace(37.5665, 126.9780, 40)
-        );
-
-        assertEquals(
-            ErrorCode.PLACES_PROVIDER_UNAVAILABLE,
-            exception.getErrorCode()
         );
 
         mockServer.verify();

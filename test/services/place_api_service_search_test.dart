@@ -251,6 +251,29 @@ void main() {
       expect(error.message, '장소를 검색하지 못했습니다. 잠시 후 다시 시도해 주세요.');
     });
 
+    test('429는 서버 문구를 그대로 보여 준다', () async {
+      const message = '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+      final error = await _searchError(
+        MockClient(
+          (_) async =>
+              _jsonResponse(_errorBody(429, 'TOO_MANY_REQUESTS', message), 429),
+        ),
+      );
+
+      expect(error.statusCode, 429);
+      expect(error.code, 'TOO_MANY_REQUESTS');
+      expect(error.message, message);
+    });
+
+    test('429 본문을 읽지 못해도 요청이 많다는 문구를 쓴다', () async {
+      final error = await _searchError(
+        MockClient((_) async => http.Response('Too Many Requests', 429)),
+      );
+
+      expect(error.statusCode, 429);
+      expect(error.message, '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.');
+    });
+
     test('오류 본문이 JSON이 아니어도 상태 코드를 유지한다', () async {
       final error = await _searchError(
         MockClient((_) async => http.Response('Bad Gateway', 502)),

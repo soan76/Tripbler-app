@@ -5,11 +5,13 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +20,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.tripbler.backend.common.exception.TooManyRequestsException;
 
 /**
- * 공개 인증 API의 요청 횟수를 서버 메모리에서 센다(서버 한 대 기준, 재시작하면 초기화).
+ * 요청 횟수를 서버 메모리에서 센다(서버 한 대 기준, 재시작하면 초기화).
+ * 이름과 달리 인증 API 전용이 아니다. 장소 API의 사용자별 제한도 이 클래스를 쓴다.
  *
  * 모든 판정과 기록은 하나의 락 안에서 한다. 그래서 여러 한도를 함께 확인할 때
  * "모두 허용일 때만 모두 기록"이 원자적으로 지켜지고, 동시에 들어온 요청도 한 번씩만 센다.
@@ -35,6 +38,8 @@ public class AuthRateLimiter {
     private final int capacityPerBucket;
     private final Map<RateLimitBucket, Map<String, ArrayDeque<Instant>>> records =
         new EnumMap<>(RateLimitBucket.class);
+    // 지금 거절 중인 WARN 대상 묶음(RateLimitBucket.warnOnLimit). 락 안에서만 읽고 쓴다.
+    private final Set<RateLimitBucket> limitedBuckets = EnumSet.noneOf(RateLimitBucket.class);
 
     @Autowired
     public AuthRateLimiter() {
@@ -52,6 +57,22 @@ public class AuthRateLimiter {
     // 한 묶음의 한도를 확인하고, 허용되면 기록한다. 거절되면 TooManyRequestsException.
     public void acquire(RateLimitBucket bucket, String key) {
         tryAcquire(List.of(new Key(bucket, key)));
+    }
+
+    // 같은 키로 여러 묶음(예: 1분 창과 1시간 창)을 한 번에 판정한다.
+    // 모두 허용될 때만 모두 기록하고, 거절되면 가장 긴 대기 시간으로 예외를 던진다.
+    public void acquireAll(String key, List<RateLimitBucket> buckets) {
+        tryAcquire(
+            buckets.stream()
+                .map(bucket -> new Key(bucket, key))
+                .toList()
+        );
+    }
+
+    // 서로 다른 키를 한 번에 판정한다(예: 사용자 키 + 서버 전체 키).
+    // 모두 허용될 때만 모두 기록하고, 거절되면 가장 긴 대기 시간으로 예외를 던진다.
+    public void acquireKeys(List<Key> keys) {
+        tryAcquire(List.copyOf(keys));
     }
 
     // 인증 메일 발송: IP 한도와 이메일 한도를 함께 판정하고, 둘 다 허용될 때만 둘 다 기록한다.
@@ -72,6 +93,9 @@ public class AuthRateLimiter {
 
         for (Key key : keys) {
             Duration wait = waitFor(key, now);
+            if (key.bucket().warnOnLimit()) {
+                updateLimitedState(key.bucket(), wait);
+            }
             if (wait.compareTo(longestWait) > 0) {
                 longestWait = wait;
             }
@@ -85,6 +109,21 @@ public class AuthRateLimiter {
             records.get(key.bucket())
                 .computeIfAbsent(key.value(), ignored -> new ArrayDeque<>())
                 .addLast(now);
+        }
+    }
+
+    // 서버 전체 한도 같은 묶음은 거절이 시작될 때 한 번만 WARN을 남긴다(요청마다 남기면 로그가 넘친다).
+    // 그 묶음이 다시 허용으로 판정되면 상태를 풀어, 다음에 또 걸릴 때 다시 한 번 남긴다.
+    // 사용자 ID 등 키 값은 남기지 않는다.
+    private void updateLimitedState(RateLimitBucket bucket, Duration wait) {
+        if (wait.isZero()) {
+            limitedBuckets.remove(bucket);
+        } else if (limitedBuckets.add(bucket)) {
+            log.warn(
+                "서버 전체 요청 한도 도달: bucket={}, retryAfter={}s",
+                bucket,
+                toRetryAfterSeconds(wait)
+            );
         }
     }
 
@@ -168,6 +207,7 @@ public class AuthRateLimiter {
         return Math.max(1, seconds);
     }
 
-    private record Key(RateLimitBucket bucket, String value) {
+    // 판정 단위: 어떤 묶음을 어떤 키로 셀지.
+    public record Key(RateLimitBucket bucket, String value) {
     }
 }

@@ -61,7 +61,7 @@ class PlaceApiService {
     }
 
     if (response.statusCode != 200) {
-      throw _searchErrorFrom(response);
+      throw _apiErrorFrom(response, _searchMessageFor);
     }
 
     try {
@@ -85,8 +85,11 @@ class PlaceApiService {
   }
 
   // 서버 ErrorResponse의 code와 message를 담아 ApiException으로 바꾼다.
-  // 본문을 읽지 못해도 상태 코드는 유지한다.
-  ApiException _searchErrorFrom(http.Response response) {
+  // 본문을 읽지 못해도 상태 코드는 유지한다. 문구는 [messageFor]가 정한다.
+  ApiException _apiErrorFrom(
+    http.Response response,
+    String Function(int statusCode, String? serverMessage) messageFor,
+  ) {
     String? code;
     String? serverMessage;
 
@@ -109,9 +112,11 @@ class PlaceApiService {
     return ApiException(
       statusCode: response.statusCode,
       code: code,
-      message: _searchMessageFor(response.statusCode, serverMessage),
+      message: messageFor(response.statusCode, serverMessage),
     );
   }
+
+  static const String _tooManyRequestsMessage = '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
 
   String _searchMessageFor(int statusCode, String? serverMessage) {
     switch (statusCode) {
@@ -120,6 +125,8 @@ class PlaceApiService {
         return serverMessage ?? '검색 조건이 올바르지 않습니다.';
       case 401:
         return '로그인이 필요합니다.';
+      case 429:
+        return serverMessage ?? _tooManyRequestsMessage;
       case 503:
         return '장소 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.';
       default:
@@ -236,41 +243,65 @@ class PlaceApiService {
     }
   }
 
-  // placeId를 기준으로 장소 상세 정보를 백엔드에서 조회함.
-  // 백엔드 엔드포인트:
-  // GET /api/v1/places/{placeId}
-  Future<PlaceModel> fetchPlaceDetails({required String placeId}) async {
+  /// placeId로 장소 상세 정보(평점·영업 여부 포함)를 조회한다(로그인 필요).
+  ///
+  /// 실패는 검색과 같은 [ApiException]으로 던진다.
+  /// - 서버 오류 응답: statusCode와 code(예: TOO_MANY_REQUESTS, RESOURCE_NOT_FOUND)
+  /// - 시간 초과·연결 실패: statusCode가 null([ApiException.isNetworkError])
+  /// 401이면 호출부(AuthRepository.authorizedRequest)가 토큰을 재발급해 다시 시도한다.
+  Future<PlaceModel> fetchPlaceDetails({
+    required String placeId,
+    required String authorizationHeader,
+  }) async {
     final uri = ApiConfig.placeDetailsUri(placeId: placeId);
 
+    final http.Response response;
+
     try {
-      final response = await _client.get(uri).timeout(_timeout);
+      response = await _client
+          .get(
+            uri,
+            headers: <String, String>{'Authorization': authorizationHeader},
+          )
+          .timeout(_timeout);
+    } on TimeoutException {
+      throw const ApiException(message: '장소 상세 정보 요청 시간이 초과되었습니다.');
+    } catch (_) {
+      throw const ApiException(message: '장소 서버에 연결할 수 없습니다.');
+    }
 
-      if (response.statusCode != 200) {
-        throw PlaceApiException(
-          message: _parseErrorMessage(
-            response,
-            fallbackMessage: '장소 상세 정보를 불러오지 못했습니다.',
-          ),
-        );
-      }
+    if (response.statusCode != 200) {
+      throw _apiErrorFrom(response, _detailsMessageFor);
+    }
 
+    try {
       final decodedBody = jsonDecode(utf8.decode(response.bodyBytes));
 
       if (decodedBody is! Map<String, dynamic>) {
-        throw const PlaceApiException(message: '장소 상세 응답 형식이 올바르지 않습니다.');
+        throw const FormatException('상세 응답이 객체 형식이 아닙니다.');
       }
 
       return PlaceModel.fromJson(decodedBody);
-    } on TimeoutException {
-      throw const PlaceApiException(message: '장소 상세 정보 요청 시간이 초과되었습니다.');
-    } on http.ClientException {
-      throw const PlaceApiException(message: '장소 서버에 연결할 수 없습니다.');
-    } on PlaceApiException {
-      rethrow;
     } catch (error) {
-      debugPrint('장소 상세 조회 실패: $error');
+      debugPrint('장소 상세 응답 파싱 실패: $error');
 
-      throw const PlaceApiException(message: '장소 상세 정보를 불러오는 중 문제가 발생했습니다.');
+      throw ApiException(
+        statusCode: response.statusCode,
+        message: '장소 상세 응답 형식이 올바르지 않습니다.',
+      );
+    }
+  }
+
+  String _detailsMessageFor(int statusCode, String? serverMessage) {
+    switch (statusCode) {
+      case 401:
+        return '로그인이 필요합니다.';
+      case 429:
+        return serverMessage ?? _tooManyRequestsMessage;
+      case 503:
+        return '장소 서비스를 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.';
+      default:
+        return serverMessage ?? '장소 상세 정보를 불러오지 못했습니다.';
     }
   }
 

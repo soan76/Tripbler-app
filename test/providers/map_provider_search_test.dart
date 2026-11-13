@@ -66,9 +66,15 @@ class FakePlaceApiService extends PlaceApiService {
     return call.completer.future;
   }
 
+  final List<String> detailHeaders = <String>[];
+
   @override
-  Future<PlaceModel> fetchPlaceDetails({required String placeId}) {
+  Future<PlaceModel> fetchPlaceDetails({
+    required String placeId,
+    required String authorizationHeader,
+  }) {
     detailCalls.add(placeId);
+    detailHeaders.add(authorizationHeader);
     final completer = Completer<PlaceModel>();
     detailCompleters.add(completer);
     return completer.future;
@@ -106,10 +112,14 @@ class FakePlaceApiService extends PlaceApiService {
 class FakeAuthorizedRunner {
   Object? error;
 
+  /// 오류를 던지기 직전에 실행한다(실제 AuthProvider는 만료를 확인하면 로그아웃한 뒤 던진다).
+  void Function()? beforeError;
+
   Future<T> run<T>(Future<T> Function(String authorizationHeader) request) {
     final currentError = error;
 
     if (currentError != null) {
+      beforeError?.call();
       return Future<T>.error(currentError);
     }
 
@@ -183,6 +193,88 @@ void main() {
     service.searchCalls.last.completer.completeError(error);
     await pending;
   }
+
+  group('검색 중복 제출', () {
+    const other = LatLng(35.1796, 129.0756);
+
+    test('같은 검색어와 같은 중심의 검색이 진행 중이면 다시 보내지 않는다', () async {
+      final first = provider.search('경복궁', center: center);
+      final second = provider.search(' 경복궁 ', center: center);
+
+      expect(service.searchCalls, hasLength(1));
+
+      service.searchCalls.single.completer.complete([_place('a')]);
+      await Future.wait([first, second]);
+
+      expect(provider.searchStatus, MapSearchStatus.success);
+      expect(provider.searchResults.single.id, 'a');
+    });
+
+    test('검색어가 다르면 진행 중이어도 보낸다', () async {
+      final first = provider.search('경복궁', center: center);
+      final second = provider.search('남산타워', center: center);
+
+      expect(service.searchCalls, hasLength(2));
+
+      service.searchCalls[1].completer.complete([_place('n')]);
+      service.searchCalls[0].completer.complete([_place('a')]);
+      await Future.wait([first, second]);
+
+      expect(provider.searchResults.single.id, 'n');
+    });
+
+    test('중심이 다르면 진행 중이어도 보낸다', () async {
+      final first = provider.search('경복궁', center: center);
+      final second = provider.search('경복궁', center: other);
+
+      expect(service.searchCalls, hasLength(2));
+
+      for (final call in service.searchCalls) {
+        call.completer.complete(const []);
+      }
+      await Future.wait([first, second]);
+    });
+
+    test('진행 중이던 같은 검색이 끝나면 같은 검색을 다시 보낸다', () async {
+      await searchAndFail(
+        '경복궁',
+        const ApiException(statusCode: 503, message: '일시 장애'),
+        at: center,
+      );
+
+      final again = provider.search('경복궁', center: center);
+      expect(service.searchCalls, hasLength(2));
+      service.searchCalls.last.completer.completeError(
+        const ApiException(statusCode: 503, message: '일시 장애'),
+      );
+      await again;
+
+      final retry = provider.retrySearch();
+      expect(service.searchCalls, hasLength(3));
+      service.searchCalls.last.completer.complete([_place('a')]);
+      await retry;
+
+      expect(provider.searchStatus, MapSearchStatus.success);
+    });
+
+    test('검색 429는 로그인을 유지하고 서버 메시지를 보여 준다', () async {
+      const message = '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+
+      await searchAndFail(
+        '경복궁',
+        const ApiException(
+          statusCode: 429,
+          code: 'TOO_MANY_REQUESTS',
+          message: message,
+        ),
+      );
+
+      expect(provider.searchStatus, MapSearchStatus.failure);
+      expect(provider.searchError?.message, message);
+      expect(authState.isAuthenticated, isTrue);
+      expect(provider.hasSessionExpiryNotice, isFalse);
+    });
+  });
 
   group('검색 실행', () {
     test('정리한 검색어와 지도 중심을 토큰과 함께 보내고 결과를 반영한다', () async {
@@ -572,6 +664,77 @@ void main() {
       ]);
 
       expect(provider.searchResultBounds, isNull);
+    });
+  });
+
+  group('상세 조회 인증', () {
+    const tooMany = '요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.';
+
+    Future<void> openCard() async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.first);
+    }
+
+    test('상세 조회는 authorizedRequest를 거쳐 토큰을 붙여 요청한다', () async {
+      await openCard();
+
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(_place('a', rating: 4.0));
+      await pending;
+
+      expect(service.detailHeaders.single, 'Bearer test-access-token');
+      expect(provider.selectedPlace?.rating, 4.0);
+    });
+
+    test('상세 조회 세션 만료는 만료 안내를 띄우고 카드를 실패로 두지 않는다', () async {
+      await openCard();
+      runner.error = const SessionExpiredException(1);
+      runner.beforeError = authState.signOut;
+
+      await provider.loadSelectedPlaceDetails();
+
+      expect(provider.hasSessionExpiryNotice, isTrue);
+      expect(provider.detailsStatus, isNot(PlaceDetailsStatus.failure));
+      expect(service.detailCalls, isEmpty);
+    });
+
+    test('상세 조회 429는 로그인을 유지하고 서버 메시지를 보여 준다', () async {
+      await openCard();
+      runner.error = const ApiException(
+        statusCode: 429,
+        code: 'TOO_MANY_REQUESTS',
+        message: tooMany,
+      );
+
+      await provider.loadSelectedPlaceDetails();
+
+      expect(provider.detailsStatus, PlaceDetailsStatus.failure);
+      expect(provider.detailsErrorMessage, tooMany);
+      expect(authState.isAuthenticated, isTrue);
+      expect(provider.hasSessionExpiryNotice, isFalse);
+      expect(provider.selectedPlace?.id, 'a');
+    });
+
+    test('상세 조회 네트워크 오류는 로그인을 유지한다', () async {
+      await openCard();
+      runner.error = const ApiException(message: '장소 서버에 연결할 수 없습니다.');
+
+      await provider.loadSelectedPlaceDetails();
+
+      expect(provider.detailsStatus, PlaceDetailsStatus.failure);
+      expect(provider.detailsErrorMessage, '장소 서버에 연결할 수 없습니다.');
+      expect(authState.isAuthenticated, isTrue);
+      expect(provider.hasSessionExpiryNotice, isFalse);
+    });
+
+    test('상세 조회는 로그인이 풀린 뒤에는 요청하지 않는다', () async {
+      await openCard();
+      authState.isAuthenticated = false;
+
+      await provider.loadSelectedPlaceDetails();
+
+      expect(service.detailCalls, isEmpty);
+      expect(provider.detailsStatus, PlaceDetailsStatus.idle);
     });
   });
 

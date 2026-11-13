@@ -13,12 +13,6 @@ public interface PlaceClient {
         int radius
     );
 
-    PlaceResponse findNearestPlace(
-        double latitude,
-        double longitude,
-        int radius
-    );
-
     PlaceResponse getPlaceDetails(String placeId);
 
     // 좌표(latitude, longitude)는 둘 다 있거나 둘 다 null이다.

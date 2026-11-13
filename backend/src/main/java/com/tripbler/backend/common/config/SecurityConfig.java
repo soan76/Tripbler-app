@@ -68,16 +68,24 @@ public class SecurityConfig {
                         "/api/v1/crypto/**"
                     ).permitAll()
 
-                    // 장소 검색은 로그인 사용자만 쓴다(유료 Google 호출 남용 방지).
-                    // 아래 /api/v1/places/** 공개 규칙보다 먼저 와야 한다.
+                    // 주변 장소는 앱이 쓰지 않아 외부 접근을 막는다(코드는 남겨 둠).
+                    // 다시 열 때는 로그인만이 아니라 사용자별 호출 제한도 함께 두고,
+                    // 지운 컨트롤러 테스트는 git 기록에서 되살린다.
+                    // 최근접 장소는 코드를 지웠다. 막지 않으면 /nearest가 장소 ID "nearest"의
+                    // 상세 조회로 처리되어 Google을 호출하므로 지운 경로도 막는다.
+                    // 두 규칙은 아래 /api/v1/places/** 인증 규칙보다 먼저 와야 한다
+                    // (보안 설정은 허용 여부만 정하고 처리할 핸들러는 MVC가 정한다).
+                    // 메서드를 지정하지 않아 GET·HEAD 등 모든 메서드에 적용된다.
                     .requestMatchers(
-                        "/api/v1/places/search"
-                    ).authenticated()
+                        "/api/v1/places/nearby",
+                        "/api/v1/places/nearest"
+                    ).denyAll()
 
-                    // 주변 장소, 최근접 장소, 장소 상세는 공개한다.
+                    // 장소 검색과 상세는 로그인 사용자만 쓴다(유료 Google 호출 남용 방지).
+                    // 사용자별 호출 제한은 PlaceService가 판정한다.
                     .requestMatchers(
                         "/api/v1/places/**"
-                    ).permitAll()
+                    ).authenticated()
 
                     .requestMatchers(
                         "/api/v1/translation/**"

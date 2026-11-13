@@ -179,107 +179,6 @@ public class GooglePlacesClient implements PlaceClient {
         }
     }
 
-    private List<PlaceResponse> searchNearbyWithoutType(
-        double latitude,
-        double longitude,
-        int radius
-    ) {
-        GoogleNearbySearchRequest request =
-            createRequestWithoutType(
-                latitude,
-                longitude,
-                radius
-            );  
-
-        try {
-            GoogleNearbySearchResponse response =
-                restClient
-                    .post()
-                    .uri("/v1/places:searchNearby")
-                    .header(
-                        "X-Goog-Api-Key",
-                        apiKey
-                    )
-                    .header(
-                        "X-Goog-FieldMask",
-                        FIELD_MASK
-                    )
-                    .body(request)
-                    .retrieve()
-                    .body(
-                        GoogleNearbySearchResponse.class
-                    );
-
-            return toPlaceResponses(response);
-
-        } catch (RestClientException exception) {
-            throw toSearchException(exception);
-        }
-    }
-
-    private GoogleNearbySearchRequest createRequestWithoutType(
-        double latitude,
-        double longitude,
-        int radius
-    ) {
-        var center =
-            new GoogleNearbySearchRequest.Center(
-                latitude,
-                longitude
-            );
-
-        var circle =
-            new GoogleNearbySearchRequest.Circle(
-                center,
-                radius
-            );
-
-        var restriction =
-            new GoogleNearbySearchRequest
-                .LocationRestriction(circle);
-
-        return new GoogleNearbySearchRequest(
-            null,
-            20,
-            restriction,
-            PLACE_LANGUAGE_CODE
-        );
-    }
-
-    @Override
-    public PlaceResponse findNearestPlace(
-        double latitude,
-        double longitude,
-        int radius
-    ) {
-        List<PlaceResponse> places =
-            searchNearbyWithoutType(
-                latitude,
-                longitude,
-                radius
-            );
-
-        // 좌표가 없는 장소는 거리를 계산할 수 없으므로 후보에서 뺀다.
-        // 좌표가 있는 후보가 없으면 null(204)이다.
-        return places
-            .stream()
-            .filter(place ->
-                place.latitude() != null
-                    && place.longitude() != null
-            )
-            .min(
-                java.util.Comparator.comparingDouble(
-                    place -> calculateDistance(
-                        latitude,
-                        longitude,
-                        place.latitude(),
-                        place.longitude()
-                    )
-                )
-            )
-            .orElse(null);
-    }
-
     @Override
     public PlaceResponse getPlaceDetails(
         String placeId
@@ -380,7 +279,7 @@ public class GooglePlacesClient implements PlaceClient {
         }
     }
 
-    // 검색 응답(nearby, nearest, searchText)을 변환한다.
+    // 검색 응답(nearby, searchText)을 변환한다.
     // 본문 자체가 없으면 정상 결과로 볼 수 없으므로 제공자 장애(503)로 본다.
     // 정상 JSON 객체에 places가 없거나 빈 배열이면 결과 0건이다.
     private List<PlaceResponse> toPlaceResponses(
@@ -405,7 +304,7 @@ public class GooglePlacesClient implements PlaceClient {
             .toList();
     }
 
-    // 검색 요청(nearby, nearest, searchText)의 Google 오류는 모두 제공자 장애(503)로 본다.
+    // 검색 요청(nearby, searchText)의 Google 오류는 모두 제공자 장애(503)로 본다.
     // 입력값은 서버에서 먼저 검증하므로 Google 400도 서버 요청 오류로 취급한다.
     private PlacesProviderException toSearchException(
         RestClientException exception
@@ -517,37 +416,6 @@ public class GooglePlacesClient implements PlaceClient {
             restriction,
             PLACE_LANGUAGE_CODE
         );
-    }
-
-    private double calculateDistance(
-        double lat1,
-        double lon1,
-        double lat2,
-        double lon2
-    ) {
-        final double earthRadius = 6371000;
-
-        double latDistance =
-            Math.toRadians(lat2 - lat1);
-
-        double lonDistance =
-            Math.toRadians(lon2 - lon1);
-
-        double a =
-            Math.sin(latDistance / 2)
-                * Math.sin(latDistance / 2)
-                + Math.cos(Math.toRadians(lat1))
-                * Math.cos(Math.toRadians(lat2))
-                * Math.sin(lonDistance / 2)
-                * Math.sin(lonDistance / 2);
-
-        double c =
-            2 * Math.atan2(
-                Math.sqrt(a),
-                Math.sqrt(1 - a)
-            );
-
-        return earthRadius * c;
     }
 
     private PlaceResponse toPlaceResponse(

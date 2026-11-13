@@ -6,11 +6,12 @@
 
 **Architecture:** 앱이 먼저 상세 요청에 토큰을 보내고 진행 중인 같은 검색을 다시 보내지 않게 한다. 백엔드는 기존 `AuthRateLimiter`에 장소 버킷과 여러 창을 한 번에 판정하는 메서드를 더하고, `PlaceService`가 클라이언트 호출 전에 JWT `sub` 기준으로 한도를 확인한다. `SecurityConfig`는 `nearby`·`nearest`를 `denyAll()`, 검색·상세를 `authenticated()`로 둔다.
 
-**Tech Stack:** Flutter/Provider(앱 `../tripbler`), Spring Boot 4.1 / Java 17, Spring Security JWT, JUnit 5, Mockito, MockMvc.
+**Tech Stack:** Flutter/Provider(앱 = 저장소 루트), Spring Boot 4.1 / Java 17, Spring Security JWT, JUnit 5, Mockito, MockMvc.
 
-**Spec:** `docs/superpowers/specs/2026-11-12-places-rate-limit-design.md`
+**Spec:** `backend/docs/superpowers/specs/2026-11-12-places-rate-limit-design.md`
 
 ## Global Constraints
+- 저장소: 앱과 백엔드는 `tripbler` 저장소 하나(GitHub `soan76/Tripbler-app`)다. 앱은 저장소 루트, 백엔드는 `backend/`(git subtree). 경로는 모두 저장소 루트 기준. `./gradlew` 명령은 `backend/`에서, `flutter` 명령과 git은 저장소 루트에서 실행한다. 보관용 `../tripbler-backend`는 수정하지 않는다.
 - 작업은 `main`에서 바로 한다(브랜치 금지). 커밋은 사용자가 요청할 때만 한다. 각 Task의 커밋 단계는 "사용자 요청 시".
 - 적용 순서: Task 1·2(앱) → Task 3~5(백엔드). 상세를 로그인 필수로 바꾸는 Task 5는 Task 1 뒤에만.
 - 완료 조건: 한도를 넘은 요청은 `429 TOO_MANY_REQUESTS` + `Retry-After`, 그 요청으로 Google 클라이언트(`PlaceClient`) 호출 0회.
@@ -18,7 +19,7 @@
 - 사용자 키: JWT `sub`(`@AuthenticationPrincipal Jwt` → `getSubject()`).
 - 서버 결과 캐시를 추가하지 않는다. 앱의 30분 상세 캐시는 바꾸지 않는다.
 - 새 라이브러리 금지. 백엔드 오류 응답은 기존 `ErrorResponse`.
-- 앱 검증: 변경 Dart 파일마다 `dart format <파일>`, `flutter analyze --no-pub <파일>`, 관련 `flutter test --no-pub <경로>`. 앱 작업 전 `../tripbler/AGENTS.md`를 따른다.
+- 앱 검증: 변경 Dart 파일마다 `dart format <파일>`, `flutter analyze --no-pub <파일>`, 관련 `flutter test --no-pub <경로>`. 앱 작업 전 `AGENTS.md`(저장소 루트)를 따른다.
 
 ## Review Focus
 - 상세 카드를 연 채 로그아웃된 뒤 "평점·영업 정보"를 누르면 요청을 보내지 않고 예외 없이 끝나야 한다 → Task 1 `상세 조회는 로그인이 풀린 뒤에는 요청하지 않는다`.
@@ -32,10 +33,10 @@
 ### Task 1: 앱 — 상세 요청에 토큰 첨부와 인증 실패 처리
 
 **Files:**
-- Modify: `../tripbler/lib/services/place_api_service.dart` (`fetchPlaceDetails`)
-- Modify: `../tripbler/lib/providers/map_provider.dart` (`loadSelectedPlaceDetails`)
-- Modify: `../tripbler/test/providers/map_provider_search_test.dart` (`FakePlaceApiService.fetchPlaceDetails`, "상세 조회" 그룹)
-- Create: `../tripbler/test/services/place_api_service_details_test.dart`
+- Modify: `lib/services/place_api_service.dart` (`fetchPlaceDetails`)
+- Modify: `lib/providers/map_provider.dart` (`loadSelectedPlaceDetails`)
+- Modify: `test/providers/map_provider_search_test.dart` (`FakePlaceApiService.fetchPlaceDetails`, "상세 조회" 그룹)
+- Create: `test/services/place_api_service_details_test.dart`
 
 **Interfaces:**
 - Produces: `Future<PlaceModel> fetchPlaceDetails({required String placeId, required String authorizationHeader})`. 실패는 검색과 같은 `ApiException`(`statusCode`, `code`, `message`; 시간 초과·연결 실패는 `statusCode == null`)으로 던진다. 오류 본문 해석은 검색의 기존 helper를 재사용한다(이름을 일반화해도 된다). `PlaceApiException`은 상세 경로에서 더 쓰지 않는다.
@@ -55,7 +56,7 @@
   - 기존 "상세 조회" 테스트는 가짜 서비스의 새 시그니처에 맞춘다.
 
 - [ ] **Step 2: 실패 확인**
-  Run: `flutter test --no-pub test/services/place_api_service_details_test.dart test/providers/map_provider_search_test.dart` (in `../tripbler`)
+  Run: `flutter test --no-pub test/services/place_api_service_details_test.dart test/providers/map_provider_search_test.dart` (저장소 루트)
   Expected: 컴파일 실패(새 매개변수 없음) 또는 새 테스트 실패.
 
 - [ ] **Step 3: 구현**
@@ -66,15 +67,15 @@
   Run: Step 2 명령 + `flutter test --no-pub test/` 전체, `dart format`·`flutter analyze --no-pub` 변경 파일.
   Expected: 모두 통과, 새 분석 문제 없음.
 
-- [ ] **Step 5: 커밋(사용자 요청 시, 앱 저장소)**
+- [ ] **Step 5: 커밋(사용자 요청 시)**
 
 ---
 
 ### Task 2: 앱 — 진행 중인 같은 검색의 중복 제출 막기
 
 **Files:**
-- Modify: `../tripbler/lib/providers/map_provider.dart` (`_runSearch`)
-- Modify: `../tripbler/test/providers/map_provider_search_test.dart`
+- Modify: `lib/providers/map_provider.dart` (`_runSearch`)
+- Modify: `test/providers/map_provider_search_test.dart`
 
 **Interfaces:**
 - Consumes: 기존 `_SearchRequest`(검색어 + `LatLng? center`, `==`가 둘 다 비교).
@@ -97,16 +98,16 @@
   Run: `flutter test --no-pub test/`, `dart format`·`flutter analyze --no-pub` 변경 파일.
   Expected: 모두 통과.
 
-- [ ] **Step 5: 커밋(사용자 요청 시, 앱 저장소)**
+- [ ] **Step 5: 커밋(사용자 요청 시)**
 
 ---
 
 ### Task 3: 백엔드 — 장소 버킷과 여러 창 동시 판정
 
 **Files:**
-- Modify: `src/main/java/com/tripbler/backend/common/ratelimit/RateLimitBucket.java`
-- Modify: `src/main/java/com/tripbler/backend/common/ratelimit/AuthRateLimiter.java`
-- Test: `src/test/java/com/tripbler/backend/common/ratelimit/AuthRateLimiterTest.java`
+- Modify: `backend/src/main/java/com/tripbler/backend/common/ratelimit/RateLimitBucket.java`
+- Modify: `backend/src/main/java/com/tripbler/backend/common/ratelimit/AuthRateLimiter.java`
+- Test: `backend/src/test/java/com/tripbler/backend/common/ratelimit/AuthRateLimiterTest.java`
 
 **Interfaces:**
 - Produces:
@@ -131,10 +132,10 @@
 ### Task 4: 백엔드 — 검색·상세에 사용자별 제한 적용
 
 **Files:**
-- Modify: `src/main/java/com/tripbler/backend/place/service/PlaceService.java`
-- Modify: `src/main/java/com/tripbler/backend/place/controller/PlaceController.java` (`searchText`, `getPlaceDetails`)
-- Create: `src/test/java/com/tripbler/backend/place/service/PlaceServiceTest.java`
-- Modify: `src/test/java/com/tripbler/backend/place/controller/PlaceControllerTest.java`
+- Modify: `backend/src/main/java/com/tripbler/backend/place/service/PlaceService.java`
+- Modify: `backend/src/main/java/com/tripbler/backend/place/controller/PlaceController.java` (`searchText`, `getPlaceDetails`)
+- Create: `backend/src/test/java/com/tripbler/backend/place/service/PlaceServiceTest.java`
+- Modify: `backend/src/test/java/com/tripbler/backend/place/controller/PlaceControllerTest.java`
 
 **Interfaces:**
 - Consumes: `AuthRateLimiter.acquireAll(String, List<RateLimitBucket>)`, 장소 버킷 4개.
@@ -163,12 +164,12 @@
 ### Task 5: 백엔드 — 보안 규칙, 최근접 삭제, 문서
 
 **Files:**
-- Modify: `src/main/java/com/tripbler/backend/common/config/SecurityConfig.java` (장소 규칙, 현재 72~80행)
-- Modify: `src/main/java/com/tripbler/backend/place/controller/PlaceController.java` (최근접 엔드포인트 삭제)
-- Modify: `src/main/java/com/tripbler/backend/place/service/PlaceService.java` (`findNearestPlace` 삭제)
-- Modify: `src/main/java/com/tripbler/backend/place/client/PlaceClient.java`, `GooglePlacesClient.java` (`findNearestPlace`, `searchNearbyWithoutType`, `createRequestWithoutType`, `calculateDistance` 삭제. 주변 조회 `searchNearby`·`createRequest`는 유지)
-- Modify: `src/test/java/com/tripbler/backend/place/controller/PlaceControllerSecurityTest.java`, `PlaceControllerTest.java`, `src/test/java/com/tripbler/backend/place/client/GooglePlacesClientTest.java`
-- Modify: `docs/places-api.md`, `README.md`(API 표 장소 행), `AGENTS.md`(아키텍처 표 장소 행)
+- Modify: `backend/src/main/java/com/tripbler/backend/common/config/SecurityConfig.java` (장소 규칙, 현재 72~80행)
+- Modify: `backend/src/main/java/com/tripbler/backend/place/controller/PlaceController.java` (최근접 엔드포인트 삭제)
+- Modify: `backend/src/main/java/com/tripbler/backend/place/service/PlaceService.java` (`findNearestPlace` 삭제)
+- Modify: `backend/src/main/java/com/tripbler/backend/place/client/PlaceClient.java`, `GooglePlacesClient.java` (`findNearestPlace`, `searchNearbyWithoutType`, `createRequestWithoutType`, `calculateDistance` 삭제. 주변 조회 `searchNearby`·`createRequest`는 유지)
+- Modify: `backend/src/test/java/com/tripbler/backend/place/controller/PlaceControllerSecurityTest.java`, `PlaceControllerTest.java`, `backend/src/test/java/com/tripbler/backend/place/client/GooglePlacesClientTest.java`
+- Modify: `backend/docs/places-api.md`, `backend/README.md`(API 표 장소 행), `backend/AGENTS.md`(아키텍처 표 장소 행)
 
 **Interfaces:**
 - Consumes: Task 4의 시그니처.
@@ -182,7 +183,7 @@
   - 기존 `주변_검색은_토큰_없이_호출할_수_있다`, `최근접_조회는_토큰_없이_호출할_수_있다`는 위 테스트로 대체해 지운다.
 - [ ] **Step 2: 실패 확인** — Run: `./gradlew test --tests "*PlaceControllerSecurityTest"` / Expected: 401·403 기대 테스트 실패(지금은 200/204).
 - [ ] **Step 3: 구현** — 보안 규칙 변경, 최근접 코드 삭제. 함께 지울 테스트: `PlaceControllerTest`의 주변·최근접 컨트롤러 테스트 전부, `GooglePlacesClientTest`의 최근접 테스트(`최근접*`). `GooglePlacesClientTest`의 주변 검색 테스트는 유지.
-- [ ] **Step 4: 문서** — `docs/places-api.md`: 엔드포인트 표(상세 로그인 필수, 주변 차단, 최근접 삭제), "최근접 장소" 절 삭제, 주변 절에 차단 사실, 호출 제한 절(숫자는 초기 설정값, 429 + `Retry-After`, 비용 상한은 Google Cloud 쿼터·예산 알림), 기존 "사용자별 호출 제한과 캐시는 없다" 문장 교체. README·AGENTS.md의 장소 행을 같은 내용으로.
+- [ ] **Step 4: 문서** — `backend/docs/places-api.md`: 엔드포인트 표(상세 로그인 필수, 주변 차단, 최근접 삭제), "최근접 장소" 절 삭제, 주변 절에 차단 사실, 호출 제한 절(숫자는 초기 설정값, 429 + `Retry-After`, 비용 상한은 Google Cloud 쿼터·예산 알림), 기존 "사용자별 호출 제한과 캐시는 없다" 문장 교체. README·AGENTS.md의 장소 행을 같은 내용으로.
 - [ ] **Step 5: 통과 확인** — Run: `./gradlew test`(DB 테스트는 `SPRING_DATASOURCE_PASSWORD` 없으면 컨텍스트 로드 실패만 허용) / Expected: DB 컨텍스트 실패 외 전부 통과. `git diff --check` 통과.
 - [ ] **Step 6: 커밋(사용자 요청 시)**
 
