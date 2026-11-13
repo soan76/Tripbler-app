@@ -25,6 +25,7 @@ import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 import 'package:tripbler/widgets/charts/market_chart_header.dart';
 import 'package:tripbler/widgets/exchange/chart_currency_picker_sheet.dart';
 import 'package:tripbler/widgets/exchange/currency_management_bottom_sheet.dart';
+import 'package:tripbler/widgets/exchange/currency_row.dart';
 import 'package:tripbler/widgets/exchange/currency_selection_sheet.dart';
 
 import '../../crypto/crypto_test.dart' show makeApi, FiatApi;
@@ -1318,6 +1319,163 @@ void main() {
       expect(screen.exchange.errorMessage, isNull);
       expect(screen.amountEditable.focusNode.hasFocus, isTrue);
       expect(tester.testTextInput.isVisible, isTrue);
+      await tester.pumpWidget(const SizedBox());
+    });
+  });
+
+  group('the row in use sits on top and the home currency follows', () {
+    CurrencyRowLayout layoutOf(WidgetTester tester, String id) =>
+        tester.widget<CurrencyRow>(find.byKey(ValueKey(id))).layout;
+
+    double topOf(WidgetTester tester, String id) =>
+        tester.getTopLeft(find.byKey(ValueKey(id))).dy;
+
+    EditableText editableOf(WidgetTester tester, String id) =>
+        tester.widget<EditableText>(
+          find.descendant(
+            of: find.byKey(ValueKey(id)),
+            matching: find.byType(EditableText),
+          ),
+        );
+
+    testWidgets('the home currency starts as the input', (tester) async {
+      final screen = RowsScreen(tester);
+      await screen.showRows();
+
+      expect(layoutOf(tester, krwRow), CurrencyRowLayout.input);
+      for (final id in [usdRow, eurRow, btcRow]) {
+        expect(layoutOf(tester, id), CurrencyRowLayout.list);
+      }
+      expect(find.text('입력 중'), findsOneWidget);
+      expect(find.text('다른 통화'), findsOneWidget);
+      // 입력 칸 금액은 굵게, 다른 통화는 기본 굵기로 보여 준다.
+      expect(editableOf(tester, krwRow).style.fontWeight, FontWeight.w700);
+      expect(editableOf(tester, usdRow).style.fontWeight, FontWeight.w500);
+      // 줄마다 있던 차트 안내 버튼은 없다.
+      expect(
+        find.descendant(
+          of: find.byType(CurrencyRow),
+          matching: find.byIcon(Icons.show_chart),
+        ),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('touching another row moves it up and keeps typing there', (
+      tester,
+    ) async {
+      final screen = RowsScreen(tester);
+      await screen.showRows();
+      final usdState = tester.state(rowField(usdRow));
+
+      await tester.tap(rowField(usdRow));
+      await tester.pumpAndSettle();
+
+      expect(layoutOf(tester, usdRow), CurrencyRowLayout.input);
+      expect(layoutOf(tester, krwRow), CurrencyRowLayout.home);
+      expect(layoutOf(tester, eurRow), CurrencyRowLayout.list);
+      expect(editableOf(tester, krwRow).style.fontWeight, FontWeight.w700);
+      expect(editableOf(tester, eurRow).style.fontWeight, FontWeight.w500);
+      expect(topOf(tester, usdRow), lessThan(topOf(tester, krwRow)));
+      expect(topOf(tester, krwRow), lessThan(topOf(tester, eurRow)));
+      expect(topOf(tester, eurRow), lessThan(topOf(tester, btcRow)));
+      // 자리를 옮겨도 같은 입력칸이고 초점과 키보드가 남는다.
+      expect(tester.state(rowField(usdRow)), same(usdState));
+      expect(editableOf(tester, usdRow).focusNode.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+
+      await tester.enterText(rowField(usdRow), '250');
+      await tester.pumpAndSettle();
+      final usd = screen.display.visible.firstWhere((row) => row.id == usdRow);
+      expect(screen.display.amountFor(usd), closeTo(250, 0.000001));
+      expect(screen.exchange.activeInputCurrencyCode, 'USD');
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('touching the home row makes it the input again', (
+      tester,
+    ) async {
+      final screen = RowsScreen(tester);
+      await screen.showRows();
+      await screen.type(usdRow, '250');
+
+      await tester.tap(rowField(krwRow));
+      await tester.pumpAndSettle();
+
+      expect(layoutOf(tester, krwRow), CurrencyRowLayout.input);
+      expect(layoutOf(tester, usdRow), CurrencyRowLayout.list);
+      expect(topOf(tester, krwRow), lessThan(topOf(tester, usdRow)));
+      expect(topOf(tester, usdRow), lessThan(topOf(tester, eurRow)));
+      expect(editableOf(tester, krwRow).focusNode.hasFocus, isTrue);
+      expect(
+        tester.widget<TextField>(rowField(usdRow)).controller!.text,
+        '250',
+      );
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('a coin row can be the input', (tester) async {
+      final screen = RowsScreen(tester);
+      await screen.showRows();
+
+      await tester.tap(rowField(btcRow));
+      await tester.pumpAndSettle();
+
+      expect(layoutOf(tester, btcRow), CurrencyRowLayout.input);
+      expect(layoutOf(tester, krwRow), CurrencyRowLayout.home);
+      expect(topOf(tester, btcRow), lessThan(topOf(tester, krwRow)));
+      expect(topOf(tester, krwRow), lessThan(topOf(tester, usdRow)));
+      expect(editableOf(tester, btcRow).focusNode.hasFocus, isTrue);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('touching a row while scrolled down shows the input on top', (
+      tester,
+    ) async {
+      final screen = RowsScreen(tester);
+      await screen.showRows();
+      // 아래 줄만 화면 맨 위에 걸치게 내려, 입력 칸 자리는 화면 위로 벗어난다.
+      screen.position.jumpTo(
+        screen.position.pixels + topOf(tester, btcRow) - 8,
+      );
+      await tester.pumpAndSettle();
+      final scrolled = screen.position.pixels;
+      expect(scrolled, greaterThan(0));
+      expect(rowField(btcRow).hitTestable(), findsOneWidget);
+      final btcState = tester.state(rowField(btcRow));
+
+      await tester.tap(rowField(btcRow));
+      await tester.pumpAndSettle();
+
+      expect(layoutOf(tester, btcRow), CurrencyRowLayout.input);
+      expect(tester.state(rowField(btcRow)), same(btcState));
+      final viewport = tester.getRect(find.byType(Scrollable).first);
+      // "입력 중" 라벨까지 포함한 입력 칸 전체가 화면 안에 있다.
+      final inputBox = tester.getRect(find.byKey(const ValueKey(btcRow)));
+      expect(inputBox.top, greaterThanOrEqualTo(viewport.top));
+      expect(inputBox.bottom, lessThanOrEqualTo(viewport.bottom));
+      expect(screen.position.pixels, lessThan(scrolled));
+      expect(editableOf(tester, btcRow).focusNode.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+
+    testWidgets('touching a row already on screen does not scroll', (
+      tester,
+    ) async {
+      final screen = RowsScreen(tester);
+      await screen.showRows();
+      expect(screen.position.pixels, 0);
+
+      await tester.tap(rowField(eurRow));
+      await tester.pumpAndSettle();
+
+      expect(layoutOf(tester, eurRow), CurrencyRowLayout.input);
+      expect(screen.position.pixels, 0);
+      expect(editableOf(tester, eurRow).focusNode.hasFocus, isTrue);
       await tester.pumpWidget(const SizedBox());
     });
   });

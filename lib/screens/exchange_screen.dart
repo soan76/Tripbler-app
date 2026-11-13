@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../presentation/charts/chart_selection_provider.dart';
+import '../presentation/exchange/display_currency.dart';
 import '../presentation/exchange/exchange_display_provider.dart';
 import '../providers/exchange_provider.dart';
 import '../widgets/charts/chart_pair_carousel.dart';
@@ -59,6 +60,64 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    // 입력 중인 통화를 맨 위, 자국 통화를 그 아래에 두고 나머지를 목록으로 보여 준다.
+    // 모든 행은 같은 Column 안에서 ValueKey로 자리만 바뀌어 입력칸 상태와 초점을 유지한다.
+    final rows = [display.base, ...display.visible];
+    final active = rows.firstWhere(
+      display.isActive,
+      orElse: () => display.base,
+    );
+    final others = [
+      for (final row in rows)
+        if (row.id != active.id && row.id != display.base.id) row,
+    ];
+
+    Widget buildRow(DisplayCurrency row, CurrencyRowLayout layout) {
+      final isBaseRow = row.id == display.base.id;
+      final quote = row.isCrypto ? display.crypto.priceFor(row.code) : null;
+      final priceError = row.isCrypto
+          ? display.crypto.errorFor(row.code)
+          : null;
+      final time = quote?.fetchedAt.toLocal();
+      final status = !row.isCrypto
+          ? null
+          : quote == null
+          ? (priceError != null ? '조회 실패 · 아래로 당겨 재시도' : '현재가 조회 중')
+          : '${display.crypto.isStale(row.code) ? '저장값 · ' : ''}${display.crypto.isLoading(row.code) ? '갱신 중 · ' : ''}1 ${row.code} = ${NumberFormat('#,##0.########').format(quote.price)} KRW · ${DateFormat('MM.dd HH:mm').format(time!)}';
+      return CurrencyRow(
+        key: ValueKey(row.id),
+        currency: row,
+        amount: display.amountFor(row),
+        status: status,
+        onAmountTap: () => display.selectInput(row),
+        onAmountChanged: (value) => display.changeAmount(row, value),
+        onCurrencyTap: () {
+          _leaveAmountField();
+          if (row.isCrypto) {
+            showCurrencyManagementBottomSheet(context: context);
+            return;
+          }
+          showCurrencySelectionSheet(
+            context: context,
+            selectedCurrency: row.fiat!,
+            onSelected: (currency) {
+              if (isBaseRow) {
+                provider.changeBaseCurrency(currency);
+              } else {
+                provider.replaceVisibleCurrency(
+                  index: visibleCurrencies.indexWhere(
+                    (item) => item.code == row.code,
+                  ),
+                  newCurrency: currency,
+                );
+              }
+            },
+          );
+        },
+        layout: layout,
+      );
+    }
+
     return Container(
       color: colorScheme.surface,
       child: RefreshIndicator(
@@ -90,55 +149,11 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                   message: display.conversionError!,
                   onRetry: display.refreshConversion,
                 ),
-              ...[display.base, ...display.visible].map((row) {
-                final isBaseRow = row.id == display.base.id;
-                final quote = row.isCrypto
-                    ? display.crypto.priceFor(row.code)
-                    : null;
-                final priceError = row.isCrypto
-                    ? display.crypto.errorFor(row.code)
-                    : null;
-                final time = quote?.fetchedAt.toLocal();
-                final status = !row.isCrypto
-                    ? null
-                    : quote == null
-                    ? (priceError != null ? '조회 실패 · 아래로 당겨 재시도' : '현재가 조회 중')
-                    : '${display.crypto.isStale(row.code) ? '저장값 · ' : ''}${display.crypto.isLoading(row.code) ? '갱신 중 · ' : ''}1 ${row.code} = ${NumberFormat('#,##0.########').format(quote.price)} KRW · ${DateFormat('MM.dd HH:mm').format(time!)}';
-                return CurrencyRow(
-                  key: ValueKey(row.id),
-                  currency: row,
-                  isBase: display.isActive(row),
-                  amount: display.amountFor(row),
-                  rate: row.isCrypto ? null : provider.rateFor(row.code),
-                  status: status,
-                  onAmountTap: () => display.selectInput(row),
-                  onAmountChanged: (value) => display.changeAmount(row, value),
-                  onCurrencyTap: () {
-                    _leaveAmountField();
-                    if (row.isCrypto) {
-                      showCurrencyManagementBottomSheet(context: context);
-                      return;
-                    }
-                    showCurrencySelectionSheet(
-                      context: context,
-                      selectedCurrency: row.fiat!,
-                      onSelected: (currency) {
-                        if (isBaseRow) {
-                          provider.changeBaseCurrency(currency);
-                        } else {
-                          provider.replaceVisibleCurrency(
-                            index: visibleCurrencies.indexWhere(
-                              (item) => item.code == row.code,
-                            ),
-                            newCurrency: currency,
-                          );
-                        }
-                      },
-                    );
-                  },
-                  onGraphTap: row.isCrypto ? null : _showChartGuide,
-                );
-              }),
+              buildRow(active, CurrencyRowLayout.input),
+              if (active.id != display.base.id)
+                buildRow(display.base, CurrencyRowLayout.home),
+              if (others.isNotEmpty) _buildOthersLabel(),
+              for (final row in others) buildRow(row, CurrencyRowLayout.list),
 
               // 통화 추가 / 편집 버튼을 표시하는 OutlinedButton 위젯
               Padding(
@@ -237,10 +252,32 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     }
   }
 
-  // 기준 통화와 상대 통화의 그래프 안내 SnackBar 중복 코드를 하나의 메서드로 분리.
-  void _showChartGuide() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('아래 차트 영역에서 환율 변동을 확인할 수 있습니다')),
+  // 입력칸·자국 통화 아래 나머지 통화 목록의 제목
+  Widget _buildOthersLabel() {
+    final theme = Theme.of(context);
+    final style = theme.textTheme.labelMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+
+    return Padding(
+      // 위 칸과 16dp를 띄워 입력·결과 묶음과 보조 목록을 나눈다.
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+      child: Row(
+        children: [
+          Text('다른 통화', style: style),
+          const SizedBox(width: 12),
+          // 줄 순서가 바뀌는 이유를 알려 준다. 글자를 키우면 줄임표로 줄인다.
+          Expanded(
+            child: Text(
+              '금액을 누르면 그 통화로 입력',
+              textAlign: TextAlign.end,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

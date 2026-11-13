@@ -24,6 +24,13 @@ class AmountInputField extends StatefulWidget {
   // 0~6 = 최대 소수점 자릿수
   final int decimalPlaces;
 
+  // 숫자가 짧을 때 쓰는 가장 큰 글자 크기. 길어지면 영역에 맞춰 줄인다.
+  final double maxFontSize;
+
+  // 금액 글자 굵기. 밝은 야외에서도 읽히도록 테마 기본(w400)보다 올린다.
+  // 금지 목록의 예외로 사용자가 정했다: 기본 w500, 환율 화면의 입력·자국 통화 칸은 w700.
+  final FontWeight fontWeight;
+
   const AmountInputField({
     super.key,
     required this.amount,
@@ -32,6 +39,8 @@ class AmountInputField extends StatefulWidget {
     this.onTap,
     this.isBase = false,
     this.unavailable = false,
+    this.maxFontSize = 22,
+    this.fontWeight = FontWeight.w500,
   });
 
   @override
@@ -40,9 +49,6 @@ class AmountInputField extends StatefulWidget {
 
 class _AmountInputFieldState extends State<AmountInputField> {
   late final TextEditingController _controller;
-
-  // 기본 글자 크기
-  static const double _defaultFontSize = 22;
 
   // 숫자가 길어졌을 때 줄일 수 있는 최소 글자 크기
   static const double _minimumFontSize = 12;
@@ -84,10 +90,9 @@ class _AmountInputFieldState extends State<AmountInputField> {
         : colorScheme.onSurface;
 
     // 입력 중 글자 크기 계산과 실제 표시가 같은 스타일을 쓰도록 한 곳에서 정한다.
-    // 밝은 야외에서도 읽히도록 테마 기본 굵기(w400)보다 올린다. 금지 목록의 예외로 사용자가 정했다.
     final baseStyle = theme.textTheme.titleLarge!.copyWith(
       color: textColor,
-      fontWeight: FontWeight.w500,
+      fontWeight: widget.fontWeight,
       fontFeatures: amountFontFeatures,
     );
 
@@ -179,10 +184,10 @@ class _AmountInputFieldState extends State<AmountInputField> {
     required TextStyle style,
   }) {
     if (text.isEmpty || !maxWidth.isFinite || maxWidth <= 0) {
-      return _defaultFontSize;
+      return widget.maxFontSize;
     }
 
-    double fontSize = _defaultFontSize;
+    double fontSize = widget.maxFontSize;
 
     while (fontSize > _minimumFontSize) {
       final textPainter = TextPainter(

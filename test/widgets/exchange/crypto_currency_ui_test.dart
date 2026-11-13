@@ -168,9 +168,7 @@ void main() {
                 width: 360,
                 child: CurrencyRow(
                   currency: coins.firstWhere((e) => e.code == 'DASH'),
-                  isBase: false,
                   amount: 0.00012345,
-                  rate: null,
                   onCurrencyTap: () {},
                   onAmountChanged: (value) => amount = value,
                   status: '1 DASH = 100000 KRW',
@@ -198,9 +196,7 @@ void main() {
           home: Scaffold(
             body: CurrencyRow(
               currency: coins.first,
-              isBase: false,
               amount: null,
-              rate: null,
               onCurrencyTap: () {},
             ),
           ),

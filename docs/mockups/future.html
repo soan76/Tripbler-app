@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tripbler — 여행 에이전트 구상안</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=block" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F3F0E9;
+    --paper-2: #EAE6DC;
+    --ink: #1C1F23;
+    --ink-2: #4A4F57;
+    --ink-3: #7A7F87;
+    --rule: #D6D1C4;
+    --accent: #0061A4;
+
+    /* 앱 테마: ColorScheme.fromSeed(Colors.blue), 라이트 */
+    --m-primary: #0061A4;
+    --m-on-primary: #FFFFFF;
+    --m-pc: #D1E4FF;
+    --m-on-pc: #001D36;
+    --m-surface: #F8F9FF;
+    --m-on-surface: #191C20;
+    --m-on-sv: #43474E;
+    --m-sch: #E0E2EC;
+    --m-sc: #ECEEF4;
+    --m-outline: #73777F;
+    --m-ov: #C3C7CF;
+    --m-gain: #146C2E;
+    --m-loss: #BA1A1A;
+    --m-tab: #2196F3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans KR", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+  .mono { font-family: "IBM Plex Mono", "IBM Plex Sans KR", ui-monospace, monospace; }
+  .ms {
+    font-family: "Material Symbols Outlined";
+    font-weight: normal; font-style: normal;
+    line-height: 1; letter-spacing: normal; text-transform: none;
+    display: inline-block; white-space: nowrap; direction: ltr;
+    -webkit-font-feature-settings: "liga"; font-feature-settings: "liga";
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    font-size: 24px;
+  }
+  .emoji { font-family: "Noto Color Emoji", sans-serif; }
+
+  /* ---------- 머리말 ---------- */
+  header.top {
+    border-bottom: 1px solid var(--rule);
+  }
+  header.top .wrap {
+    display: flex; justify-content: space-between; align-items: center;
+    height: 64px; font-size: 14px; color: var(--ink-2);
+  }
+  header.top b { color: var(--ink); font-weight: 700; font-size: 17px; }
+  header.top nav a { color: var(--ink-2); text-decoration: none; margin-left: 22px; }
+  header.top nav a:hover { color: var(--ink); }
+
+  .hero { padding: 72px 0 40px; }
+  .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: end; }
+  .hero h1 {
+    font-size: 54px; line-height: 1.15; margin: 0 0 22px; font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p.lead { font-size: 18px; color: var(--ink-2); margin: 0 0 28px; max-width: 30em; }
+  .facts { display: grid; grid-template-columns: repeat(3, auto); gap: 8px 32px; justify-content: start; font-size: 14px; }
+  .facts dt { color: var(--ink-3); }
+  .facts dd { margin: 0; font-weight: 600; }
+  .hero-note { font-size: 13px; color: var(--ink-3); border-left: 2px solid var(--rule); padding-left: 12px; max-width: 26em; }
+
+  .stage {
+    margin-top: 48px;
+    display: flex; justify-content: center; gap: 32px; align-items: flex-end;
+    padding: 48px 0 0;
+    background:
+      linear-gradient(var(--paper-2), var(--paper-2)) bottom / 100% 55% no-repeat;
+    border-bottom: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .stage .phone { margin-bottom: -120px; }
+  .stage .phone:nth-child(2) { margin-bottom: -60px; }
+
+  /* ---------- 섹션 ---------- */
+  section.feature { padding: 104px 0 24px; }
+  .feature-grid { display: grid; grid-template-columns: 380px 1fr; gap: 72px; align-items: start; }
+  .feature.flip .feature-grid { grid-template-columns: 1fr 380px; }
+  .feature.flip .copy { order: -1; }
+  .kicker { font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 10px; }
+  .copy h2 { font-size: 34px; line-height: 1.25; margin: 0 0 18px; letter-spacing: -0.01em; }
+  .copy > p { color: var(--ink-2); margin: 0 0 28px; max-width: 34em; }
+  .points { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--rule); }
+  .points li { padding: 16px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 9.5em 1fr; gap: 16px; font-size: 15px; }
+  .points li b { font-weight: 600; }
+  .points li span { color: var(--ink-2); }
+  .copy .phones-row { display: flex; gap: 28px; margin-top: 40px; flex-wrap: wrap; }
+
+  .divider { height: 1px; background: var(--rule); margin: 96px 0 0; }
+
+  /* ---------- 휴대폰 틀 ---------- */
+  .phone {
+    width: 360px; flex: none;
+    background: #111; border-radius: 44px; padding: 10px;
+    box-shadow: 0 1px 0 #2a2a2a inset, 0 30px 60px -30px rgba(28,31,35,.45), 0 12px 24px -12px rgba(28,31,35,.25);
+  }
+  .phone.sm { width: 300px; border-radius: 38px; padding: 8px; }
+  .screen {
+    position: relative;
+    height: 740px; border-radius: 34px; overflow: hidden;
+    background: var(--m-surface); color: var(--m-on-surface);
+    font-family: "Noto Sans KR", Roboto, sans-serif; font-size: 14px; line-height: 1.4;
+    display: flex; flex-direction: column;
+  }
+  .phone.sm .screen { height: 620px; border-radius: 30px; }
+  .statusbar {
+    height: 32px; flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; font-size: 13px; font-weight: 500;
+  }
+  .statusbar .ms { font-size: 16px; margin-left: 2px; }
+  .topbar {
+    height: 56px; flex: none; position: relative; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700;
+  }
+  .topbar .lead-ic { position: absolute; left: 16px; top: 14px; font-size: 28px; }
+  .topbar.back { justify-content: flex-start; padding-left: 16px; gap: 12px; }
+  .topbar.back .ms { font-size: 26px; }
+  .body { flex: 1; overflow: hidden; position: relative; }
+
+  /* 하단 도넛 손잡이 */
+  .handle {
+    position: absolute; left: 50%; bottom: 17px; transform: translateX(-50%);
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 3px solid rgba(0,97,164,.45);
+  }
+  .gesture { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); width: 110px; height: 4px; border-radius: 2px; background: #1a1a1a; opacity: .75; }
+
+  /* ---------- 환율 ---------- */
+  .updated { text-align: center; font-size: 12px; color: var(--m-on-sv); padding: 12px 16px; }
+  .row {
+    display: flex; align-items: center; min-height: 72px; padding: 0 4px 0 16px;
+    border-bottom: 1px solid var(--m-ov); background: var(--m-surface);
+  }
+  .row.base { background: var(--m-pc); color: var(--m-on-pc); }
+  .row .cur { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; }
+  .row .cur .flag { font-size: 26px; line-height: 1; width: 28px; text-align: center; }
+  .row .cur .ms { font-size: 22px; margin-left: -4px; color: var(--m-on-sv); }
+  .row.base .cur .ms { color: var(--m-on-pc); }
+  .coin { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px; }
+  .row .amt { flex: 1; text-align: right; padding: 0 12px; min-width: 0; }
+  .row .amt .v { font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+  .row.base .amt .v { border-bottom: 2px solid var(--m-primary); padding-bottom: 1px; }
+  .row .amt .st { font-size: 11px; color: var(--m-on-sv); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .gr { width: 48px; height: 48px; display: grid; place-items: center; color: var(--m-on-sv); }
+  .row .gr.none { visibility: hidden; }
+  .btn-outline {
+    margin: 16px 16px 0; height: 52px; border: 1px solid var(--m-outline); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 500;
+  }
+  .btn-outline .ms { font-size: 18px; }
+  .section-t { font-size: 22px; padding: 32px 16px 16px; }
+
+  /* 차트 카드 */
+  .card { margin: 0 16px; border: 1px solid var(--m-ov); border-radius: 12px; background: var(--m-surface); padding: 12px 12px 14px; }
+  .card-h { display: flex; align-items: center; gap: 4px; }
+  .card-h .t { font-size: 16px; font-weight: 500; flex: 1; }
+  .card-h .sub { font-size: 11px; color: var(--m-on-sv); }
+  .card-h .ms { font-size: 22px; color: var(--m-on-sv); width: 36px; text-align: center; }
+  .pair { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 6px; }
+  .pair .side { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; background: var(--m-sc); font-weight: 500; }
+  .pair .side .flag { font-size: 20px; }
+  .pair .swap { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--m-ov); color: var(--m-primary); }
+  .pair .swap .ms { font-size: 20px; }
+  .rate { display: flex; align-items: baseline; justify-content: space-between; margin: 10px 2px 2px; }
+  .rate .big { font-size: 20px; font-weight: 700; }
+  .rate .big small { font-size: 13px; font-weight: 400; color: var(--m-on-sv); }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--m-pc); color: var(--m-on-pc); }
+  .delta { font-size: 12px; color: var(--m-gain); margin: 0 2px 6px; }
+  .chart-svg { display: block; width: 100%; height: auto; }
+  .periods { display: flex; gap: 4px; margin-top: 10px; }
+  .periods span { flex: 1; text-align: center; padding: 8px 0; border-radius: 4px; background: var(--m-sch); color: var(--m-on-sv); font-size: 12px; font-weight: 500; }
+  .periods span.on { background: var(--m-primary); color: var(--m-on-primary); }
+  .compare { display: flex; gap: 8px; margin-top: 10px; }
+  .compare div { flex: 1; background: var(--m-sc); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+  .compare div b { display: block; font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0 0; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--m-ov); }
+  .dots i.on { background: var(--m-primary); width: 18px; border-radius: 3px; }
+
+  /* ---------- 지도 ---------- */
+  .map-bg { position: absolute; inset: 0; }
+  .searchbar {
+    position: absolute; left: 12px; right: 12px; top: 10px; height: 52px; border-radius: 26px;
+    background: var(--m-sch); display: flex; align-items: center; padding: 0 6px 0 18px; gap: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.12);
+  }
+  .searchbar .q { flex: 1; font-size: 15px; }
+  .searchbar .ms { width: 40px; text-align: center; color: var(--m-on-sv); }
+  .fab-loc {
+    position: absolute; right: 14px; bottom: 286px; width: 48px; height: 48px; border-radius: 14px;
+    background: var(--m-surface); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.18); color: var(--m-on-sv);
+  }
+  .scale { position: absolute; left: 14px; bottom: 292px; font-size: 11px; color: #333; }
+  .scale i { display: block; width: 64px; height: 6px; border: 2px solid #333; border-top: 0; margin-top: 2px; }
+  .place {
+    position: absolute; left: 0; right: 0; bottom: 0; background: var(--m-surface);
+    border-radius: 24px 24px 0 0; padding: 10px 18px 64px; box-shadow: 0 -4px 16px rgba(0,0,0,.12);
+  }
+  .grab { width: 32px; height: 4px; border-radius: 2px; background: var(--m-ov); margin: 0 auto 12px; }
+  .place .name { font-size: 20px; font-weight: 700; display: flex; justify-content: space-between; align-items: flex-start; }
+  .place .name .ms { font-size: 22px; color: var(--m-on-sv); }
+  .place .addr { font-size: 13px; color: var(--m-on-sv); margin: 2px 0 12px; }
+  .meta { display: flex; gap: 16px; font-size: 13px; margin-bottom: 14px; }
+  .meta span { display: flex; align-items: center; gap: 4px; }
+  .meta .ms { font-size: 18px; }
+  .meta .open { color: var(--m-gain); }
+  .place .acts { display: flex; gap: 8px; }
+  .fbtn { height: 40px; border-radius: 20px; padding: 0 16px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
+  .fbtn .ms { font-size: 18px; }
+  .fbtn.fill { background: var(--m-primary); color: #fff; }
+  .fbtn.tonal { background: var(--m-pc); color: var(--m-on-pc); }
+  .fbtn.line { border: 1px solid var(--m-outline); color: var(--m-primary); }
+  .stale { font-size: 11px; color: var(--m-on-sv); margin-top: 10px; display: flex; align-items: center; gap: 4px; }
+  .stale .ms { font-size: 14px; }
+
+  /* 지도 검색 결과 */
+  .results { position: absolute; left: 0; right: 0; bottom: 0; top: 330px; background: var(--m-surface); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.12); padding: 10px 0 0; }
+  .results .rh { display: flex; justify-content: space-between; padding: 0 18px 8px; font-size: 13px; color: var(--m-on-sv); }
+  .results .it { padding: 12px 18px; border-top: 1px solid var(--m-ov); }
+  .results .it b { display: block; font-weight: 500; font-size: 15px; }
+  .results .it span { font-size: 12px; color: var(--m-on-sv); }
+
+  /* ---------- 번역 ---------- */
+  .tr-head { padding: 4px 16px 12px; }
+  .tr-head .t { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+  .langs { display: flex; align-items: center; gap: 6px; }
+  .lang { flex: 1; height: 44px; border-radius: 22px; border: 1px solid var(--m-ov); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 14px; font-size: 14px; }
+  .lang .ms { font-size: 20px; color: var(--m-on-sv); }
+  .langs > .ms { color: var(--m-primary); }
+  .info { margin: 0 16px 10px; display: flex; gap: 8px; align-items: center; background: var(--m-sc); padding: 10px 12px; border-radius: 10px; font-size: 12px; color: var(--m-on-sv); }
+  .info .ms { font-size: 18px; }
+  .tr-cards { display: flex; gap: 12px; padding: 0 16px; }
+  .tr-card { flex: none; width: 272px; height: 380px; border-radius: 16px; padding: 14px 16px; background: var(--m-sc); }
+  .tr-card.res { background: var(--m-pc); color: var(--m-on-pc); }
+  .tr-card .lab { font-size: 12px; font-weight: 500; color: var(--m-on-sv); margin-bottom: 10px; display: flex; justify-content: space-between; }
+  .tr-card.res .lab { color: var(--m-on-pc); }
+  .tr-card p { margin: 0 0 10px; font-size: 16px; line-height: 1.6; }
+  .tr-card .jp { font-family: "Noto Sans JP", "Noto Sans KR", sans-serif; }
+  .tr-acts { display: flex; gap: 8px; padding: 14px 16px; }
+  .tr-acts .fbtn { flex: 1; justify-content: center; }
+
+  /* 카메라 */
+  .cam { margin: 0 16px; height: 470px; border-radius: 20px; overflow: hidden; position: relative; background: #2a2723; }
+  .cam .frame { position: absolute; left: 28px; right: 28px; top: 90px; height: 210px; border-radius: 12px; }
+  .cam .frame::before, .cam .frame::after { content: ""; position: absolute; inset: 0; border: 3px solid #fff; border-radius: 12px; clip-path: polygon(0 0, 22% 0, 22% 3px, 3px 3px, 3px 30%, 0 30%, 0 0, 78% 0, 100% 0, 100% 30%, calc(100% - 3px) 30%, calc(100% - 3px) 3px, 78% 3px, 78% 0); }
+  .cam .frame::after { transform: rotate(180deg); }
+  .cam .hint { position: absolute; left: 0; right: 0; top: 24px; text-align: center; color: #fff; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+  .cam .ctrls { position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: space-around; align-items: center; color: #fff; }
+  .cam .ctrls .ms { font-size: 26px; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.14); }
+  .shutter { width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff; display: grid; place-items: center; }
+  .shutter i { width: 52px; height: 52px; border-radius: 50%; background: #fff; }
+
+  /* ---------- 탭 메뉴 시연 ---------- */
+  .menu-demo { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 8px; max-width: 420px; justify-self: center; width: 100%; }
+  .phone.sm .lang { font-size: 12px; white-space: nowrap; padding: 0 4px 0 10px; height: 38px; }
+  .phone.sm .lang .ms { font-size: 18px; }
+  .demo { background: var(--m-surface); border: 1px solid var(--rule); border-radius: 16px; height: 200px; min-width: 320px; position: relative; overflow: hidden; font-family: "Noto Sans KR", sans-serif; }
+  .demo .cap { position: absolute; left: 16px; top: 12px; font-size: 13px; color: var(--ink-3); font-family: "IBM Plex Sans KR", sans-serif; }
+  .tabbtn { position: absolute; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--m-sch); color: var(--m-on-sv); border: 1.5px solid var(--m-ov); }
+  .tabbtn.on { background: var(--m-tab); color: #fff; border-color: var(--m-tab); }
+  .tabbtn .ms { font-size: 26px; }
+  .tabbtn small { position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); font-size: 12px; background: var(--m-surface); padding: 0 4px; line-height: 16px; color: var(--m-on-sv); }
+  .tabbtn.on small { font-weight: 700; }
+  .homebtn { position: absolute; width: 76px; height: 76px; border-radius: 50%; background: var(--m-pc); color: var(--m-on-pc); border: 1.5px solid var(--m-ov); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .homebtn .ms { font-size: 28px; }
+  .arc { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); width: 280px; height: 140px; border-radius: 140px 140px 0 0; background: rgba(0,97,164,.05); border: 1px dashed rgba(0,97,164,.25); border-bottom: 0; }
+  .swipe { position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); color: var(--ink-3); font-size: 12px; display: flex; flex-direction: column; align-items: center; font-family: "IBM Plex Sans KR", sans-serif; }
+  .swipe .ms { font-size: 22px; }
+
+  /* ---------- 설정 / 드로어 ---------- */
+  .tile { display: flex; align-items: center; padding: 14px 20px; gap: 16px; border-bottom: 1px solid var(--m-ov); }
+  .tile .tx { flex: 1; }
+  .tile .tx b { display: block; font-weight: 500; font-size: 16px; }
+  .tile .tx span { font-size: 13px; color: var(--m-on-sv); }
+  .tile .ms { color: var(--m-on-sv); }
+  .seg { display: flex; border: 1px solid var(--m-outline); border-radius: 20px; overflow: hidden; margin: 6px 20px 0; }
+  .seg span { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; border-right: 1px solid var(--m-outline); }
+  .seg span:last-child { border-right: 0; }
+  .seg span.on { background: var(--m-pc); color: var(--m-on-pc); font-weight: 500; }
+  .drawer { position: absolute; inset: 0 70px 0 0; background: var(--m-surface); border-radius: 0 16px 16px 0; box-shadow: 4px 0 18px rgba(0,0,0,.18); padding: 24px 0; display: flex; flex-direction: column; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.32); }
+  .acct { padding: 8px 24px 20px; border-bottom: 1px solid var(--m-ov); }
+  .acct .ms { font-size: 56px; color: var(--m-on-sv); }
+  .acct b { display: block; font-size: 18px; margin-top: 6px; }
+  .acct span { font-size: 13px; color: var(--m-on-sv); }
+  .dr-item { display: flex; gap: 14px; align-items: center; padding: 16px 24px; font-size: 15px; }
+  .dr-item .ms { color: var(--m-on-sv); }
+  .dr-foot { margin-top: auto; padding: 16px 24px; color: var(--m-loss); font-size: 15px; }
+
+  /* ---------- 구조 ---------- */
+  .arch { display: grid; grid-template-columns: 1fr 40px 1fr 40px 1fr; align-items: stretch; margin-top: 40px; }
+  .node { border: 1px solid var(--ink); background: #FBFAF6; padding: 20px; border-radius: 4px; }
+  .node h4 { margin: 0 0 4px; font-size: 17px; }
+  .node .mono { font-size: 12px; color: var(--ink-3); }
+  .node ul { margin: 14px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); }
+  .node ul li { margin: 4px 0; }
+  .arrow { display: grid; place-items: center; color: var(--ink-3); }
+  .arrow .ms { font-size: 28px; }
+  .arch-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 40px; }
+  .arch-notes h5 { margin: 0 0 6px; font-size: 15px; }
+  .arch-notes p { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+  footer { margin-top: 112px; border-top: 1px solid var(--rule); padding: 28px 0 48px; font-size: 13px; color: var(--ink-3); }
+  footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+
+  @media (max-width: 960px) {
+    .hero-grid, .feature-grid, .feature.flip .feature-grid { grid-template-columns: 1fr; gap: 40px; }
+    .feature.flip .copy { order: 0; }
+    .feature-grid > .phone { justify-self: center; }
+    .stage .phone:not(:nth-child(2)) { display: none; }
+    .arch { grid-template-columns: 1fr; }
+    .arrow { height: 40px; }
+    .arrow .ms { transform: rotate(90deg); }
+    .arch-notes { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 40px; }
+  }
+  @media (max-width: 420px) {
+    .wrap { padding: 0 16px; }
+    .phone { transform: scale(.88); transform-origin: top center; margin-bottom: -88px; }
+    .points li { grid-template-columns: 1fr; gap: 2px; }
+    .menu-demo { grid-template-columns: 1fr; }
+    header.top nav { display: none; }
+  }
+
+  /* ---------- 향후 방향 전용 ---------- */
+  .badge-plan { display: inline-block; font-size: 13px; font-weight: 600; color: #8A4B00; background: #FBE7CC; border-radius: 4px; padding: 2px 8px; margin-bottom: 14px; }
+  .askbar {
+    position: absolute; left: 12px; right: 12px; bottom: 14px; height: 52px; border-radius: 26px;
+    background: var(--m-sch); display: flex; align-items: center; gap: 4px; padding: 0 6px 0 6px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.14); z-index: 5;
+  }
+  .askbar .apps { width: 40px; height: 40px; display: grid; place-items: center; color: var(--m-on-sv); }
+  .askbar .ph { flex: 1; font-size: 14px; color: var(--m-on-sv); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .askbar .mic { width: 40px; height: 40px; border-radius: 50%; background: var(--m-primary); color: #fff; display: grid; place-items: center; }
+  .askbar .mic .ms { font-size: 22px; }
+  .reqchip {
+    margin: 4px 16px 10px; display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px;
+    border-radius: 12px; background: var(--m-pc); color: var(--m-on-pc); font-size: 13px;
+  }
+  .reqchip .ms { font-size: 18px; }
+  .reqchip .q { flex: 1; min-width: 0; }
+  .reqchip .q b { display: block; font-weight: 500; font-size: 14px; }
+  .reqchip .q span { font-size: 11px; opacity: .8; }
+  .chips { display: flex; gap: 6px; padding: 0 16px 10px; overflow: hidden; }
+  .chip2 { flex: none; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--m-outline); display: flex; align-items: center; gap: 4px; font-size: 13px; color: var(--m-on-sv); background: var(--m-surface); }
+  .chip2.on { background: var(--m-pc); border-color: var(--m-pc); color: var(--m-on-pc); }
+  .chip2 .ms { font-size: 16px; }
+
+  /* 음성 */
+  .listen { position: absolute; left: 0; right: 0; bottom: 0; background: var(--m-surface); border-radius: 24px 24px 0 0; padding: 14px 20px 26px; box-shadow: 0 -6px 20px rgba(0,0,0,.18); z-index: 6; }
+  .listen .lab { font-size: 13px; color: var(--m-primary); display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+  .wave { display: flex; align-items: center; gap: 3px; height: 26px; margin-bottom: 14px; }
+  .wave i { width: 4px; border-radius: 2px; background: var(--m-primary); }
+  .listen .said { font-size: 22px; font-weight: 500; line-height: 1.35; margin-bottom: 6px; }
+  .listen .said u { text-decoration-color: var(--m-ov); text-underline-offset: 4px; }
+  .listen .hint2 { font-size: 12px; color: var(--m-on-sv); margin-bottom: 16px; }
+  .listen .acts { display: flex; gap: 8px; }
+  .listen .acts .fbtn { flex: 1; justify-content: center; }
+  .count { position: relative; }
+  .count::after { content: ""; position: absolute; left: 0; bottom: 0; height: 3px; width: 62%; background: rgba(255,255,255,.7); border-radius: 0 0 20px 20px; }
+
+  /* 지도 결과 목록 */
+  .pin { position: absolute; width: 28px; height: 28px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--m-loss); display: grid; place-items: center; box-shadow: 0 2px 4px rgba(0,0,0,.25); }
+  .pin b { transform: rotate(45deg); color: #fff; font-size: 12px; }
+  .pin.sel { background: var(--m-primary); width: 34px; height: 34px; }
+  .me { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #1A73E8; border: 3px solid #fff; box-shadow: 0 0 0 8px rgba(26,115,232,.18); }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--m-surface); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.12); padding: 10px 0 78px; }
+  .sheet .rh { display: flex; justify-content: space-between; padding: 0 18px 6px; font-size: 13px; color: var(--m-on-sv); }
+  .res { display: flex; gap: 12px; align-items: center; padding: 10px 18px; border-top: 1px solid var(--m-ov); }
+  .res .no { width: 24px; height: 24px; border-radius: 50%; background: var(--m-loss); color: #fff; font-size: 12px; display: grid; place-items: center; flex: none; }
+  .res.sel .no { background: var(--m-primary); }
+  .res .tx { flex: 1; min-width: 0; }
+  .res .tx b { display: block; font-size: 15px; font-weight: 500; }
+  .res .tx span { font-size: 12px; color: var(--m-on-sv); }
+  .res .tx .open { color: var(--m-gain); }
+  .res .go { width: 40px; height: 40px; border-radius: 50%; background: var(--m-pc); color: var(--m-on-pc); display: grid; place-items: center; flex: none; }
+  .res .go .ms { font-size: 20px; }
+
+  /* 메뉴표 */
+  .menu-meta { padding: 0 16px 8px; font-size: 12px; color: var(--m-on-sv); }
+  .mt { margin: 0 16px; border: 1px solid var(--m-ov); border-radius: 12px; overflow: hidden; }
+  .mt .r { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--m-ov); }
+  .mt .r:last-child { border-bottom: 0; }
+  .mt .r .nm { flex: 1; min-width: 0; }
+  .mt .r .nm small { display: block; font-size: 11px; color: var(--m-on-sv); font-family: "Noto Sans JP", "Noto Sans KR", sans-serif; }
+  .mt .r .nm b { font-size: 15px; font-weight: 500; }
+  .mt .r .pr { text-align: right; }
+  .mt .r .pr b { display: block; font-size: 15px; font-weight: 700; }
+  .mt .r .pr small { font-size: 11px; color: var(--m-on-sv); }
+  .mt .r.note { background: var(--m-sc); font-size: 12px; color: var(--m-on-sv); }
+  .next-acts { display: flex; gap: 8px; padding: 12px 16px; flex-wrap: wrap; }
+  .next-acts .fbtn { height: 36px; padding: 0 12px; font-size: 13px; }
+
+  /* 환율 답 */
+  .answer { margin: 4px 16px 12px; padding: 14px 16px; border-radius: 12px; background: var(--m-pc); color: var(--m-on-pc); }
+  .answer .q { font-size: 12px; opacity: .8; display: flex; gap: 6px; align-items: center; }
+  .answer .q .ms { font-size: 16px; }
+  .answer .a { font-size: 22px; font-weight: 700; margin: 6px 0 2px; }
+  .answer .s { font-size: 12px; opacity: .8; }
+
+  /* 일정 */
+  .daybar { padding: 0 20px 12px; }
+  .daybar b { font-size: 20px; display: block; }
+  .daybar span { font-size: 13px; color: var(--m-on-sv); }
+  .nextcard { margin: 0 16px 14px; border-radius: 16px; background: var(--m-primary); color: #fff; padding: 14px 16px; }
+  .nextcard .k { font-size: 12px; opacity: .85; }
+  .nextcard .t { font-size: 20px; font-weight: 700; margin: 2px 0 4px; }
+  .nextcard .d { font-size: 13px; opacity: .9; display: flex; gap: 6px; align-items: center; }
+  .nextcard .d .ms { font-size: 16px; }
+  .nextcard .acts { display: flex; gap: 8px; margin-top: 12px; }
+  .nextcard .fbtn { height: 36px; background: #fff; color: var(--m-primary); }
+  .nextcard .fbtn.ghost { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.6); }
+  .tl { padding: 0 16px 0 20px; }
+  .tl .it { display: grid; grid-template-columns: 48px 18px 1fr; gap: 8px; min-height: 56px; }
+  .tl .tm { font-size: 13px; color: var(--m-on-sv); padding-top: 1px; }
+  .tl .ln { position: relative; }
+  .tl .ln::before { content: ""; position: absolute; left: 8px; top: 0; bottom: 0; width: 2px; background: var(--m-ov); }
+  .tl .ln i { position: absolute; left: 3px; top: 3px; width: 12px; height: 12px; border-radius: 50%; background: var(--m-surface); border: 2px solid var(--m-outline); }
+  .tl .it.done .ln i { background: var(--m-outline); }
+  .tl .it.now .ln i { border-color: var(--m-primary); background: var(--m-primary); box-shadow: 0 0 0 4px var(--m-pc); }
+  .tl .tx b { display: block; font-size: 15px; font-weight: 500; }
+  .tl .tx span { font-size: 12px; color: var(--m-on-sv); }
+  .tl .it.done .tx b, .tl .it.done .tm { color: var(--m-outline); }
+
+  /* 표지판 */
+  .shot { margin: 0 16px 12px; height: 120px; border-radius: 12px; overflow: hidden; position: relative; }
+  .sumcard { margin: 0 16px 12px; padding: 14px 16px; border-radius: 12px; background: #FFF4D6; color: #3A2A00; border-left: 4px solid #B26A00; }
+  .sumcard .k { font-size: 12px; font-weight: 600; color: #8A4B00; margin-bottom: 4px; }
+  .sumcard p { margin: 0; font-size: 16px; line-height: 1.5; font-weight: 500; }
+  .full { margin: 0 16px; padding: 12px 14px; border-radius: 12px; background: var(--m-sc); font-size: 14px; line-height: 1.6; }
+  .full .k { font-size: 12px; color: var(--m-on-sv); margin-bottom: 4px; }
+
+  /* 비교표 / 흐름 */
+  .chg { width: 100%; border-collapse: collapse; margin-top: 32px; font-size: 15px; }
+  .chg th, .chg td { text-align: left; padding: 14px 16px 14px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  .chg th { font-size: 13px; color: var(--ink-3); font-weight: 500; }
+  .chg td:first-child { font-weight: 600; width: 22%; }
+  .chg td:nth-child(2) { color: var(--ink-3); width: 30%; }
+  .flow { display: grid; grid-template-columns: 1fr 32px 1fr 32px 1fr 32px 1fr; margin-top: 40px; align-items: stretch; }
+  .flow .node { padding: 16px; }
+  .flow .node h4 { font-size: 15px; }
+  .flow .node ul { margin-top: 8px; font-size: 13px; }
+  .node.new { border-style: dashed; border-color: #8A4B00; }
+  .node.new h4::after { content: " 신규"; font-size: 12px; color: #8A4B00; font-weight: 600; }
+  .open-q { margin-top: 32px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .open-q div { border-top: 2px solid var(--ink); padding-top: 12px; }
+  .open-q h5 { margin: 0 0 6px; font-size: 15px; }
+  .open-q p { margin: 0; font-size: 14px; color: var(--ink-2); }
+  @media (max-width: 960px) {
+    .flow { grid-template-columns: 1fr; }
+    .flow .arrow .ms { transform: rotate(90deg); }
+    .open-q { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <b>Tripbler</b>
+    <nav>
+      <a href="#ask">요청하기</a>
+      <a href="#nearby">찾기</a>
+      <a href="#menu">읽기</a>
+      <a href="#calc">계산하기</a>
+      <a href="#today">확인하기</a>
+      <a href="#changes">바뀌는 점</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero" style="padding-bottom:24px">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="badge-plan">구상안 · 아직 구현하지 않은 화면</span>
+        <h1>말하면<br>앱이 <em>바로 움직입니다</em></h1>
+        <p class="lead">별도의 AI 채팅 화면을 없애고, 어느 화면에서든 한 문장으로 요청하면 결과가 지도·번역·환율·일정 화면에 바로 반영되는 여행 에이전트로 넓혀 갑니다. 찾기, 읽기, 계산하기, 확인하기를 요청 한 번으로 끝내는 것이 목표입니다.</p>
+      </div>
+      <p class="hero-note">트립블러 기획서의 시나리오를 화면으로 옮긴 구상안입니다. 지금 앱의 테마와 화면 구조를 그대로 쓰고, 바뀌는 부분만 더했습니다. 값은 모두 예시입니다.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 01 요청하기 -->
+<section class="feature" id="ask" style="padding-top:56px">
+  <div class="wrap feature-grid">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>12:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+        <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+        <div class="body">
+          <div class="updated">마지막 업데이트: 2026.11.14 12:30</div>
+          <div class="row base"><div class="cur"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">10,000</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+          <div class="row"><div class="cur"><span class="flag emoji">🇯🇵</span>JPY<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">1,081</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+          <div class="row"><div class="cur"><span class="flag emoji">🇺🇸</span>USD<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">7.22</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+          <div class="scrim" style="z-index:5"></div>
+          <div class="listen">
+            <div class="lab"><span class="ms" style="font-size:18px">mic</span>듣고 있어요</div>
+            <div class="wave"><i style="height:8px"></i><i style="height:16px"></i><i style="height:24px"></i><i style="height:12px"></i><i style="height:20px"></i><i style="height:26px"></i><i style="height:14px"></i><i style="height:8px"></i><i style="height:18px"></i><i style="height:22px"></i><i style="height:10px"></i><i style="height:6px"></i></div>
+            <div class="said"><u>여기 근처 라멘집</u> 찾아줘</div>
+            <div class="hint2">잘못 들었으면 문장을 눌러 고칠 수 있어요.</div>
+            <div class="acts"><div class="fbtn line"><span class="ms">edit</span>고치기</div><div class="fbtn fill count"><span class="ms">arrow_forward</span>바로 실행</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="copy">
+      <div class="kicker">01 요청하기</div>
+      <h2>모든 화면 아래에<br>요청창 하나</h2>
+      <p>지금의 도넛 손잡이 자리에 요청창을 둡니다. 어느 탭에 있든 마이크를 누르거나 짧게 입력하면 됩니다. 왼쪽 버튼은 지금처럼 부채꼴 탭 메뉴를 엽니다.</p>
+      <ul class="points">
+        <li><b>들은 문장 보여 주기</b><span>음성은 인식한 문장을 잠깐 띄우고, 잘못 들었으면 바로 고칠 수 있게 합니다. 고치지 않으면 2초 뒤 실행합니다.</span></li>
+        <li><b>되묻지 않기</b><span>요청이 모호하면 현재 위치, 현지 통화, 오늘 날짜 같은 기본값으로 먼저 실행하고 결과 화면에서 조건을 바꾸게 합니다.</span></li>
+        <li><b>권한은 그때그때</b><span>마이크·위치·카메라 권한은 그 요청이 필요할 때만 묻습니다.</span></li>
+      </ul>
+      <div class="phones-row">
+        <div class="phone sm">
+          <div class="screen">
+            <div class="statusbar"><span>12:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+            <div class="topbar"><span class="ms lead-ic">menu</span>번역</div>
+            <div class="body">
+              <div class="tr-head"><div class="t">카메라 번역</div></div>
+              <div class="cam" style="height:390px">
+                <svg viewBox="0 0 268 390" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#signart"/></svg>
+              </div>
+              <div class="askbar"><span class="apps ms">apps</span><span class="ph">무엇이든 요청하세요</span><span class="mic"><span class="ms">mic</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 찾기 -->
+<section class="feature flip" id="nearby">
+  <div class="wrap feature-grid">
+    <div class="copy">
+      <div class="kicker">02 찾기</div>
+      <h2>"여기 근처 라멘집 찾아줘"</h2>
+      <p>현재 위치를 확인하고, 요청에서 음식 종류와 조건을 뽑아 주변을 검색합니다. 지도 탭으로 넘어가 핀과 목록을 함께 띄웁니다.</p>
+      <ul class="points">
+        <li><b>요청 칩</b><span>화면 위에 무엇을 요청했고 어떤 기준으로 찾았는지 남겨, 결과가 왜 이렇게 나왔는지 알 수 있게 합니다.</span></li>
+        <li><b>조건 바꾸기</b><span>영업 중, 평점, 거리 같은 조건은 칩으로 바로 바꿉니다. 다시 말하지 않아도 됩니다.</span></li>
+        <li><b>다음 행동</b><span>목록마다 길찾기 버튼을 두어 고른 곳으로 바로 출발합니다. 지금의 상세 카드와 길찾기를 그대로 씁니다.</span></li>
+      </ul>
+    </div>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>12:42</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+        <div class="topbar"><span class="ms lead-ic">menu</span>맵</div>
+        <div class="body">
+          <svg class="map-bg" viewBox="0 0 340 652" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><use href="#mapart"/></svg>
+          <div style="position:absolute;inset:0 0 auto 0;background:linear-gradient(var(--m-surface) 78%, transparent);padding-bottom:16px">
+            <div class="reqchip"><span class="ms">auto_awesome</span><div class="q"><b>여기 근처 라멘집</b><span>현재 위치에서 1km 이내 · 거리순</span></div><span class="ms">close</span></div>
+            <div class="chips"><span class="chip2 on"><span class="ms">check</span>영업 중</span><span class="chip2">평점 4.0+</span><span class="chip2 on">1km</span><span class="chip2">거리순<span class="ms">arrow_drop_down</span></span></div>
+          </div>
+          <div class="me" style="left:150px;top:250px"></div>
+          <div class="pin sel" style="left:178px;top:196px"><b>1</b></div>
+          <div class="pin" style="left:96px;top:210px"><b>2</b></div>
+          <div class="pin" style="left:222px;top:268px"><b>3</b></div>
+          <div class="pin" style="left:60px;top:300px"><b>4</b></div>
+          <div class="sheet">
+            <div class="grab"></div>
+            <div class="rh"><span>라멘집 6곳 · 지금 영업 중</span></div>
+            <div class="res sel"><span class="no">1</span><div class="tx"><b>멘야 하나비</b><span>180m · 평점 4.4 · <span class="open">영업 중</span></span></div><span class="go"><span class="ms">directions</span></span></div>
+            <div class="res"><span class="no">2</span><div class="tx"><b>아사쿠사 라멘 요로이야</b><span>320m · 평점 4.2 · <span class="open">영업 중</span></span></div><span class="go"><span class="ms">directions</span></span></div>
+            <div class="res"><span class="no">3</span><div class="tx"><b>이치란 아사쿠사점</b><span>450m · 평점 4.1 · <span class="open">영업 중</span></span></div><span class="go"><span class="ms">directions</span></span></div>
+          </div>
+          <div class="askbar"><span class="apps ms">apps</span><span class="ph">조건을 말해도 돼요 · "더 싼 곳"</span><span class="mic"><span class="ms">mic</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 읽기 -->
+<section class="feature" id="menu">
+  <div class="wrap feature-grid">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>12:58</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+        <div class="topbar"><span class="ms lead-ic">menu</span>번역</div>
+        <div class="body">
+          <div class="reqchip"><span class="ms">auto_awesome</span><div class="q"><b>메뉴판 번역하고 원화로 알려줘</b><span>일본어 → 한국어 · 100엔 = 924.50원 (12:30 기준)</span></div><span class="ms">close</span></div>
+          <div class="menu-meta">메뉴 4개 · 가격을 찾은 항목만 원화로 바꿨어요</div>
+          <div class="mt">
+            <div class="r"><div class="nm"><small>醤油ラーメン</small><b>간장 라멘</b></div><div class="pr"><b>약 9,060원</b><small>980엔</small></div></div>
+            <div class="r"><div class="nm"><small>味噌ラーメン</small><b>된장 라멘</b></div><div class="pr"><b>약 9,980원</b><small>1,080엔</small></div></div>
+            <div class="r"><div class="nm"><small>餃子（6個）</small><b>교자 6개</b></div><div class="pr"><b>약 4,160원</b><small>450엔</small></div></div>
+            <div class="r"><div class="nm"><small>大盛り</small><b>곱빼기 추가</b></div><div class="pr"><b>+ 약 1,390원</b><small>+150엔</small></div></div>
+            <div class="r note"><span class="ms" style="font-size:16px">info</span>식권은 입구의 발매기에서 사야 해요.</div>
+          </div>
+          <div class="next-acts"><div class="fbtn tonal"><span class="ms">photo_camera</span>다시 찍기</div><div class="fbtn line"><span class="ms">currency_exchange</span>통화 바꾸기</div><div class="fbtn line"><span class="ms">image</span>원본 사진</div></div>
+          <div class="askbar"><span class="apps ms">apps</span><span class="ph">"두 개 시키면 얼마야?"</span><span class="mic"><span class="ms">mic</span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="copy">
+      <div class="kicker">03 읽기</div>
+      <h2>메뉴판 한 장이<br>원화 메뉴표로</h2>
+      <p>글자를 인식한 뒤 메뉴 이름과 가격을 나누고, 이름은 한국어로 옮기고 가격은 오늘 환율로 원화를 붙입니다. 번역 앱 → 환율 앱 → 계산으로 이어지던 과정이 사진 한 장으로 줄어듭니다.</p>
+      <ul class="points">
+        <li><b>원화가 먼저</b><span>원화를 크게, 현지 가격을 작게 보여 줍니다. 계산에 쓴 환율과 시각은 위에 밝힙니다.</span></li>
+        <li><b>가격 없는 줄</b><span>안내 문구처럼 가격이 없는 줄은 따로 모아 짧게 보여 줍니다.</span></li>
+        <li><b>이어서 묻기</b><span>"두 개 시키면 얼마야?"처럼 이 메뉴표를 두고 이어서 물을 수 있습니다.</span></li>
+      </ul>
+      <div class="phones-row">
+        <div class="phone sm">
+          <div class="screen">
+            <div class="statusbar"><span>15:10</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+            <div class="topbar"><span class="ms lead-ic">menu</span>번역</div>
+            <div class="body">
+              <div class="reqchip"><span class="ms">auto_awesome</span><div class="q"><b>이거 무슨 뜻이야?</b><span>일본어 → 한국어</span></div></div>
+              <div class="shot"><svg viewBox="0 0 268 120" width="100%" height="100%" aria-hidden="true"><rect width="268" height="120" fill="#2B3A4A"/><rect x="20" y="22" width="228" height="76" rx="4" fill="#F5C518"/><text x="134" y="56" text-anchor="middle" font-size="18" font-weight="700" fill="#1C1C1C" font-family="Noto Sans KR">東口 工事中</text><text x="134" y="82" text-anchor="middle" font-size="12" fill="#1C1C1C" font-family="Noto Sans KR">B2出口をご利用ください</text></svg></div>
+              <div class="sumcard"><div class="k">요약</div><p>동쪽 출구는 공사 중이에요. B2 출구로 나가세요.</p></div>
+              <div class="full"><div class="k">전체 번역</div>동쪽 출구 공사 중<br>B2 출구를 이용해 주십시오.</div>
+              <div class="askbar"><span class="apps ms">apps</span><span class="ph">무엇이든 요청하세요</span><span class="mic"><span class="ms">mic</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 계산하기 -->
+<section class="feature flip" id="calc">
+  <div class="wrap feature-grid">
+    <div class="copy">
+      <div class="kicker">04 계산하기</div>
+      <h2>"3,800엔이면<br>우리 돈으로 얼마야?"</h2>
+      <p>금액과 통화를 뽑아 환율 화면에 그대로 입력합니다. 답은 위에 한 줄로 보여 주고, 아래는 평소의 환율 화면이라 금액을 바로 고쳐 볼 수 있습니다.</p>
+      <ul class="points">
+        <li><b>숫자는 조회값에서</b><span>답의 숫자는 AI가 지어내지 않고 지금 앱이 받은 환율로 계산합니다.</span></li>
+        <li><b>네트워크가 불안할 때</b><span>지금처럼 마지막으로 받은 환율과 그 시각으로 계산하고, 저장된 값이라고 함께 알립니다.</span></li>
+        <li><b>통화 짐작</b><span>"엔", "달러"처럼 말한 단위를 통화로 바꾸고, 말하지 않으면 지금 있는 나라의 통화로 봅니다.</span></li>
+      </ul>
+    </div>
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>16:20</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+        <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+        <div class="body">
+          <div class="answer">
+            <div class="q"><span class="ms">auto_awesome</span>3,800엔이면 우리 돈으로 얼마야?</div>
+            <div class="a">약 35,130원</div>
+            <div class="s">100엔 = 924.50원 · 2026.11.14 16:00 기준</div>
+          </div>
+          <div class="row base"><div class="cur"><span class="flag emoji">🇯🇵</span>JPY<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">3,800</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+          <div class="row"><div class="cur"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">35,131</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+          <div class="row"><div class="cur"><span class="flag emoji">🇺🇸</span>USD<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">25.37</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+          <div class="row"><div class="cur"><span class="flag emoji">🇪🇺</span>EUR<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">23.35</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+          <div class="next-acts" style="padding-top:16px"><div class="fbtn tonal"><span class="ms">edit</span>금액 바꾸기</div><div class="fbtn line"><span class="ms">add</span>다른 통화로 보기</div></div>
+          <div class="askbar"><span class="apps ms">apps</span><span class="ph">"그럼 5천 엔은?"</span><span class="mic"><span class="ms">mic</span></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 확인하기 -->
+<section class="feature" id="today">
+  <div class="wrap feature-grid">
+    <div class="phone">
+      <div class="screen">
+        <div class="statusbar"><span>13:20</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+        <div class="topbar"><span class="ms lead-ic">menu</span>오늘</div>
+        <div class="body">
+          <div class="daybar"><b>11월 14일 토요일</b><span>도쿄 3일차 · 맑음 14°</span></div>
+          <div class="nextcard">
+            <div class="k">다음 일정 · 40분 뒤</div>
+            <div class="t">14:00 팀랩 플래닛</div>
+            <div class="d"><span class="ms">train</span>지금 위치에서 6.1km · 전철 약 32분</div>
+            <div class="acts"><div class="fbtn"><span class="ms">directions</span>길찾기</div><div class="fbtn ghost"><span class="ms">map</span>지도에서 보기</div></div>
+          </div>
+          <div class="tl">
+            <div class="it done"><div class="tm">09:00</div><div class="ln"><i></i></div><div class="tx"><b>츠키지 장외시장</b><span>아침 식사</span></div></div>
+            <div class="it done"><div class="tm">11:30</div><div class="ln"><i></i></div><div class="tx"><b>센소지</b><span>아사쿠사</span></div></div>
+            <div class="it now"><div class="tm" style="color:var(--m-primary);font-weight:500">14:00</div><div class="ln"><i></i></div><div class="tx"><b>팀랩 플래닛</b><span>예약 14:00 · 입장권 저장됨</span></div></div>
+            <div class="it"><div class="tm">18:30</div><div class="ln"><i></i></div><div class="tx"><b>시부야 스카이</b><span>일몰 16:38</span></div></div>
+            <div class="it"><div class="tm">20:00</div><div class="ln" style="--x:0"><i></i></div><div class="tx"><b>저녁 · 장소 미정</b><span>"시부야 이자카야 찾아줘"라고 해 보세요</span></div></div>
+          </div>
+          <div class="askbar"><span class="apps ms">apps</span><span class="ph">"오늘 일정 뭐야?"</span><span class="mic"><span class="ms">mic</span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="copy">
+      <div class="kicker">05 확인하기</div>
+      <h2>AI 버튼 자리에<br>"오늘" 화면</h2>
+      <p>채팅 화면이 사라진 부채꼴 메뉴의 가운데 자리에 오늘 일정을 둡니다. "오늘 일정 뭐야?"라고 물어도 이 화면이 열리고, 다음 일정까지 얼마나 걸리는지 현재 위치 기준으로 계산해 보여 줍니다.</p>
+      <ul class="points">
+        <li><b>다음 일정 먼저</b><span>지난 일정은 흐리게, 다음 일정은 맨 위 카드로 크게 보여 줍니다.</span></li>
+        <li><b>지도로 이어짐</b><span>일정의 장소는 지도 탭과 길찾기로 바로 이어집니다.</span></li>
+        <li><b>빈 시간 채우기</b><span>장소를 정하지 않은 일정에는 요청 예시를 띄워, 말 한마디로 찾게 합니다.</span></li>
+      </ul>
+      <div class="menu-demo" style="margin-top:40px;justify-self:start">
+        <div class="demo">
+          <div class="cap">부채꼴 메뉴: 가운데가 AI에서 오늘로</div>
+          <div class="arc"></div>
+          <div class="tabbtn" style="left:calc(50% - 125px);bottom:40px"><span class="ms">attach_money</span><small>환율</small></div>
+          <div class="tabbtn" style="left:calc(50% - 32px);bottom:90px"><span class="ms">map</span><small>지도</small></div>
+          <div class="tabbtn" style="left:calc(50% + 61px);bottom:40px"><span class="ms">translate</span><small>번역</small></div>
+          <div class="homebtn" style="left:calc(50% - 38px);bottom:8px;background:var(--m-tab);color:#fff;border-color:var(--m-tab)"><span class="ms">today</span>오늘</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 바뀌는 점 -->
+<section class="feature" id="changes">
+  <div class="wrap">
+    <div class="copy">
+      <div class="kicker">06 바뀌는 점</div>
+      <h2>지금 앱에서 무엇이 달라지나</h2>
+      <p>세 탭과 서버 구조는 그대로 두고, 그 위에 요청을 해석해 기능을 대신 실행하는 층을 더합니다.</p>
+    </div>
+    <table class="chg">
+      <thead><tr><th>부분</th><th>지금</th><th>바뀐 뒤</th></tr></thead>
+      <tbody>
+        <tr><td>AI 채팅 화면</td><td>자리만 있는 임시 화면</td><td>없앱니다. 요청은 모든 화면의 요청창에서 받습니다.</td></tr>
+        <tr><td>화면 아래</td><td>부채꼴 메뉴를 여는 도넛 손잡이</td><td>요청창(입력 + 마이크). 왼쪽 버튼으로 부채꼴 메뉴를 엽니다.</td></tr>
+        <tr><td>부채꼴 메뉴 가운데</td><td>AI 홈 버튼</td><td>오늘 일정 화면</td></tr>
+        <tr><td>지도·번역·환율 화면</td><td>사용자가 직접 조작</td><td>요청 결과가 들어오면 위에 요청 칩을 띄우고 다음 행동 버튼을 붙입니다. 직접 조작도 그대로 됩니다.</td></tr>
+        <tr><td>번역</td><td>글자 인식까지 동작, 번역 연결 진행 중</td><td>번역 연결 + 메뉴 이름·가격 나누기 + 원화 환산</td></tr>
+        <tr><td>일정</td><td>없음</td><td>일정 저장·조회와 오늘 화면을 새로 만듭니다.</td></tr>
+      </tbody>
+    </table>
+
+    <div class="flow">
+      <div class="node"><h4>요청</h4><div class="mono">어느 화면에서든</div><ul><li>음성 (문장으로 바꿔서)</li><li>짧은 입력</li><li>방금 찍은 사진</li></ul></div>
+      <div class="arrow"><span class="ms">arrow_forward</span></div>
+      <div class="node new"><h4>에이전트 API</h4><div class="mono">Spring Boot</div><ul><li>요청 해석</li><li>필요한 도구만 고르기</li><li>모델 호출·키는 서버에만</li></ul></div>
+      <div class="arrow"><span class="ms">arrow_forward</span></div>
+      <div class="node"><h4>도구</h4><div class="mono">3개는 지금 있음</div><ul><li>장소 검색·상세</li><li>글자 인식·번역</li><li>환율·코인 시세</li><li>일정 (신규)</li></ul></div>
+      <div class="arrow"><span class="ms">arrow_forward</span></div>
+      <div class="node"><h4>화면에 반영</h4><div class="mono">해당 탭으로 이동</div><ul><li>지도 핀과 목록</li><li>원화 메뉴표</li><li>금액이 들어간 환율</li><li>오늘 타임라인</li></ul></div>
+    </div>
+
+    <div class="copy" style="margin-top:72px">
+      <h2 style="font-size:24px">정해야 할 것</h2>
+    </div>
+    <div class="open-q">
+      <div><h5>요청창과 하단 카드</h5><p>지도의 장소 카드·결과 목록, 번역 버튼이 화면 아래를 함께 씁니다. 요청창을 늘 띄울지, 카드가 열리면 접을지 정해야 합니다.</p></div>
+      <div><h5>음성 자동 실행</h5><p>들은 문장을 2초 뒤 실행하는 안입니다. 시끄러운 길에서 잘못 실행될 수 있어, 버튼을 눌러야 실행하는 쪽도 함께 시험해 볼 만합니다.</p></div>
+      <div><h5>일정 입력</h5><p>일정을 손으로 넣을지, 예약 메일·말로 넣을지에 따라 오늘 화면의 빈 상태와 첫 사용 흐름이 달라집니다.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Tripbler · 개인 프로젝트</span>
+    <span>트립블러 기획서를 바탕으로 한 구상안이며, 표시된 값은 예시입니다.</span>
+  </div>
+</footer>
+<!-- 공용 그림 -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="mapart">
+      <rect width="400" height="700" fill="#EEF0E6"/>
+      <path d="M260,0 C250,120 300,200 290,320 C282,420 330,520 320,700 L400,700 L400,0 Z" fill="#AECBEB"/>
+      <rect x="30" y="300" width="110" height="90" rx="6" fill="#CFE6C4"/>
+      <rect x="150" y="40" width="80" height="70" rx="6" fill="#CFE6C4"/>
+      <g fill="#E3E4DC">
+        <rect x="20" y="60" width="110" height="80"/><rect x="150" y="130" width="90" height="70"/>
+        <rect x="20" y="160" width="60" height="110"/><rect x="95" y="160" width="40" height="110"/>
+        <rect x="150" y="220" width="90" height="70"/><rect x="150" y="310" width="90" height="80"/>
+        <rect x="20" y="410" width="110" height="90"/><rect x="150" y="410" width="90" height="90"/>
+        <rect x="20" y="520" width="220" height="70"/>
+      </g>
+      <g stroke="#fff" stroke-width="10" fill="none">
+        <path d="M0,150 L260,150"/><path d="M0,400 L280,400"/><path d="M140,0 L140,700"/><path d="M0,510 L280,510"/>
+      </g>
+      <g stroke="#FCE7A8" stroke-width="12" fill="none">
+        <path d="M0,295 L270,295"/><path d="M85,0 L85,700"/>
+      </g>
+      <g stroke="#fff" stroke-width="5" fill="none"><path d="M0,210 L140,210"/><path d="M245,0 L245,600"/></g>
+      <g font-family="Noto Sans KR" font-size="11" fill="#5F6368">
+        <text x="160" y="80">아사쿠사 공원</text><text x="40" y="350">스미다 공원</text><text x="292" y="260" fill="#3E6E9E">스미다강</text><text x="16" y="290">가미나리몬 거리</text>
+      </g>
+    </g>
+    <g id="signart">
+      <rect width="300" height="460" fill="#3A322B"/>
+      <rect x="18" y="70" width="232" height="230" rx="4" fill="#F2E6CF"/>
+      <rect x="18" y="70" width="232" height="34" fill="#9C2A1F"/>
+      <g font-family="Noto Sans KR" fill="#2B2420" font-size="15">
+        <text x="70" y="93" fill="#fff" font-size="16" font-weight="700">お品書き</text>
+        <text x="32" y="135">醤油ラーメン</text><text x="180" y="135">980円</text>
+        <text x="32" y="168">味噌ラーメン</text><text x="172" y="168">1,080円</text>
+        <text x="32" y="201">餃子（6個）</text><text x="180" y="201">450円</text>
+        <text x="32" y="234">大盛り</text><text x="172" y="234">+150円</text>
+        <text x="32" y="276" font-size="11">※食券は入口の券売機でお求めください</text>
+      </g>
+      <rect y="330" width="300" height="130" fill="#2A241F"/>
+    </g>
+  </defs>
+</svg>
+</body>
+</html>

@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tripbler — 환율 화면 디자인 시안 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=block" rel="stylesheet">
+<style>
+  :root {
+    --paper: #F3F0E9;
+    --paper-2: #EAE6DC;
+    --ink: #1C1F23;
+    --ink-2: #4A4F57;
+    --ink-3: #7A7F87;
+    --rule: #D6D1C4;
+    --accent: #0061A4;
+
+    /* 앱 테마: ColorScheme.fromSeed(Colors.blue), 라이트 */
+    --m-primary: #0061A4;
+    --m-on-primary: #FFFFFF;
+    --m-pc: #D1E4FF;
+    --m-on-pc: #001D36;
+    --m-surface: #F8F9FF;
+    --m-on-surface: #191C20;
+    --m-on-sv: #43474E;
+    --m-sch: #E0E2EC;
+    --m-sc: #ECEEF4;
+    --m-outline: #73777F;
+    --m-ov: #C3C7CF;
+    --m-gain: #146C2E;
+    --m-loss: #BA1A1A;
+    --m-tab: #2196F3;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans KR", system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 28px; }
+  .mono { font-family: "IBM Plex Mono", "IBM Plex Sans KR", ui-monospace, monospace; }
+  .ms {
+    font-family: "Material Symbols Outlined";
+    font-weight: normal; font-style: normal;
+    line-height: 1; letter-spacing: normal; text-transform: none;
+    display: inline-block; white-space: nowrap; direction: ltr;
+    -webkit-font-feature-settings: "liga"; font-feature-settings: "liga";
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+    font-size: 24px;
+  }
+  .emoji { font-family: "Noto Color Emoji", sans-serif; }
+
+  /* ---------- 머리말 ---------- */
+  header.top {
+    border-bottom: 1px solid var(--rule);
+  }
+  header.top .wrap {
+    display: flex; justify-content: space-between; align-items: center;
+    height: 64px; font-size: 14px; color: var(--ink-2);
+  }
+  header.top b { color: var(--ink); font-weight: 700; font-size: 17px; }
+  header.top nav a { color: var(--ink-2); text-decoration: none; margin-left: 22px; }
+  header.top nav a:hover { color: var(--ink); }
+
+  .hero { padding: 72px 0 40px; }
+  .hero-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: end; }
+  .hero h1 {
+    font-size: 54px; line-height: 1.15; margin: 0 0 22px; font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p.lead { font-size: 18px; color: var(--ink-2); margin: 0 0 28px; max-width: 30em; }
+  .facts { display: grid; grid-template-columns: repeat(3, auto); gap: 8px 32px; justify-content: start; font-size: 14px; }
+  .facts dt { color: var(--ink-3); }
+  .facts dd { margin: 0; font-weight: 600; }
+  .hero-note { font-size: 13px; color: var(--ink-3); border-left: 2px solid var(--rule); padding-left: 12px; max-width: 26em; }
+
+  .stage {
+    margin-top: 48px;
+    display: flex; justify-content: center; gap: 32px; align-items: flex-end;
+    padding: 48px 0 0;
+    background:
+      linear-gradient(var(--paper-2), var(--paper-2)) bottom / 100% 55% no-repeat;
+    border-bottom: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .stage .phone { margin-bottom: -120px; }
+  .stage .phone:nth-child(2) { margin-bottom: -60px; }
+
+  /* ---------- 섹션 ---------- */
+  section.feature { padding: 104px 0 24px; }
+  .feature-grid { display: grid; grid-template-columns: 380px 1fr; gap: 72px; align-items: start; }
+  .feature.flip .feature-grid { grid-template-columns: 1fr 380px; }
+  .feature.flip .copy { order: -1; }
+  .kicker { font-size: 14px; font-weight: 600; color: var(--accent); margin-bottom: 10px; }
+  .copy h2 { font-size: 34px; line-height: 1.25; margin: 0 0 18px; letter-spacing: -0.01em; }
+  .copy > p { color: var(--ink-2); margin: 0 0 28px; max-width: 34em; }
+  .points { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--rule); }
+  .points li { padding: 16px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 9.5em 1fr; gap: 16px; font-size: 15px; }
+  .points li b { font-weight: 600; }
+  .points li span { color: var(--ink-2); }
+  .copy .phones-row { display: flex; gap: 28px; margin-top: 40px; flex-wrap: wrap; }
+
+  .divider { height: 1px; background: var(--rule); margin: 96px 0 0; }
+
+  /* ---------- 휴대폰 틀 ---------- */
+  .phone {
+    width: 360px; flex: none;
+    background: #111; border-radius: 44px; padding: 10px;
+    box-shadow: 0 1px 0 #2a2a2a inset, 0 30px 60px -30px rgba(28,31,35,.45), 0 12px 24px -12px rgba(28,31,35,.25);
+  }
+  .phone.sm { width: 300px; border-radius: 38px; padding: 8px; }
+  .screen {
+    position: relative;
+    height: 740px; border-radius: 34px; overflow: hidden;
+    background: var(--m-surface); color: var(--m-on-surface);
+    font-family: "Noto Sans KR", Roboto, sans-serif; font-size: 14px; line-height: 1.4;
+    display: flex; flex-direction: column;
+  }
+  .phone.sm .screen { height: 620px; border-radius: 30px; }
+  .statusbar {
+    height: 32px; flex: none; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; font-size: 13px; font-weight: 500;
+  }
+  .statusbar .ms { font-size: 16px; margin-left: 2px; }
+  .topbar {
+    height: 56px; flex: none; position: relative; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 700;
+  }
+  .topbar .lead-ic { position: absolute; left: 16px; top: 14px; font-size: 28px; }
+  .topbar.back { justify-content: flex-start; padding-left: 16px; gap: 12px; }
+  .topbar.back .ms { font-size: 26px; }
+  .body { flex: 1; overflow: hidden; position: relative; }
+
+  /* 하단 도넛 손잡이 */
+  .handle {
+    position: absolute; left: 50%; bottom: 17px; transform: translateX(-50%);
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 3px solid rgba(0,97,164,.45);
+  }
+  .gesture { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); width: 110px; height: 4px; border-radius: 2px; background: #1a1a1a; opacity: .75; }
+
+  /* ---------- 환율 ---------- */
+  .updated { text-align: center; font-size: 12px; color: var(--m-on-sv); padding: 12px 16px; }
+  .row {
+    display: flex; align-items: center; min-height: 72px; padding: 0 4px 0 16px;
+    border-bottom: 1px solid var(--m-ov); background: var(--m-surface);
+  }
+  .row.base { background: var(--m-pc); color: var(--m-on-pc); }
+  .row .cur { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 500; }
+  .row .cur .flag { font-size: 26px; line-height: 1; width: 28px; text-align: center; }
+  .row .cur .ms { font-size: 22px; margin-left: -4px; color: var(--m-on-sv); }
+  .row.base .cur .ms { color: var(--m-on-pc); }
+  .coin { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 15px; }
+  .row .amt { flex: 1; text-align: right; padding: 0 12px; min-width: 0; }
+  .row .amt .v { font-size: 22px; font-weight: 500; letter-spacing: -0.01em; }
+  .row.base .amt .v { border-bottom: 2px solid var(--m-primary); padding-bottom: 1px; }
+  .row .amt .st { font-size: 11px; color: var(--m-on-sv); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .gr { width: 48px; height: 48px; display: grid; place-items: center; color: var(--m-on-sv); }
+  .row .gr.none { visibility: hidden; }
+  .btn-outline {
+    margin: 16px 16px 0; height: 52px; border: 1px solid var(--m-outline); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 500;
+  }
+  .btn-outline .ms { font-size: 18px; }
+  .section-t { font-size: 22px; padding: 32px 16px 16px; }
+
+  /* 차트 카드 */
+  .card { margin: 0 16px; border: 1px solid var(--m-ov); border-radius: 12px; background: var(--m-surface); padding: 12px 12px 14px; }
+  .card-h { display: flex; align-items: center; gap: 4px; }
+  .card-h .t { font-size: 16px; font-weight: 500; flex: 1; }
+  .card-h .sub { font-size: 11px; color: var(--m-on-sv); }
+  .card-h .ms { font-size: 22px; color: var(--m-on-sv); width: 36px; text-align: center; }
+  .pair { display: flex; align-items: center; justify-content: space-between; margin: 12px 0 6px; }
+  .pair .side { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; background: var(--m-sc); font-weight: 500; }
+  .pair .side .flag { font-size: 20px; }
+  .pair .swap { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--m-ov); color: var(--m-primary); }
+  .pair .swap .ms { font-size: 20px; }
+  .rate { display: flex; align-items: baseline; justify-content: space-between; margin: 10px 2px 2px; }
+  .rate .big { font-size: 20px; font-weight: 700; }
+  .rate .big small { font-size: 13px; font-weight: 400; color: var(--m-on-sv); }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--m-pc); color: var(--m-on-pc); }
+  .delta { font-size: 12px; color: var(--m-gain); margin: 0 2px 6px; }
+  .chart-svg { display: block; width: 100%; height: auto; }
+  .periods { display: flex; gap: 4px; margin-top: 10px; }
+  .periods span { flex: 1; text-align: center; padding: 8px 0; border-radius: 4px; background: var(--m-sch); color: var(--m-on-sv); font-size: 12px; font-weight: 500; }
+  .periods span.on { background: var(--m-primary); color: var(--m-on-primary); }
+  .compare { display: flex; gap: 8px; margin-top: 10px; }
+  .compare div { flex: 1; background: var(--m-sc); border-radius: 8px; padding: 8px 10px; font-size: 12px; }
+  .compare div b { display: block; font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .dots { display: flex; justify-content: center; gap: 6px; margin: 14px 0 0; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--m-ov); }
+  .dots i.on { background: var(--m-primary); width: 18px; border-radius: 3px; }
+
+  /* ---------- 지도 ---------- */
+  .map-bg { position: absolute; inset: 0; }
+  .searchbar {
+    position: absolute; left: 12px; right: 12px; top: 10px; height: 52px; border-radius: 26px;
+    background: var(--m-sch); display: flex; align-items: center; padding: 0 6px 0 18px; gap: 6px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.12);
+  }
+  .searchbar .q { flex: 1; font-size: 15px; }
+  .searchbar .ms { width: 40px; text-align: center; color: var(--m-on-sv); }
+  .fab-loc {
+    position: absolute; right: 14px; bottom: 286px; width: 48px; height: 48px; border-radius: 14px;
+    background: var(--m-surface); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.18); color: var(--m-on-sv);
+  }
+  .scale { position: absolute; left: 14px; bottom: 292px; font-size: 11px; color: #333; }
+  .scale i { display: block; width: 64px; height: 6px; border: 2px solid #333; border-top: 0; margin-top: 2px; }
+  .place {
+    position: absolute; left: 0; right: 0; bottom: 0; background: var(--m-surface);
+    border-radius: 24px 24px 0 0; padding: 10px 18px 64px; box-shadow: 0 -4px 16px rgba(0,0,0,.12);
+  }
+  .grab { width: 32px; height: 4px; border-radius: 2px; background: var(--m-ov); margin: 0 auto 12px; }
+  .place .name { font-size: 20px; font-weight: 700; display: flex; justify-content: space-between; align-items: flex-start; }
+  .place .name .ms { font-size: 22px; color: var(--m-on-sv); }
+  .place .addr { font-size: 13px; color: var(--m-on-sv); margin: 2px 0 12px; }
+  .meta { display: flex; gap: 16px; font-size: 13px; margin-bottom: 14px; }
+  .meta span { display: flex; align-items: center; gap: 4px; }
+  .meta .ms { font-size: 18px; }
+  .meta .open { color: var(--m-gain); }
+  .place .acts { display: flex; gap: 8px; }
+  .fbtn { height: 40px; border-radius: 20px; padding: 0 16px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; }
+  .fbtn .ms { font-size: 18px; }
+  .fbtn.fill { background: var(--m-primary); color: #fff; }
+  .fbtn.tonal { background: var(--m-pc); color: var(--m-on-pc); }
+  .fbtn.line { border: 1px solid var(--m-outline); color: var(--m-primary); }
+  .stale { font-size: 11px; color: var(--m-on-sv); margin-top: 10px; display: flex; align-items: center; gap: 4px; }
+  .stale .ms { font-size: 14px; }
+
+  /* 지도 검색 결과 */
+  .results { position: absolute; left: 0; right: 0; bottom: 0; top: 330px; background: var(--m-surface); border-radius: 24px 24px 0 0; box-shadow: 0 -4px 16px rgba(0,0,0,.12); padding: 10px 0 0; }
+  .results .rh { display: flex; justify-content: space-between; padding: 0 18px 8px; font-size: 13px; color: var(--m-on-sv); }
+  .results .it { padding: 12px 18px; border-top: 1px solid var(--m-ov); }
+  .results .it b { display: block; font-weight: 500; font-size: 15px; }
+  .results .it span { font-size: 12px; color: var(--m-on-sv); }
+
+  /* ---------- 번역 ---------- */
+  .tr-head { padding: 4px 16px 12px; }
+  .tr-head .t { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+  .langs { display: flex; align-items: center; gap: 6px; }
+  .lang { flex: 1; height: 44px; border-radius: 22px; border: 1px solid var(--m-ov); display: flex; align-items: center; justify-content: space-between; padding: 0 10px 0 14px; font-size: 14px; }
+  .lang .ms { font-size: 20px; color: var(--m-on-sv); }
+  .langs > .ms { color: var(--m-primary); }
+  .info { margin: 0 16px 10px; display: flex; gap: 8px; align-items: center; background: var(--m-sc); padding: 10px 12px; border-radius: 10px; font-size: 12px; color: var(--m-on-sv); }
+  .info .ms { font-size: 18px; }
+  .tr-cards { display: flex; gap: 12px; padding: 0 16px; }
+  .tr-card { flex: none; width: 272px; height: 380px; border-radius: 16px; padding: 14px 16px; background: var(--m-sc); }
+  .tr-card.res { background: var(--m-pc); color: var(--m-on-pc); }
+  .tr-card .lab { font-size: 12px; font-weight: 500; color: var(--m-on-sv); margin-bottom: 10px; display: flex; justify-content: space-between; }
+  .tr-card.res .lab { color: var(--m-on-pc); }
+  .tr-card p { margin: 0 0 10px; font-size: 16px; line-height: 1.6; }
+  .tr-card .jp { font-family: "Noto Sans JP", "Noto Sans KR", sans-serif; }
+  .tr-acts { display: flex; gap: 8px; padding: 14px 16px; }
+  .tr-acts .fbtn { flex: 1; justify-content: center; }
+
+  /* 카메라 */
+  .cam { margin: 0 16px; height: 470px; border-radius: 20px; overflow: hidden; position: relative; background: #2a2723; }
+  .cam .frame { position: absolute; left: 28px; right: 28px; top: 90px; height: 210px; border-radius: 12px; }
+  .cam .frame::before, .cam .frame::after { content: ""; position: absolute; inset: 0; border: 3px solid #fff; border-radius: 12px; clip-path: polygon(0 0, 22% 0, 22% 3px, 3px 3px, 3px 30%, 0 30%, 0 0, 78% 0, 100% 0, 100% 30%, calc(100% - 3px) 30%, calc(100% - 3px) 3px, 78% 3px, 78% 0); }
+  .cam .frame::after { transform: rotate(180deg); }
+  .cam .hint { position: absolute; left: 0; right: 0; top: 24px; text-align: center; color: #fff; font-size: 13px; text-shadow: 0 1px 3px rgba(0,0,0,.5); }
+  .cam .ctrls { position: absolute; left: 0; right: 0; bottom: 22px; display: flex; justify-content: space-around; align-items: center; color: #fff; }
+  .cam .ctrls .ms { font-size: 26px; width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.14); }
+  .shutter { width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff; display: grid; place-items: center; }
+  .shutter i { width: 52px; height: 52px; border-radius: 50%; background: #fff; }
+
+  /* ---------- 탭 메뉴 시연 ---------- */
+  .menu-demo { display: grid; grid-template-columns: 1fr; gap: 20px; margin-top: 8px; max-width: 420px; justify-self: center; width: 100%; }
+  .phone.sm .lang { font-size: 12px; white-space: nowrap; padding: 0 4px 0 10px; height: 38px; }
+  .phone.sm .lang .ms { font-size: 18px; }
+  .demo { background: var(--m-surface); border: 1px solid var(--rule); border-radius: 16px; height: 200px; min-width: 320px; position: relative; overflow: hidden; font-family: "Noto Sans KR", sans-serif; }
+  .demo .cap { position: absolute; left: 16px; top: 12px; font-size: 13px; color: var(--ink-3); font-family: "IBM Plex Sans KR", sans-serif; }
+  .tabbtn { position: absolute; width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--m-sch); color: var(--m-on-sv); border: 1.5px solid var(--m-ov); }
+  .tabbtn.on { background: var(--m-tab); color: #fff; border-color: var(--m-tab); }
+  .tabbtn .ms { font-size: 26px; }
+  .tabbtn small { position: absolute; left: 50%; bottom: -9px; transform: translateX(-50%); font-size: 12px; background: var(--m-surface); padding: 0 4px; line-height: 16px; color: var(--m-on-sv); }
+  .tabbtn.on small { font-weight: 700; }
+  .homebtn { position: absolute; width: 76px; height: 76px; border-radius: 50%; background: var(--m-pc); color: var(--m-on-pc); border: 1.5px solid var(--m-ov); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .homebtn .ms { font-size: 28px; }
+  .arc { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); width: 280px; height: 140px; border-radius: 140px 140px 0 0; background: rgba(0,97,164,.05); border: 1px dashed rgba(0,97,164,.25); border-bottom: 0; }
+  .swipe { position: absolute; left: 50%; bottom: 58px; transform: translateX(-50%); color: var(--ink-3); font-size: 12px; display: flex; flex-direction: column; align-items: center; font-family: "IBM Plex Sans KR", sans-serif; }
+  .swipe .ms { font-size: 22px; }
+
+  /* ---------- 설정 / 드로어 ---------- */
+  .tile { display: flex; align-items: center; padding: 14px 20px; gap: 16px; border-bottom: 1px solid var(--m-ov); }
+  .tile .tx { flex: 1; }
+  .tile .tx b { display: block; font-weight: 500; font-size: 16px; }
+  .tile .tx span { font-size: 13px; color: var(--m-on-sv); }
+  .tile .ms { color: var(--m-on-sv); }
+  .seg { display: flex; border: 1px solid var(--m-outline); border-radius: 20px; overflow: hidden; margin: 6px 20px 0; }
+  .seg span { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; border-right: 1px solid var(--m-outline); }
+  .seg span:last-child { border-right: 0; }
+  .seg span.on { background: var(--m-pc); color: var(--m-on-pc); font-weight: 500; }
+  .drawer { position: absolute; inset: 0 70px 0 0; background: var(--m-surface); border-radius: 0 16px 16px 0; box-shadow: 4px 0 18px rgba(0,0,0,.18); padding: 24px 0; display: flex; flex-direction: column; }
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.32); }
+  .acct { padding: 8px 24px 20px; border-bottom: 1px solid var(--m-ov); }
+  .acct .ms { font-size: 56px; color: var(--m-on-sv); }
+  .acct b { display: block; font-size: 18px; margin-top: 6px; }
+  .acct span { font-size: 13px; color: var(--m-on-sv); }
+  .dr-item { display: flex; gap: 14px; align-items: center; padding: 16px 24px; font-size: 15px; }
+  .dr-item .ms { color: var(--m-on-sv); }
+  .dr-foot { margin-top: auto; padding: 16px 24px; color: var(--m-loss); font-size: 15px; }
+
+  /* ---------- 구조 ---------- */
+  .arch { display: grid; grid-template-columns: 1fr 40px 1fr 40px 1fr; align-items: stretch; margin-top: 40px; }
+  .node { border: 1px solid var(--ink); background: #FBFAF6; padding: 20px; border-radius: 4px; }
+  .node h4 { margin: 0 0 4px; font-size: 17px; }
+  .node .mono { font-size: 12px; color: var(--ink-3); }
+  .node ul { margin: 14px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); }
+  .node ul li { margin: 4px 0; }
+  .arrow { display: grid; place-items: center; color: var(--ink-3); }
+  .arrow .ms { font-size: 28px; }
+  .arch-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: 40px; }
+  .arch-notes h5 { margin: 0 0 6px; font-size: 15px; }
+  .arch-notes p { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+  footer { margin-top: 112px; border-top: 1px solid var(--rule); padding: 28px 0 48px; font-size: 13px; color: var(--ink-3); }
+  footer .wrap { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+
+  @media (max-width: 960px) {
+    .hero-grid, .feature-grid, .feature.flip .feature-grid { grid-template-columns: 1fr; gap: 40px; }
+    .feature.flip .copy { order: 0; }
+    .feature-grid > .phone { justify-self: center; }
+    .stage .phone:not(:nth-child(2)) { display: none; }
+    .arch { grid-template-columns: 1fr; }
+    .arrow { height: 40px; }
+    .arrow .ms { transform: rotate(90deg); }
+    .arch-notes { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 40px; }
+  }
+  @media (max-width: 420px) {
+    .wrap { padding: 0 16px; }
+    .phone { transform: scale(.88); transform-origin: top center; margin-bottom: -88px; }
+    .points li { grid-template-columns: 1fr; gap: 2px; }
+    .menu-demo { grid-template-columns: 1fr; }
+    header.top nav { display: none; }
+  }
+
+  /* ---------- 시안 비교 전용 ---------- */
+  .dark {
+    --m-primary: #9ECAFF; --m-on-primary: #003258; --m-pc: #00497D; --m-on-pc: #D1E4FF;
+    --m-surface: #111418; --m-on-surface: #E1E2E8; --m-on-sv: #C3C7CF; --m-sch: #33353A; --m-sc: #1D2024;
+    --m-outline: #8D9199; --m-ov: #43474E; --m-gain: #7BD88F; --m-loss: #FFB4AB;
+  }
+  .variants { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; margin-top: 48px; }
+  .variant { display: flex; flex-direction: column; align-items: center; }
+  .variant .phone { width: 340px; }
+  .variant .screen { height: 720px; }
+  .vhead { align-self: stretch; margin-bottom: 20px; }
+  .vhead .tag { font-size: 14px; font-weight: 600; color: var(--accent); }
+  .vhead h3 { margin: 2px 0 6px; font-size: 22px; }
+  .vhead p { margin: 0; font-size: 14px; color: var(--ink-2); min-height: 4.8em; }
+  .rec { display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 600; color: #fff; background: var(--accent); border-radius: 4px; padding: 1px 8px; vertical-align: 3px; }
+  .notes { align-self: stretch; margin-top: 28px; font-size: 14px; }
+  .notes h4 { margin: 0 0 6px; font-size: 14px; }
+  .notes ul { margin: 0 0 16px; padding-left: 18px; color: var(--ink-2); }
+  .notes li { margin: 4px 0; }
+  .notes .good h4 { color: #146C2E; }
+  .notes .bad h4 { color: #BA1A1A; }
+
+  /* 시안 B: 정돈 */
+  .b-row { display: flex; align-items: center; min-height: 64px; padding: 0 16px; border-bottom: 1px solid var(--m-ov); gap: 12px; }
+  .b-row .cur { display: flex; align-items: center; gap: 8px; min-width: 96px; font-size: 16px; font-weight: 500; }
+  .b-row .cur .flag { font-size: 24px; width: 28px; text-align: center; }
+  .b-row .cur .ms { font-size: 20px; color: var(--m-on-sv); margin-left: -4px; }
+  .b-row .amt { flex: 1; text-align: right; min-width: 0; }
+  .b-row .amt .v { font-size: 20px; font-weight: 500; }
+  .b-row .amt .st { font-size: 11px; color: var(--m-on-sv); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .b-input { margin: 4px 16px 0; border: 2px solid var(--m-primary); border-radius: 4px; padding: 10px 14px 12px; background: var(--m-surface); }
+  .b-input .lab { font-size: 12px; color: var(--m-primary); font-weight: 500; display: flex; justify-content: space-between; }
+  .b-input .lab span { color: var(--m-on-sv); font-weight: 400; }
+  .b-input .line { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+  .b-input .line .flag { font-size: 26px; }
+  .b-input .line .code { font-size: 18px; font-weight: 500; display: flex; align-items: center; }
+  .b-input .line .code .ms { font-size: 20px; color: var(--m-on-sv); }
+  .b-input .line .v { flex: 1; text-align: right; font-size: 30px; font-weight: 700; letter-spacing: -0.01em; }
+  .b-home { margin: 8px 16px 12px; padding: 12px 14px; background: var(--m-pc); color: var(--m-on-pc); border-radius: 4px; display: flex; align-items: center; gap: 8px; }
+  .b-home .flag { font-size: 24px; }
+  .b-home .code { font-size: 16px; font-weight: 500; }
+  .b-home .v { flex: 1; text-align: right; font-size: 26px; font-weight: 700; }
+  .b-home small { display: block; font-size: 11px; font-weight: 400; opacity: .8; text-align: right; }
+  .b-sub { font-size: 12px; color: var(--m-on-sv); padding: 4px 16px 4px; display: flex; justify-content: space-between; }
+  .b-edit { margin: 12px 16px 0; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 4px; color: var(--m-primary); font-weight: 500; }
+  .b-edit .ms { font-size: 20px; }
+
+  /* 시안 C: 원화 우선 + 숫자판 */
+  .c-top { padding: 4px 20px 0; }
+  .c-from { display: flex; align-items: center; justify-content: space-between; }
+  .c-pick { display: flex; align-items: center; gap: 6px; height: 40px; padding: 0 10px 0 8px; border: 1px solid var(--m-outline); border-radius: 4px; font-weight: 500; }
+  .c-pick .flag { font-size: 22px; }
+  .c-pick .ms { font-size: 20px; color: var(--m-on-sv); }
+  .c-swap { width: 48px; height: 48px; display: grid; place-items: center; color: var(--m-on-sv); }
+  .c-amt { text-align: right; font-size: 34px; font-weight: 700; margin: 8px 0 0; letter-spacing: -0.01em; }
+  .c-amt::after { content: ""; display: inline-block; width: 2px; height: 30px; background: var(--m-primary); margin-left: 2px; vertical-align: -4px; }
+  .c-krw { margin: 10px 0 0; padding: 12px 0 14px; border-top: 1px solid var(--m-ov); text-align: right; }
+  .c-krw .k { font-size: 12px; color: var(--m-on-sv); }
+  .c-krw .v { font-size: 40px; font-weight: 700; color: var(--m-primary); letter-spacing: -0.02em; line-height: 1.15; }
+  .c-krw .r { font-size: 11px; color: var(--m-on-sv); }
+  .c-others { display: flex; gap: 8px; padding: 0 20px 12px; }
+  .c-others div { flex: 1; background: var(--m-sc); border-radius: 4px; padding: 8px 10px; font-size: 11px; color: var(--m-on-sv); min-width: 0; }
+  .c-others div b { display: block; font-size: 14px; color: var(--m-on-surface); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .c-quick { display: flex; gap: 6px; padding: 0 20px 10px; }
+  .c-quick span { flex: 1; text-align: center; height: 36px; line-height: 36px; border: 1px solid var(--m-ov); border-radius: 4px; font-size: 13px; color: var(--m-on-sv); }
+  .keypad { position: absolute; left: 0; right: 0; bottom: 0; background: var(--m-sc); padding: 8px 8px 22px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .keypad span { height: 52px; display: grid; place-items: center; font-size: 22px; font-weight: 500; border-radius: 4px; background: var(--m-surface); }
+  .keypad span.fn { background: transparent; color: var(--m-on-sv); }
+  .keypad span .ms { font-size: 22px; }
+
+  /* 비교표 */
+  .cmp { width: 100%; border-collapse: collapse; margin-top: 32px; font-size: 15px; }
+  .cmp th, .cmp td { padding: 14px 12px 14px 0; border-bottom: 1px solid var(--rule); text-align: left; vertical-align: top; }
+  .cmp th { font-size: 13px; color: var(--ink-3); font-weight: 500; }
+  .cmp td:first-child { font-weight: 600; width: 20%; }
+  .lv { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+  .lv.h { background: #146C2E; } .lv.m { background: #B26A00; } .lv.l { background: #BA1A1A; }
+  .darkrow { display: flex; gap: 40px; align-items: flex-start; margin-top: 40px; flex-wrap: wrap; }
+  .darkrow .copy { flex: 1; min-width: 280px; }
+  @media (max-width: 1100px) {
+    .variants { grid-template-columns: 1fr; justify-items: center; }
+    .variant { max-width: 420px; }
+    .vhead p { min-height: 0; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <b>Tripbler</b>
+    <nav>
+      <a href="#variants">시안 세 가지</a>
+      <a href="#compare">비교</a>
+      <a href="#dark">다크 모드</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero" style="padding-bottom:0">
+  <div class="wrap">
+    <div class="hero-grid">
+      <div>
+        <span class="badge-plan" style="display:inline-block;font-size:13px;font-weight:600;color:#8A4B00;background:#FBE7CC;border-radius:4px;padding:2px 8px;margin-bottom:14px">디자인 시안 · 환율 화면</span>
+        <h1>가격표 앞에서<br><em>원화가 먼저</em> 보이게</h1>
+        <p class="lead">환율 화면은 여행 중 가장 자주 여는 화면입니다. 지금은 모든 통화 줄이 같은 무게로 보여서, 가장 궁금한 원화 금액이 다른 숫자들 사이에 묻힙니다. 같은 상황(200엔짜리 물건 앞)을 세 가지 시안으로 그려 비교합니다.</p>
+      </div>
+      <p class="hero-note">세 시안 모두 앱의 디자인 규칙(테마 색만 쓰기, 둥글기 0 또는 4, 터치 영역 48 이상, 꾸밈 그라데이션 금지)을 따릅니다. 시안 A만 지금 화면 그대로입니다. 값은 예시입니다.</p>
+    </div>
+  </div>
+</section>
+
+<section id="variants" style="padding-top:24px">
+  <div class="wrap">
+    <div class="variants">
+
+      <!-- A 현재 -->
+      <div class="variant">
+        <div class="vhead">
+          <div class="tag">시안 A</div>
+          <h3>지금 화면</h3>
+          <p>기준 통화(원화)가 맨 위, 입력 중인 줄은 파란 배경입니다. 입력값과 원화 결과가 다른 통화와 같은 크기의 줄로 나란히 놓입니다.</p>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+            <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+            <div class="body">
+              <div class="updated">마지막 업데이트: 2026.11.13 09:30</div>
+              <div class="row"><div class="cur"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">1,849</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+              <div class="row base"><div class="cur"><span class="flag emoji">🇯🇵</span>JPY<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">200</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+              <div class="row"><div class="cur"><span class="flag emoji">🇺🇸</span>USD<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">1.33</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+              <div class="row"><div class="cur"><span class="flag emoji">🇹🇼</span>TWD<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">43.12</div></div><div class="gr"><span class="ms">show_chart</span></div></div>
+              <div class="row"><div class="cur"><span class="coin" style="background:#627EEA">Ξ</span>ETH<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">0.00039</div><div class="st">1 ETH = 4,712,000 KRW · 11.13 09:12</div></div><div class="gr none"></div></div>
+              <div class="btn-outline"><span class="ms">tune</span>통화 추가 / 편집</div>
+              <div class="section-t">환율 흐름</div>
+              <div class="handle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notes">
+          <div class="good"><h4>좋은 점</h4><ul><li>여러 통화를 한 번에 비교하기 쉽습니다.</li><li>어느 줄에서든 바로 입력할 수 있습니다.</li></ul></div>
+          <div class="bad"><h4>아쉬운 점</h4><ul><li>원화 결과가 다른 줄과 같은 크기라, 가장 중요한 숫자가 눈에 띄지 않습니다.</li><li>줄마다 있는 차트 버튼은 안내 문구만 띄워 터치 자리를 차지합니다.</li><li>입력 중인 칸이 배경색으로만 구분됩니다.</li></ul></div>
+        </div>
+      </div>
+
+      <!-- B 정돈 -->
+      <div class="variant">
+        <div class="vhead">
+          <div class="tag">시안 B<span class="rec">추천</span></div>
+          <h3>입력칸과 원화를 분리</h3>
+          <p>지금 구조는 두고, 입력 중인 통화를 위로 올려 크게 보여 줍니다. 그 바로 아래에 원화를 고정하고, 나머지 통화는 작은 목록으로 둡니다.</p>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+            <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+            <div class="body">
+              <div class="updated">마지막 업데이트: 2026.11.13 09:30</div>
+              <div class="b-input">
+                <div class="lab">입력 중<span>통화를 눌러 바꾸기</span></div>
+                <div class="line"><span class="flag emoji">🇯🇵</span><span class="code">JPY<span class="ms">keyboard_arrow_down</span></span><span class="v">200</span></div>
+              </div>
+              <div class="b-home"><span class="flag emoji">🇰🇷</span><span class="code">KRW</span><span class="v">1,849<small>100 JPY = 924.50 KRW</small></span></div>
+              <div class="b-sub"><span>다른 통화</span><span>줄을 누르면 그 통화로 입력</span></div>
+              <div class="b-row"><div class="cur"><span class="flag emoji">🇺🇸</span>USD<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">1.33</div></div></div>
+              <div class="b-row"><div class="cur"><span class="flag emoji">🇹🇼</span>TWD<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">43.12</div></div></div>
+              <div class="b-row"><div class="cur"><span class="coin" style="background:#627EEA">Ξ</span>ETH<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">0.00039</div><div class="st">1 ETH = 4,712,000 KRW · 11.13 09:12</div></div></div>
+              <div class="b-edit"><span class="ms">tune</span>통화 추가 / 편집</div>
+              <div class="handle"></div>
+            </div>
+          </div>
+        </div>
+        <div class="notes">
+          <div class="good"><h4>좋은 점</h4><ul><li>입력값과 원화가 화면 위쪽 같은 자리에 늘 있습니다.</li><li>지금의 통화 줄·입력 방식을 그대로 써서 바꿀 범위가 작습니다.</li><li>줄의 차트 버튼을 빼고 차트는 아래 "환율 흐름"에 모읍니다.</li></ul></div>
+          <div class="bad"><h4>아쉬운 점</h4><ul><li>원화에서 외화로 거꾸로 계산할 때는 원화 줄을 눌러 위로 올려야 합니다.</li><li>입력 중인 통화가 바뀔 때마다 줄 순서가 달라집니다.</li></ul></div>
+        </div>
+      </div>
+
+      <!-- C 원화 우선 -->
+      <div class="variant">
+        <div class="vhead">
+          <div class="tag">시안 C</div>
+          <h3>계산기처럼</h3>
+          <p>한 통화에서 원화로 바꾸는 일에 집중합니다. 원화를 가장 크게 보여 주고, 앱 안 숫자판과 자주 쓰는 금액 버튼으로 한 손 입력을 빠르게 합니다.</p>
+        </div>
+        <div class="phone">
+          <div class="screen">
+            <div class="statusbar"><span>9:41</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+            <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+            <div class="body">
+              <div class="c-top">
+                <div class="c-from"><span class="c-pick"><span class="flag emoji">🇯🇵</span>JPY<span class="ms">arrow_drop_down</span></span><span class="c-swap"><span class="ms">swap_vert</span></span><span class="c-pick"><span class="flag emoji">🇰🇷</span>KRW<span class="ms">arrow_drop_down</span></span></div>
+                <div class="c-amt">200</div>
+                <div class="c-krw"><div class="k">원화로</div><div class="v">1,849원</div><div class="r">100 JPY = 924.50 KRW · 11.13 09:30</div></div>
+              </div>
+              <div class="c-others"><div>USD<b>1.33</b></div><div>TWD<b>43.12</b></div><div>ETH<b>0.00039</b></div></div>
+              <div class="c-quick"><span>+100</span><span>+500</span><span>+1,000</span><span>×2</span></div>
+              <div class="keypad">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span class="fn">.</span><span>0</span><span class="fn"><span class="ms">backspace</span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="notes">
+          <div class="good"><h4>좋은 점</h4><ul><li>원화가 가장 크게 보여 걸으면서도 바로 읽힙니다.</li><li>시스템 키보드가 화면을 가리지 않고, "×2"처럼 여러 개 살 때 계산이 쉽습니다.</li></ul></div>
+          <div class="bad"><h4>아쉬운 점</h4><ul><li>숫자판이 화면 절반을 차지해 "환율 흐름" 차트가 아래로 밀립니다.</li><li>입력 방식과 화면 구성을 새로 만들어야 해 바꿀 범위가 큽니다.</li><li>여러 통화를 동시에 비교하는 쓰임새가 약해집니다.</li></ul></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section class="feature" id="compare" style="padding-top:96px">
+  <div class="wrap">
+    <div class="copy">
+      <div class="kicker">비교</div>
+      <h2>지금 고친다면 시안 B</h2>
+      <p>B는 지금 화면의 위젯과 입력 방식을 그대로 쓰면서 원화 금액을 화면에서 가장 눈에 띄는 숫자로 만듭니다. C는 한 손 계산이 가장 빠르지만 화면을 새로 만들어야 해서, 실제로 써 본 뒤 계산이 불편하다는 게 확인되면 검토할 만합니다.</p>
+    </div>
+    <table class="cmp">
+      <thead><tr><th>기준</th><th>A 지금 화면</th><th>B 입력칸과 원화 분리</th><th>C 계산기처럼</th></tr></thead>
+      <tbody>
+        <tr><td>원화가 한눈에 보이나</td><td><span class="lv m"></span>맨 위지만 다른 줄과 같은 크기</td><td><span class="lv h"></span>입력칸 바로 아래 고정</td><td><span class="lv h"></span>가장 크게</td></tr>
+        <tr><td>한 손 입력</td><td><span class="lv m"></span>시스템 키보드</td><td><span class="lv m"></span>시스템 키보드</td><td><span class="lv h"></span>앱 숫자판, 금액 버튼</td></tr>
+        <tr><td>여러 통화 비교</td><td><span class="lv h"></span>모든 통화 같은 크기</td><td><span class="lv h"></span>작은 목록으로 유지</td><td><span class="lv l"></span>보조 정보로 축소</td></tr>
+        <tr><td>차트까지 거리</td><td><span class="lv m"></span>목록 아래</td><td><span class="lv h"></span>목록이 짧아져 가까움</td><td><span class="lv l"></span>숫자판 아래로 밀림</td></tr>
+        <tr><td>바꿀 범위</td><td>없음</td><td><span class="lv h"></span>환율 화면 배치, 통화 줄 모양</td><td><span class="lv l"></span>입력 방식, 화면 구성, 상태 처리</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="feature" id="dark" style="padding-top:96px">
+  <div class="wrap">
+    <div class="darkrow">
+      <div class="copy">
+        <div class="kicker">다크 모드</div>
+        <h2>시안 B를 어두운 화면에서</h2>
+        <p>앱은 라이트와 다크 모드를 모두 지원합니다. B는 테마의 primary·primaryContainer 색만 쓰기 때문에 다크 모드에서도 입력칸과 원화의 위계가 그대로 유지됩니다.</p>
+        <ul class="points">
+          <li><b>입력칸</b><span>primary 테두리로 구분합니다. 배경을 칠하지 않아 밤에 눈부시지 않습니다.</span></li>
+          <li><b>원화</b><span>primaryContainer 면으로 화면에서 가장 진한 덩어리가 됩니다.</span></li>
+          <li><b>오래된 값</b><span>시세를 갱신하지 못했으면 기존처럼 "저장값"과 조회 시각을 줄 아래에 적습니다.</span></li>
+        </ul>
+      </div>
+      <div class="phone dark">
+        <div class="screen">
+          <div class="statusbar"><span>21:10</span><span><span class="ms">signal_cellular_alt</span><span class="ms">wifi</span><span class="ms">battery_full</span></span></div>
+          <div class="topbar"><span class="ms lead-ic">menu</span>환율</div>
+          <div class="body">
+            <div class="updated">마지막 업데이트: 2026.11.13 21:00</div>
+            <div class="b-input">
+              <div class="lab">입력 중<span>통화를 눌러 바꾸기</span></div>
+              <div class="line"><span class="flag emoji">🇯🇵</span><span class="code">JPY<span class="ms">keyboard_arrow_down</span></span><span class="v">3,800</span></div>
+            </div>
+            <div class="b-home"><span class="flag emoji">🇰🇷</span><span class="code">KRW</span><span class="v">35,131<small>100 JPY = 924.50 KRW</small></span></div>
+            <div class="b-sub"><span>다른 통화</span><span>줄을 누르면 그 통화로 입력</span></div>
+            <div class="b-row"><div class="cur"><span class="flag emoji">🇺🇸</span>USD<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">25.37</div></div></div>
+            <div class="b-row"><div class="cur"><span class="flag emoji">🇹🇼</span>TWD<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">819.30</div></div></div>
+            <div class="b-row"><div class="cur"><span class="coin" style="background:#627EEA">Ξ</span>ETH<span class="ms">keyboard_arrow_down</span></div><div class="amt"><div class="v">0.00746</div><div class="st">저장값 · 1 ETH = 4,712,000 KRW · 11.13 09:12</div></div></div>
+            <div class="b-edit"><span class="ms">tune</span>통화 추가 / 편집</div>
+            <div class="handle" style="border-color:rgba(158,202,255,.5)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>Tripbler · 개인 프로젝트</span>
+    <span>환율 화면 디자인 시안이며, 표시된 값은 예시입니다.</span>
+  </div>
+</footer>
+</body>
+</html>
