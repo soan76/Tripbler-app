@@ -8,6 +8,7 @@ import 'package:tripbler/crypto/providers/crypto_provider.dart';
 import 'package:tripbler/models/currency_model.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
 import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
+import '../../helpers/chart_selection_handle.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/providers/exchange_provider.dart';
@@ -26,7 +27,7 @@ void main() {
   late CryptoProvider crypto;
   late ExchangeProvider exchange;
   late ExchangeDisplayProvider display;
-  late ChartSelectionProvider charts;
+  late ChartSelectionHandle charts;
   late FiatApi fiatApi;
 
   Future<void> pumpScreen(WidgetTester tester) async {
@@ -35,10 +36,9 @@ void main() {
     fiatApi = FiatApi();
     exchange = ExchangeProvider(apiService: fiatApi);
     display = ExchangeDisplayProvider(exchange, crypto, fiatApi: fiatApi);
-    charts = ChartSelectionProvider();
+    charts = ChartSelectionHandle.of(tester);
     await display.initialize();
     addTearDown(() {
-      charts.dispose();
       display.dispose();
       exchange.dispose();
       crypto.dispose();
@@ -52,7 +52,6 @@ void main() {
             ChangeNotifierProvider.value(value: crypto),
             ChangeNotifierProvider.value(value: exchange),
             ChangeNotifierProvider.value(value: display),
-            ChangeNotifierProvider.value(value: charts),
           ],
           child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
         ),
@@ -76,7 +75,7 @@ void main() {
       await pumpScreen(tester);
       final visibleBefore = exchange.visibleCurrencies.map((c) => c.code);
       final baseBefore = exchange.baseCurrency.code;
-      expect(charts.pairs, ChartSelectionProvider.defaults);
+      expect(charts.pairs, ChartSelectionNotifier.defaults);
 
       // 두 통화명 옆에 드롭다운 표시가 있고 스왑 버튼도 그대로 있다.
       expect(pick('fiat:USD'), findsOneWidget);
@@ -119,7 +118,7 @@ void main() {
       expect(exchange.baseCurrency.code, baseBefore);
       expect(
         (await SharedPreferences.getInstance()).getStringList(
-          ChartSelectionProvider.storageKey,
+          ChartSelectionNotifier.storageKey,
         ),
         ['fiat:EUR/KRW', 'fiat:JPY/KRW', 'crypto:BTC/KRW'],
       );
@@ -140,7 +139,7 @@ void main() {
       expect(pick('fiat:JPY').hitTestable(), findsOneWidget);
       expect(
         (await SharedPreferences.getInstance()).getStringList(
-          ChartSelectionProvider.storageKey,
+          ChartSelectionNotifier.storageKey,
         ),
         ['fiat:JPY/KRW', 'fiat:EUR/KRW', 'crypto:BTC/KRW'],
       );
@@ -325,7 +324,7 @@ void main() {
     'an exchange from the screen shows the pick on the pressed side',
     (tester) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:JPY/USD'],
+        ChartSelectionNotifier.storageKey: ['fiat:USD/KRW', 'fiat:JPY/USD'],
       });
       await pumpScreen(tester);
 

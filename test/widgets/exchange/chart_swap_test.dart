@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderContainer;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/crypto/models/crypto_coin.dart';
@@ -13,6 +14,7 @@ import 'package:tripbler/presentation/charts/chart_data_source.dart';
 import 'package:tripbler/presentation/charts/chart_inversion.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
 import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
+import '../../helpers/chart_selection_handle.dart';
 import 'package:tripbler/presentation/charts/chart_swap_store.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
@@ -1441,12 +1443,17 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
-  group('with ChartSelectionProvider', () {
-    late ChartSelectionProvider charts;
+  group('with ChartSelectionNotifier', () {
+    late ChartSelectionListenable charts;
+
+    ChartSelectionListenable newCharts() {
+      final listenable = ChartSelectionListenable(ProviderContainer.test());
+      addTearDown(listenable.dispose);
+      return listenable;
+    }
 
     Future<void> pumpCharts(WidgetTester tester) async {
-      charts = ChartSelectionProvider();
-      addTearDown(charts.dispose);
+      charts = newCharts();
       await charts.initialize();
       await tester.pumpWidget(
         MaterialApp(
@@ -1487,7 +1494,7 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:JPY/USD'],
+        ChartSelectionNotifier.storageKey: ['fiat:USD/KRW', 'fiat:JPY/USD'],
       });
       await pumpCharts(tester);
       expectShown(tester, 'USD', 'KRW');
@@ -1523,7 +1530,7 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:USD/JPY'],
+        ChartSelectionNotifier.storageKey: ['fiat:USD/KRW', 'fiat:USD/JPY'],
         storeKey: ['fiat:USD/KRW'],
       });
       await pumpCharts(tester);
@@ -1550,7 +1557,7 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', coinId('BTC')],
+        ChartSelectionNotifier.storageKey: ['fiat:USD/KRW', coinId('BTC')],
       });
       await pumpCharts(tester);
 
@@ -1570,7 +1577,7 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:JPY/KRW'],
+        ChartSelectionNotifier.storageKey: ['fiat:USD/KRW', 'fiat:JPY/KRW'],
         storeKey: ['fiat:JPY/KRW'],
       });
       await pumpCharts(tester);
@@ -1596,15 +1603,14 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: [
+        ChartSelectionNotifier.storageKey: [
           'fiat:USD/KRW',
           'fiat:JPY/KRW',
           'fiat:EUR/KRW',
         ],
         storeKey: ['fiat:JPY/KRW', 'fiat:EUR/KRW'],
       });
-      charts = ChartSelectionProvider();
-      addTearDown(charts.dispose);
+      charts = newCharts();
       await charts.initialize();
       final show = ValueNotifier(false);
       addTearDown(show.dispose);
@@ -1655,10 +1661,9 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: ['fiat:USD/KRW', 'fiat:KRW/JPY'],
+        ChartSelectionNotifier.storageKey: ['fiat:USD/KRW', 'fiat:KRW/JPY'],
       });
-      charts = ChartSelectionProvider();
-      addTearDown(charts.dispose);
+      charts = newCharts();
       await charts.initialize();
       final usd = Source(symbol: 'USD');
       final jpy = Source(symbol: 'KRW');
@@ -1751,7 +1756,7 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: ['fiat:USD/KRW'],
+        ChartSelectionNotifier.storageKey: ['fiat:USD/KRW'],
         storeKey: ['fiat:USD/KRW'],
       });
       await pumpCharts(tester);
@@ -1778,7 +1783,7 @@ void main() {
       tester,
     ) async {
       SharedPreferences.setMockInitialValues({
-        ChartSelectionProvider.storageKey: [
+        ChartSelectionNotifier.storageKey: [
           'fiat:USD/KRW',
           'fiat:JPY/KRW',
           coinId('ETH'),

@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderContainer;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/crypto/models/crypto_coin.dart';
@@ -6,7 +7,15 @@ import 'package:tripbler/presentation/charts/chart_pair.dart';
 import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
 
-const key = ChartSelectionProvider.storageKey;
+import '../../helpers/chart_selection_handle.dart';
+
+ChartSelectionListenable newCharts() {
+  final charts = ChartSelectionListenable(ProviderContainer.test());
+  addTearDown(charts.dispose);
+  return charts;
+}
+
+const key = ChartSelectionNotifier.storageKey;
 
 Future<List<String>?> stored() async =>
     (await SharedPreferences.getInstance()).getStringList(key);
@@ -19,7 +28,7 @@ DisplayCurrency coin(String symbol) =>
 void main() {
   test('starts with USD/KRW, JPY/KRW and BTC/KRW', () async {
     SharedPreferences.setMockInitialValues({});
-    final charts = ChartSelectionProvider();
+    final charts = newCharts();
     expect(charts.loaded, isFalse);
     await charts.initialize();
     expect(charts.loaded, isTrue);
@@ -30,7 +39,6 @@ void main() {
     ]);
     // 처음 상태는 저장하지 않아 기본값이 바뀌면 그대로 따라간다.
     expect(await stored(), isNull);
-    charts.dispose();
   });
 
   test(
@@ -48,7 +56,7 @@ void main() {
           'fiat:GBP/KRW',
         ],
       });
-      final charts = ChartSelectionProvider();
+      final charts = newCharts();
       await charts.initialize();
       expect(charts.pairs.map((p) => p.id), [
         'crypto:ETH/KRW',
@@ -58,7 +66,6 @@ void main() {
         'crypto:BTC/KRW',
       ]);
       expect(charts.canAdd, isFalse);
-      charts.dispose();
     },
   );
 
@@ -68,16 +75,15 @@ void main() {
       SharedPreferences.setMockInitialValues({
         key: ['nonsense'],
       });
-      final charts = ChartSelectionProvider();
+      final charts = newCharts();
       await charts.initialize();
-      expect(charts.pairs, ChartSelectionProvider.defaults);
-      charts.dispose();
+      expect(charts.pairs, ChartSelectionNotifier.defaults);
     },
   );
 
   test('replace changes one card, refuses duplicates and saves', () async {
     SharedPreferences.setMockInitialValues({});
-    final charts = ChartSelectionProvider();
+    final charts = newCharts();
     await charts.initialize();
     var notified = 0;
     charts.addListener(() => notified++);
@@ -101,17 +107,16 @@ void main() {
     );
     expect(notified, 1);
     expect(charts.pairs.first.id, 'fiat:EUR/KRW');
-    charts.dispose();
   });
 
   test('add stops at five cards and remove keeps at least one', () async {
     SharedPreferences.setMockInitialValues({});
-    final charts = ChartSelectionProvider();
+    final charts = newCharts();
     await charts.initialize();
 
     final added = [charts.add(), charts.add()];
     expect(added.every((pair) => pair != null), isTrue);
-    expect(charts.pairs, hasLength(ChartSelectionProvider.maxCards));
+    expect(charts.pairs, hasLength(ChartSelectionNotifier.maxCards));
     expect(charts.pairs.toSet(), hasLength(5));
     // 새 카드는 아직 없는 통화/KRW 쌍이다.
     for (final pair in added) {
@@ -134,25 +139,23 @@ void main() {
 
     await pumpEventQueue();
     expect(await stored(), [charts.pairs.single.id]);
-    charts.dispose();
   });
 
   test('pairs cannot be changed from outside', () async {
     SharedPreferences.setMockInitialValues({});
-    final charts = ChartSelectionProvider();
+    final charts = newCharts();
     await charts.initialize();
     expect(
       () => charts.pairs.add(const ChartPair.crypto('ETH')),
       throwsUnsupportedError,
     );
-    charts.dispose();
   });
 
   test('pairs that differ only in direction count as one chart', () async {
     SharedPreferences.setMockInitialValues({
       key: ['fiat:KRW/USD', 'fiat:USD/KRW', 'fiat:JPY/KRW', 'fiat:KRW/JPY'],
     });
-    final charts = ChartSelectionProvider();
+    final charts = newCharts();
     await charts.initialize();
     // 저장값을 읽을 때도 먼저 나온 방향만 남긴다.
     expect(charts.pairs.map((p) => p.id), ['fiat:KRW/USD', 'fiat:JPY/KRW']);
@@ -168,14 +171,13 @@ void main() {
     final next = charts.add()!;
     expect(next.isSameChart(const ChartPair.fiat('KRW', 'USD')), isFalse);
     expect(next.isSameChart(const ChartPair.fiat('KRW', 'JPY')), isFalse);
-    charts.dispose();
   });
 
   test('changes before the saved pairs are read are ignored', () async {
     SharedPreferences.setMockInitialValues({
       key: ['fiat:EUR/KRW', 'crypto:ETH/KRW'],
     });
-    final charts = ChartSelectionProvider();
+    final charts = newCharts();
     var notified = 0;
     charts.addListener(() => notified++);
 
@@ -195,7 +197,7 @@ void main() {
     );
     expect(charts.add(), isNull);
     charts.remove(0);
-    expect(charts.pairs, ChartSelectionProvider.defaults);
+    expect(charts.pairs, ChartSelectionNotifier.defaults);
     expect(notified, 0);
     await pumpEventQueue();
     expect(await stored(), ['fiat:EUR/KRW', 'crypto:ETH/KRW']);
@@ -205,12 +207,11 @@ void main() {
     expect(charts.pairs.map((p) => p.id), ['fiat:EUR/KRW', 'crypto:ETH/KRW']);
     await pumpEventQueue();
     expect(await stored(), ['fiat:EUR/KRW', 'crypto:ETH/KRW']);
-    charts.dispose();
   });
 
   test('replaceSide computes the pair and the direction to show', () async {
     SharedPreferences.setMockInitialValues({});
-    final charts = ChartSelectionProvider();
+    final charts = newCharts();
     await charts.initialize();
     const usdKrw = ChartPair.fiat('USD', 'KRW');
 
@@ -260,14 +261,13 @@ void main() {
       charts.swappedAfterReplace('crypto:ETH/KRW', 'crypto:SOL/KRW'),
       isNull,
     );
-    charts.dispose();
   });
 
   test(
     'replaceSide exchanges positions when the chart already exists',
     () async {
       SharedPreferences.setMockInitialValues({});
-      final charts = ChartSelectionProvider();
+      final charts = newCharts();
       await charts.initialize();
       var notified = 0;
       charts.addListener(() => notified++);
@@ -335,7 +335,6 @@ void main() {
         'crypto:BTC/KRW',
         'fiat:JPY/KRW',
       ]);
-      charts.dispose();
     },
   );
 
@@ -486,7 +485,7 @@ void main() {
           SharedPreferences.setMockInitialValues({
             key: [pressed.id, existing.id],
           });
-          final charts = ChartSelectionProvider();
+          final charts = newCharts();
           await charts.initialize();
 
           expect(
@@ -509,7 +508,6 @@ void main() {
           // 방향만 정하고 옮겨 온 카드의 ID는 그대로다.
           expect(direction.id, existing.id);
           expect(shown(existing, direction.swapped), want);
-          charts.dispose();
         },
       );
     }
@@ -518,7 +516,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       const usd = ChartPair.fiat('USD', 'KRW');
       const jpy = ChartPair.fiat('JPY', 'KRW');
-      final charts = ChartSelectionProvider();
+      final charts = newCharts();
       await charts.initialize();
       void exchange(ChartPair pressed) => charts.replaceSide(
         0,
@@ -554,13 +552,12 @@ void main() {
         currency: coin('SOL'),
       );
       expect(charts.swappedAfterExchange(usd.id, 'crypto:SOL/KRW'), isNull);
-      charts.dispose();
     });
   });
 
   test('replaceSide ignores stale and impossible picks', () async {
     SharedPreferences.setMockInitialValues({});
-    final charts = ChartSelectionProvider();
+    final charts = newCharts();
     await charts.initialize();
     const usdKrw = ChartPair.fiat('USD', 'KRW');
 
@@ -616,6 +613,5 @@ void main() {
       'fiat:JPY/KRW',
       'crypto:BTC/KRW',
     ]);
-    charts.dispose();
   });
 }

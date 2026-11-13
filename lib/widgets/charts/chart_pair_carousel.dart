@@ -74,7 +74,7 @@ class ChartPairCarousel extends StatelessWidget {
         ? null
         : _AddChartPage(
             onAdd: onAdd!,
-            remaining: ChartSelectionProvider.maxCards - pairs.length,
+            remaining: ChartSelectionNotifier.maxCards - pairs.length,
           ),
     cardBuilder: (context, index, period, shouldLoad, swapped, onSwap) {
       final pair = pairs[index];
@@ -177,7 +177,7 @@ class _AddChartPage extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               Text(
-                '최대 ${ChartSelectionProvider.maxCards}개 · $remaining개 더 추가할 수 있어요',
+                '최대 ${ChartSelectionNotifier.maxCards}개 · $remaining개 더 추가할 수 있어요',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: colorScheme.onSurfaceVariant,

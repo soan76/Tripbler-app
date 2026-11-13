@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show ConsumerState, ConsumerStatefulWidget;
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -14,15 +16,15 @@ import '../widgets/exchange/currency_selection_sheet.dart';
 import '../widgets/focus_history.dart';
 
 // 환율 화면을 구성하는 StatefulWidget
-class ExchangeScreen extends StatefulWidget {
+class ExchangeScreen extends ConsumerStatefulWidget {
   const ExchangeScreen({super.key});
 
   @override
-  State<ExchangeScreen> createState() => _ExchangeScreenState();
+  ConsumerState<ExchangeScreen> createState() => _ExchangeScreenState();
 }
 
 // 환율 화면을 구성하는 StatefulWidget
-class _ExchangeScreenState extends State<ExchangeScreen> {
+class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
   // State 내부에서만 사용하는 초기화 여부 값이므로 private 필드로 변경.
   bool _hasInitialized = false;
 
@@ -40,7 +42,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
         }
 
         context.read<ExchangeDisplayProvider>().initialize();
-        context.read<ChartSelectionProvider>().initialize();
+        ref.read(chartSelectionProvider.notifier).initialize();
       });
     }
   }
@@ -50,7 +52,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
   Widget build(BuildContext context) {
     final provider = context.watch<ExchangeProvider>();
     final display = context.watch<ExchangeDisplayProvider>();
-    final charts = context.watch<ChartSelectionProvider>();
+    final charts = ref.watch(chartSelectionProvider);
+    final chartsNotifier = ref.read(chartSelectionProvider.notifier);
 
     // 한 번의 build 안에서 동일한 Provider 상태 snapshot을 사용하도록 지역 변수로 정리.
     final visibleCurrencies = provider.visibleCurrencies;
@@ -192,10 +195,10 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                   currencies: display.available,
                   onPick: (index, {required base, required swapped}) =>
                       _pickChartCurrency(index, base: base, swapped: swapped),
-                  onAdd: charts.canAdd ? charts.add : null,
-                  onRemove: charts.canRemove ? charts.remove : null,
-                  swappedAfterReplace: charts.swappedAfterReplace,
-                  swappedAfterExchange: charts.swappedAfterExchange,
+                  onAdd: charts.canAdd ? chartsNotifier.add : null,
+                  onRemove: charts.canRemove ? chartsNotifier.remove : null,
+                  swappedAfterReplace: chartsNotifier.swappedAfterReplace,
+                  swappedAfterExchange: chartsNotifier.swappedAfterExchange,
                 )
               else
                 const SizedBox(
@@ -226,9 +229,9 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     required bool base,
     required bool swapped,
   }) async {
-    final charts = context.read<ChartSelectionProvider>();
+    final charts = ref.read(chartSelectionProvider.notifier);
     final display = context.read<ExchangeDisplayProvider>();
-    final pair = charts.pairs[index];
+    final pair = ref.read(chartSelectionProvider).pairs[index];
     _leaveAmountField();
     final picked = await showChartCurrencyPicker(
       context: context,

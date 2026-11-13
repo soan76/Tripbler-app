@@ -12,7 +12,7 @@ import 'package:tripbler/models/chart_point.dart';
 import 'package:tripbler/models/exchange_rate_history_model.dart';
 import 'package:tripbler/presentation/charts/chart_data_source.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
-import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
+import '../../helpers/chart_selection_handle.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/providers/auth_provider.dart';
 import 'package:tripbler/providers/exchange_provider.dart';
@@ -1659,10 +1659,9 @@ void main() {
         crypto,
         fiatApi: fiatApi,
       );
-      final charts = ChartSelectionProvider();
+      final charts = ChartSelectionHandle.of(tester);
       await display.initialize();
       addTearDown(() {
-        charts.dispose();
         display.dispose();
         exchange.dispose();
         crypto.dispose();
@@ -1676,7 +1675,6 @@ void main() {
               ChangeNotifierProvider.value(value: crypto),
               ChangeNotifierProvider.value(value: exchange),
               ChangeNotifierProvider.value(value: display),
-              ChangeNotifierProvider.value(value: charts),
             ],
             child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
           ),

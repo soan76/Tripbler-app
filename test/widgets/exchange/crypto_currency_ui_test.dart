@@ -7,6 +7,7 @@ import 'package:tripbler/crypto/models/crypto_coin.dart';
 import 'package:tripbler/crypto/providers/crypto_provider.dart';
 import 'package:tripbler/models/currency_model.dart';
 import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
+import '../../helpers/chart_selection_handle.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/providers/exchange_provider.dart';
@@ -38,7 +39,7 @@ void main() {
         fiatApi: fiatApi,
       );
       await display.initialize();
-      final charts = ChartSelectionProvider();
+      final charts = ChartSelectionHandle.of(tester);
       await tester.pumpWidget(
         buildAppScope(
           child: MultiProvider(
@@ -46,7 +47,6 @@ void main() {
               ChangeNotifierProvider.value(value: crypto),
               ChangeNotifierProvider.value(value: exchange),
               ChangeNotifierProvider.value(value: display),
-              ChangeNotifierProvider.value(value: charts),
             ],
             child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
           ),
@@ -55,7 +55,7 @@ void main() {
       await tester.pumpAndSettle();
       // 차트는 위쪽 목록과 상관없이 기본 통화쌍으로 시작하고 통화/암호 전환이 없다.
       expect(find.byType(ChartPairCarousel), findsOneWidget);
-      expect(charts.pairs, ChartSelectionProvider.defaults);
+      expect(charts.pairs, ChartSelectionNotifier.defaults);
       expect(
         find.byWidgetPredicate((widget) => widget is SegmentedButton),
         findsNothing,
@@ -80,7 +80,7 @@ void main() {
       expect(find.byType(CurrencyRow), findsNWidgets(2));
       expect(find.byKey(const ValueKey('crypto:BTC')), findsOneWidget);
       expect(find.text('환율 흐름'), findsOneWidget);
-      expect(charts.pairs, ChartSelectionProvider.defaults);
+      expect(charts.pairs, ChartSelectionNotifier.defaults);
       expect(exchange.visibleCurrencies, isEmpty);
       await tester.tap(find.text('통화 추가 / 편집'));
       await tester.pumpAndSettle();
@@ -90,10 +90,9 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(CurrencyRow), findsOneWidget);
       expect(crypto.selectedCoins, isEmpty);
-      expect(charts.pairs, ChartSelectionProvider.defaults);
+      expect(charts.pairs, ChartSelectionNotifier.defaults);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
-      charts.dispose();
       display.dispose();
       exchange.dispose();
       crypto.dispose();

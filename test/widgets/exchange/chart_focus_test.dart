@@ -16,7 +16,7 @@ import 'package:tripbler/models/exchange_rate_history_model.dart';
 import 'package:tripbler/models/exchange_rate_response.dart';
 import 'package:tripbler/presentation/charts/chart_data_source.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
-import 'package:tripbler/presentation/charts/chart_selection_provider.dart';
+import '../../helpers/chart_selection_handle.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/providers/exchange_provider.dart';
@@ -86,7 +86,7 @@ class RealScreen {
   RealScreen(this.tester);
 
   final WidgetTester tester;
-  late final ChartSelectionProvider charts;
+  late final ChartSelectionHandle charts;
   late final ExchangeProvider exchange;
   late final ExchangeDisplayProvider display;
   late final StaleApi fiatApi;
@@ -99,10 +99,9 @@ class RealScreen {
     fiatApi = StaleApi();
     exchange = ExchangeProvider(apiService: fiatApi);
     display = ExchangeDisplayProvider(exchange, crypto, fiatApi: fiatApi);
-    charts = ChartSelectionProvider();
+    charts = ChartSelectionHandle.of(tester);
     await display.initialize();
     addTearDown(() {
-      charts.dispose();
       display.dispose();
       exchange.dispose();
       crypto.dispose();
@@ -116,7 +115,6 @@ class RealScreen {
             ChangeNotifierProvider.value(value: crypto),
             ChangeNotifierProvider.value(value: exchange),
             ChangeNotifierProvider.value(value: display),
-            ChangeNotifierProvider.value(value: charts),
           ],
           child: const MaterialApp(home: Scaffold(body: ExchangeScreen())),
         ),
