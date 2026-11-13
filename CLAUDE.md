@@ -6,6 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @AGENTS.md
 
+## 백엔드 작업
+- 백엔드(`backend/`) 작업은 Claude를 `backend/` 폴더에서 실행한다. 그래야 `backend/CLAUDE.md`와 `backend/.claude/`의 서브에이전트(`security-reviewer` 포함)·훅이 적용된다. 저장소 루트에서 실행하면 앱용 설정만 적용된다.
+
 ## 서브에이전트 사용
 - 코드 점검(버그, 규칙 위반, 성능 문제)은 `code-inspector` 서브에이전트에게 맡긴다. 기능 구현이나 수정이 끝나면 점검을 요청받지 않아도 `code-inspector`로 점검한다.
 - `code-inspector`가 보고한 버그, 규칙 위반, 성능 문제는 사용자에게 알리고, 수정은 사용자가 요청할 때 진행한다.

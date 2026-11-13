@@ -42,7 +42,7 @@ tools: Read, Edit, Write, Grep, Glob, Bash, Skill
 - `controller → service → client` 구조와 `BusinessException` + `ErrorCode` 예외 처리를 따른다.
 - 외부 시세 캐시는 시간 초과일 때만 마지막 값을 `stale: true`와 원래 `fetchedAt`으로 돌려준다. 다른 오류를 성공으로 바꾸지 않는다.
 - 캐시 TTL·허용 기간·타임아웃 값을 바꾸면 `docs/market-network-resilience.md`도 함께 고친다.
-- API 경로나 응답 필드를 바꿔야 하면 바로 바꾸지 않는다. `../tripbler`의 `lib/core/config/api_config.dart`와 호출부를 확인하고, 앱도 함께 바꿔야 하는 내용을 보고한다.
+- API 경로나 응답 필드를 바꿔야 하면 바로 바꾸지 않는다. 앱(저장소 루트)의 `../lib/core/config/api_config.dart`와 호출부를 확인하고, 앱도 함께 바꿔야 하는 내용을 보고한다.
 - DB 스키마 변경(인덱스, 컬럼), 새 의존성 추가, `SecurityConfig` 접근 규칙 변경은 하지 않고 제안만 한다.
 - 키, 비밀값, 토큰을 코드나 로그에 남기지 않는다.
 - 커밋과 푸시는 하지 않는다.

@@ -20,7 +20,7 @@ model: sonnet
 - 잘못된 로직, null 처리, 경계값, 상태 갱신 누락, 예외 처리 누락.
 - 비동기 응답이 화면 제거나 요청 변경 뒤에 반영되는 문제(`mounted` 확인, 요청 순번 확인 누락).
 - dispose되지 않는 Timer, StreamSubscription, Controller.
-- API 경로나 응답 필드가 `../tripbler-backend`의 계약과 맞지 않는 경우.
+- API 경로나 응답 필드가 `backend/`의 계약과 맞지 않는 경우.
 
 버그는 직접 고치지 않는다. 고치려면 동작이 바뀌므로 위치와 수정 방향만 보고한다.
 

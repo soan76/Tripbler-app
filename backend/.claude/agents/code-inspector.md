@@ -22,7 +22,7 @@ model: sonnet
 - 인증·보안: `SecurityConfig`에서 열리면 안 되는 엔드포인트가 `permitAll`인지, 다른 사용자의 데이터에 접근할 수 있는지, 토큰 만료·재발급 처리.
 - 입력 검증: 요청 DTO에 `@Valid`와 검증 어노테이션이 빠졌는지.
 - 동시성: 메모리 캐시나 공유 상태를 여러 요청이 동시에 바꿀 때 생기는 문제.
-- API 경로나 응답 필드가 `../tripbler`의 `lib/core/config/api_config.dart`와 호출부의 기대와 맞지 않는 경우.
+- API 경로나 응답 필드가 앱(저장소 루트)의 `../lib/core/config/api_config.dart`와 호출부의 기대와 맞지 않는 경우.
 
 버그는 직접 고치지 않는다. 고치려면 동작이 바뀌므로 위치와 수정 방향만 보고한다.
 

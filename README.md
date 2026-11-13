@@ -4,7 +4,7 @@
 
 환율, 암호화폐 시세, 장소 검색, 번역 요청은 Tripbler 서버의 `/api/v1/...`를 거치며, 이 외부 서비스의 API 키는 서버에만 있습니다. 지도 표시용 Google Maps SDK 키만 앱에서 별도로 설정합니다(아래 실행 방법 참고).
 
-- 백엔드(Spring Boot): [soan76/Tripbler-backend](https://github.com/soan76/Tripbler-backend)
+- 백엔드(Spring Boot): 이 저장소의 [`backend/`](backend/) 폴더. 실행 방법은 [backend/README.md](backend/README.md)를 참고하세요.
 
 ## 주요 기능
 
@@ -69,7 +69,7 @@ lib
 ### 준비물
 
 - Flutter SDK
-- 실행 중인 [Tripbler 백엔드](https://github.com/soan76/Tripbler-backend) 서버
+- 실행 중인 Tripbler 백엔드 서버([backend/](backend/))
 - Google Maps API 키, Google OAuth 서버 클라이언트 ID
 
 ### 설정

@@ -2,7 +2,8 @@
 
 ## 목적과 범위
 - Tripbler는 환율·지도·번역 등 여행 도구를 연결하는 Flutter 앱이다. 상태 관리는 기존 Provider 구조를 따른다.
-- 이 지침은 현재 프론트엔드 저장소에 적용한다. 연동 백엔드는 `../tripbler-backend`의 Spring Boot 프로젝트이며, 수정 시 해당 저장소의 지침과 API 계약을 확인한다.
+- 이 지침은 앱(저장소 루트, `backend/` 제외)에 적용한다. 연동 백엔드는 같은 저장소의 `backend/`(Spring Boot, git subtree)이며, 수정 시 `backend/AGENTS.md`와 API 계약을 확인한다.
+- 백엔드는 `backend/`에서만 수정한다. 예전 별도 저장소(`soan76/Tripbler-backend`, 로컬 `../tripbler-backend`)는 보관용이다.
 - 현재 구현 여부는 코드로 확인한다. AI 채팅 화면 제거와 개인 여행 에이전트 확장은 향후 방향이며, 별도 구현 요청 없이 실행하지 않는다.
 
 ## 작업 원칙
@@ -33,6 +34,8 @@ flutter test --no-pub --plain-name "<테스트 이름>" <파일>       # 테스�
 - `TRIPBLER_API_BASE_URL`이 없으면 `ApiConfig.baseUrl`은 Android 에뮬레이터에서 `http://10.0.2.2:8080`, 그 외에는 `http://localhost:8080`을 쓴다.
 - Google Maps 키: Android는 `android/local.properties`의 `GOOGLE_MAPS_ANDROID_API_KEY`, iOS는 `ios/Flutter/Secrets.xcconfig`에서 읽는다.
 - `google_maps_flutter*` 패키지는 `dependency_overrides`로 `packages/`에 내려받아 수정해 쓴다(정적 분석 제외). pub 캐시가 아니라 이 폴더에서 고친다.
+- 백엔드 빌드·테스트는 `backend/`에서 `./gradlew` 명령으로 실행한다(`backend/AGENTS.md` 참고).
+- 예전 백엔드 저장소에도 반영하려면 루트에서 `git subtree push --prefix=backend https://github.com/soan76/Tripbler-backend.git main`을 실행한다. 사용자가 요청할 때만 한다.
 
 ## 아키텍처
 

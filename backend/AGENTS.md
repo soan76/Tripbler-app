@@ -2,7 +2,8 @@
 
 ## 목적과 범위
 - Tripbler 여행 앱의 Spring Boot 4.1 / Java 17 API 서버다(PostgreSQL, JPA, Spring Security JWT).
-- 연동 클라이언트는 `../tripbler`의 Flutter 앱이다. API 계약(경로, 요청·응답 필드)을 바꾸면 앱의 `lib/core/config/api_config.dart`와 호출부도 함께 확인한다.
+- 이 폴더는 Tripbler-app 저장소의 `backend/`(git subtree)이며, 백엔드 수정은 여기서 한다. git 명령은 저장소 루트(`..`)에서 실행한다.
+- 연동 클라이언트는 저장소 루트(`..`)의 Flutter 앱이다. API 계약(경로, 요청·응답 필드)을 바꾸면 앱의 `../lib/core/config/api_config.dart`와 호출부도 함께 확인한다.
 - 설명과 작업 결과는 한국어로 간결하게 작성하고, 구현 완료·계획·미검증을 구분한다. 실행하지 않은 테스트나 실제 외부 API 호출을 성공했다고 표현하지 않는다.
 
 ## 테스트 규칙

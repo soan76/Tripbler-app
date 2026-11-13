@@ -4,7 +4,7 @@
 
 환율·암호화폐·장소 검색·번역 요청은 Tripbler 서버를 거치며, 이 외부 서비스의 API 키는 서버에만 둡니다. 지도 표시용 Google Maps SDK 키는 Android와 iOS 앱에서 별도로 설정합니다.
 
-- 클라이언트(Flutter 앱): [soan76/Tripbler-app](https://github.com/soan76/Tripbler-app)
+- 클라이언트(Flutter 앱): [soan76/Tripbler-app](https://github.com/soan76/Tripbler-app). 이 서버 코드는 그 저장소의 `backend/` 폴더에서 관리합니다.
 
 ## 기술 스택
 
@@ -146,4 +146,4 @@ Windows (PowerShell)
 
 ## 관련 저장소
 
-- [Tripbler-app](https://github.com/soan76/Tripbler-app): Flutter 클라이언트. API 경로는 앱의 `lib/core/config/api_config.dart`에 모여 있습니다.
+- [Tripbler-app](https://github.com/soan76/Tripbler-app): Flutter 클라이언트이자 이 백엔드(`backend/`)를 함께 담은 저장소. API 경로는 앱의 `lib/core/config/api_config.dart`에 모여 있습니다.
