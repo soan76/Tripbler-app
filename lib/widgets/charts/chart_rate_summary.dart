@@ -20,6 +20,7 @@ class ChartRateSummary extends StatelessWidget {
     required this.baseCode,
     required this.targetCode,
     this.historicalRate = false,
+    this.decimalPlaces,
   });
 
   /// 화면 방향(뒤집혀 있으면 뒤집은 값)의 현재 환율. 없으면 null.
@@ -34,16 +35,33 @@ class ChartRateSummary extends StatelessWidget {
   /// [rate]가 지금 시세가 아니라 기록의 마지막 값인지. 단위 뒤에 "최근 기록"을 붙인다.
   final bool historicalRate;
 
-  /// 기간 시작 값과의 차이. 계산할 수 없으면 null, 표시 자릿수에서 0이면 0.
-  static double? changeOf(double? rate, List<ChartPoint> history) {
+  /// 환율과 변화량의 최대 소수점 자릿수(설정의 자릿수 제한). null이면 제한 없음.
+  final int? decimalPlaces;
+
+  /// 기간 시작 값과의 차이와 그 표시 글자(부호 없는 크기). 계산할 수 없으면 null.
+  ///
+  /// 표시 규칙은 [ChartAmountConverter.formatChange]를 따른다. 기간 시작 값이나 현재
+  /// 환율이 제한 없이 보이면 차이도 제한 없이, 아니면 [maxDecimals]로 반올림해 보여
+  /// 준다. 표시가 0이면 [value]도 0(변동 없음)이다.
+  static ({double value, String text})? changeOf(
+    double? rate,
+    List<ChartPoint> history, {
+    int? maxDecimals,
+  }) {
     if (rate == null || !rate.isFinite || history.isEmpty) return null;
     final start = history.first.rate;
     if (!start.isFinite || start <= 0) return null;
     final change = rate - start;
     if (!change.isFinite) return null;
     // 표시하면 0이 되는 차이는 오르내림으로 보지 않는다.
-    final shown = ChartAmountConverter.formatAmount(change.abs());
-    return double.tryParse(shown.replaceAll(',', '')) == 0 ? 0 : change;
+    final text = ChartAmountConverter.formatChange(
+      change.abs(),
+      maxDecimals: maxDecimals,
+      compared: [start, rate],
+    );
+    return ChartAmountConverter.isZeroText(text)
+        ? (value: 0.0, text: '0')
+        : (value: change, text: text);
   }
 
   /// 큰 환율의 글자 배율 상한. 이미 큰 글자라 더 키우지 않아도 읽히고, 높이가 고정된
@@ -72,9 +90,10 @@ class ChartRateSummary extends StatelessWidget {
     final unitStyle = textTheme.bodyMedium?.copyWith(color: mutedColor);
     final changeStyle = textTheme.labelLarge;
 
-    final change = changeOf(rate, history);
+    final periodChange = changeOf(rate, history, maxDecimals: decimalPlaces);
     Widget? changeText;
-    if (change != null) {
+    if (periodChange != null) {
+      final change = periodChange.value;
       final start = history.first.rate;
       final fixedPercent = (change / start * 100).abs().toStringAsFixed(2);
       // 변화량은 보이는데 퍼센트가 0.00으로 반올림되면 오르내림과 어긋나 보이므로 "<0.01"로 쓴다.
@@ -92,7 +111,7 @@ class ChartRateSummary extends StatelessWidget {
           : down
           ? '▼ '
           : '';
-      final amount = ChartAmountConverter.formatAmount(change.abs());
+      final amount = periodChange.text;
       changeText = Text.rich(
         TextSpan(
           children: [
@@ -134,7 +153,12 @@ class ChartRateSummary extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 alignment: AlignmentDirectional.centerStart,
                 child: Text(
-                  hasRate ? ChartAmountConverter.formatAmount(rate) : '—',
+                  hasRate
+                      ? ChartAmountConverter.formatAmount(
+                          rate,
+                          maxDecimals: decimalPlaces,
+                        )
+                      : '—',
                   key: const ValueKey('market-chart-current-rate'),
                   maxLines: 1,
                   textScaler: MediaQuery.textScalerOf(

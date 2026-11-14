@@ -8,6 +8,7 @@ import '../../presentation/charts/chart_load_state.dart';
 import '../../presentation/charts/chart_snapshot_store.dart';
 import '../../presentation/charts/market_chart_provider.dart';
 import '../../presentation/exchange/display_currency.dart';
+import '../../providers/settings_provider.dart';
 import '../exchange/exchange_chart_period_selector.dart';
 import 'chart_amount_converter.dart';
 import 'chart_period_scope.dart';
@@ -53,6 +54,10 @@ class MarketChartCard extends StatefulWidget {
   /// 카드를 지울 때. null이면 지우기 버튼을 두지 않는다.
   final VoidCallback? onRemove;
 
+  /// 설정의 자릿수 제한 값(-1이면 자동). 환율·환산 금액·입력칸에 적용한다.
+  /// null이면 제한하지 않는다. 그래프의 세로축 눈금은 간격에 맞춘 자릿수를 그대로 쓴다.
+  final int? decimalPlaces;
+
   const MarketChartCard({
     super.key,
     required this.baseCurrency,
@@ -71,6 +76,7 @@ class MarketChartCard extends StatefulWidget {
     this.snapshotStore,
     this.onPickCurrency,
     this.onRemove,
+    this.decimalPlaces,
   });
 
   @override
@@ -103,6 +109,17 @@ class _MarketChartCardState extends State<MarketChartCard>
 
   static bool _canLoad(MarketChartCard card) =>
       card.shouldLoad && card.unavailableText == null;
+
+  // 화면에 보이는 한쪽 통화의 최대 소수점 자릿수. 설정이 없으면 제한하지 않는다.
+  int? _decimalsOf(DisplayCurrency currency) {
+    final setting = widget.decimalPlaces;
+    return setting == null
+        ? null
+        : SettingsState.resolveDecimalPlaces(
+            setting,
+            isCrypto: currency.isCrypto,
+          );
+  }
 
   bool get _isCrypto =>
       widget.baseCurrency.isCrypto || widget.targetCurrency.isCrypto;
@@ -287,6 +304,7 @@ class _MarketChartCardState extends State<MarketChartCard>
                 period: widget.period,
                 baseCode: _shownBase.code,
                 targetCode: _shownTarget.code,
+                decimalPlaces: _decimalsOf(_shownTarget),
               ),
               converterBuilder: (status) => ChartAmountConverter(
                 rate: widget.swapped
@@ -300,6 +318,8 @@ class _MarketChartCardState extends State<MarketChartCard>
                 selectedDate: _selectedDate,
                 selectionKey: widget.swapped,
                 status: status,
+                inputDecimalPlaces: _decimalsOf(_shownBase),
+                resultDecimalPlaces: _decimalsOf(_shownTarget),
                 message:
                     widget.unavailableText ??
                     (!widget.shouldLoad && !state.hasLoaded

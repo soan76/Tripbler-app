@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +63,8 @@ class ChartAmountConverter extends StatefulWidget {
     this.selectionKey,
     this.status = const SizedBox.shrink(),
     this.message,
+    this.inputDecimalPlaces,
+    this.resultDecimalPlaces,
   });
 
   final double? rate;
@@ -86,6 +90,12 @@ class ChartAmountConverter extends StatefulWidget {
   final Widget status;
   final String? message;
 
+  /// 입력칸([baseCode] 금액)에 넣을 수 있는 최대 소수점 자릿수. null이면 제한 없음.
+  final int? inputDecimalPlaces;
+
+  /// [targetCode]로 보여 주는 금액·환율의 최대 소수점 자릿수. null이면 제한 없음.
+  final int? resultDecimalPlaces;
+
   /// 입력 글자를 금액으로 바꾼다. 비었거나 숫자가 아니면 null이다.
   static double? parseAmount(String text) {
     final amount = double.tryParse(text.replaceAll(',', ''));
@@ -93,23 +103,106 @@ class ChartAmountConverter extends StatefulWidget {
   }
 
   /// 환산 금액을 표시 글자로 바꾼다. 계산할 수 없으면 null이다.
-  static String? convertedText(String text, double rate) {
+  static String? convertedText(String text, double rate, {int? maxDecimals}) {
     final amount = parseAmount(text);
     if (amount == null) return null;
     final result = const ExchangeCalculator().convertFromBase(
       baseAmount: amount,
       rate: rate,
     );
-    return result.isFinite ? formatAmount(result) : null;
+    return result.isFinite
+        ? formatAmount(result, maxDecimals: maxDecimals)
+        : null;
   }
 
-  /// 금액이나 환율을 표시 글자로 바꾼다.
-  /// 1 미만 값은 반전된 코인 환율처럼 아주 작을 수 있어 유효숫자 기준으로 표시한다.
-  static String formatAmount(double value) => value.abs() < 1
-      ? ExchangeChartAxisHelper.formatRate(value)
-      : _resultFormat.format(value);
+  /// 금액이나 환율(현재 환율, 환산 결과, 선택일 환율, 비교 금액)을 표시 글자로 바꾼다.
+  ///
+  /// [maxDecimals]가 있으면 설정의 자릿수 제한에 맞춰 반올림한다. 다만 0이 아니고
+  /// 절댓값이 표시 단위(10^-[maxDecimals])보다 작은 값(예: 1원의 달러 환율)은 제한하면
+  /// 0이나 단위 하나로 뭉개지므로, 제한 없이 아래 기본 표시를 쓴다.
+  /// 예: 2자리에서 0.006은 "0.006", 0.0123은 "0.01". 0자리에서 0.4는 "0.4", 0.6은 "0.6",
+  /// 1.4는 "1".
+  ///
+  /// 제한이 없으면 1 미만 값은 반전된 코인 환율처럼 아주 작을 수 있어 유효숫자 기준으로
+  /// 표시한다. 0(-0.0 포함)은 언제나 "0"이다.
+  ///
+  /// 변화량·차이는 [formatChange]를 쓴다.
+  static String formatAmount(double value, {int? maxDecimals}) {
+    // 0(-0.0 포함)은 아래 기본 표시로 가고, 거기서 "0"이 된다.
+    if (maxDecimals != null &&
+        value.isFinite &&
+        value != 0 &&
+        !usesFullPrecision(value, maxDecimals)) {
+      return _limitedFormat(maxDecimals).format(value);
+    }
+
+    return value.abs() < 1
+        ? ExchangeChartAxisHelper.formatRate(value)
+        : _resultFormat.format(value);
+  }
+
+  /// [formatAmount]가 [maxDecimals] 제한 대신 제한 없는 기본 표시를 쓰는 값인지.
+  /// 0이 아니고 절댓값이 표시 단위(10^-[maxDecimals])보다 작은 유한한 값이다.
+  /// [formatAmount]와 [formatChange]가 이 한 곳의 판정을 함께 쓴다.
+  static bool usesFullPrecision(double value, int maxDecimals) =>
+      value.isFinite &&
+      value != 0 &&
+      value.abs() < 1 / math.pow(10, maxDecimals);
+
+  /// 기간 변화량이나 비교 차이를 표시 글자로 바꾼다. [compared]는 차이를 낸 두 값
+  /// (기간 시작 값과 현재 환율, 또는 선택일 금액과 최신 금액)이다.
+  ///
+  /// - 제한이 없으면 [formatAmount]와 같다.
+  /// - [compared] 중 하나라도 [usesFullPrecision]이면(화면에 제한 없이 보이면) 차이도
+  ///   제한 없이 [formatAmount] 기본 표시로 보여 준다. 두 값이 서로 다르게 보이는데
+  ///   차이만 반올림돼 0이 되지 않게 한다. 이때 "0"은 차이가 정확히 0일 때뿐이다.
+  /// - 두 값이 모두 제한 자릿수로 보이면 차이도 제한대로 반올림한다. 두 값이 같게
+  ///   보이는데 차이만 더 긴 소수로 보이지 않게 한다. 반올림해 0이 되면 "0"이다.
+  ///
+  /// 화면은 "0"([isZeroText])을 "변동 없음"(부호·색 없음)으로 본다.
+  /// 예(2자리): 0.00070 → 0.00072는 "0.00002"(▲), 1,300.12 → 1,300.1249는 "0"(변동 없음),
+  /// 선택일 0.0072 → 최신 0.01은 "0.0028".
+  static String formatChange(
+    double value, {
+    int? maxDecimals,
+    List<double> compared = const [],
+  }) {
+    if (maxDecimals == null ||
+        !value.isFinite ||
+        compared.any((v) => usesFullPrecision(v, maxDecimals))) {
+      return formatAmount(value);
+    }
+    final text = _limitedFormat(maxDecimals).format(value);
+    return isZeroText(text) ? '0' : text;
+  }
+
+  /// 표시 글자가 0을 나타내는지("0", "-0", "0.00" 등).
+  static bool isZeroText(String text) =>
+      double.tryParse(text.replaceAll(',', '')) == 0;
 
   static final _resultFormat = NumberFormat('#,##0.######');
+
+  static final _limitedFormats = <int, NumberFormat>{};
+
+  static NumberFormat _limitedFormat(int maxDecimals) =>
+      _limitedFormats.putIfAbsent(
+        maxDecimals,
+        () => NumberFormat(
+          maxDecimals > 0 ? '#,##0.${'#' * maxDecimals}' : '#,##0',
+        ),
+      );
+
+  /// 입력 글자의 소수 부분을 [maxDecimals]자리까지 자른다(반올림하지 않음).
+  /// 0자리면 소수점도 지운다("1,234." → "1,234").
+  static String trimDecimals(String text, int? maxDecimals) {
+    if (maxDecimals == null) return text;
+    final dot = text.indexOf('.');
+    if (dot < 0) return text;
+    if (maxDecimals == 0) return text.substring(0, dot);
+    final decimals = text.length - dot - 1;
+    if (decimals <= maxDecimals) return text;
+    return text.substring(0, dot + 1 + maxDecimals);
+  }
 
   @override
   State<ChartAmountConverter> createState() => _ChartAmountConverterState();
@@ -136,9 +229,15 @@ class _ChartAmountConverterState extends State<ChartAmountConverter>
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(
-      text: ChartAmountScope.maybeOf(context)?.text ?? '',
+    // 다른 방향·카드에서 이어 받은 금액이 이 칸의 자릿수보다 길면 자른다.
+    final scope = ChartAmountScope.maybeOf(context);
+    final saved = scope?.text ?? '';
+    final text = ChartAmountConverter.trimDecimals(
+      saved,
+      widget.inputDecimalPlaces,
     );
+    if (text != saved) scope?.onChanged(text);
+    _controller = TextEditingController(text: text);
     _motion = AnimationController(
       vsync: this,
       duration: _enterDuration,
@@ -168,6 +267,24 @@ class _ChartAmountConverterState extends State<ChartAmountConverter>
     }
     _followHistory(oldWidget);
     _syncSelection();
+    if (oldWidget.inputDecimalPlaces != widget.inputDecimalPlaces) {
+      _trimInput();
+    }
+  }
+
+  // 방향을 바꾸거나 설정을 바꿔 입력 자릿수가 줄면, 이미 넣은 금액도 그 자릿수로 자른다.
+  // 그대로 두면 줄인 자릿수보다 긴 글자를 지울 수도 고칠 수도 없게 된다.
+  void _trimInput() {
+    final text = ChartAmountConverter.trimDecimals(
+      _controller.text,
+      widget.inputDecimalPlaces,
+    );
+    if (text == _controller.text) return;
+    _controller.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+    ChartAmountScope.maybeOf(context)?.onChanged(text);
   }
 
   // 그래프가 기록 변경을 처리하는 규칙(ExchangeChartTouchController.updateData)을 따른다.
@@ -255,7 +372,11 @@ class _ChartAmountConverterState extends State<ChartAmountConverter>
     final rate = widget.rate;
     final hasRate = const ExchangeCalculator().isValidRate(rate);
     final converted = hasRate
-        ? ChartAmountConverter.convertedText(_controller.text, rate!)
+        ? ChartAmountConverter.convertedText(
+            _controller.text,
+            rate!,
+            maxDecimals: widget.resultDecimalPlaces,
+          )
         : null;
 
     final Widget current = !hasRate
@@ -292,7 +413,9 @@ class _ChartAmountConverterState extends State<ChartAmountConverter>
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
           inputFormatters: [
             FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
-            ThousandsSeparatorInputFormatter(decimalPlaces: -1),
+            ThousandsSeparatorInputFormatter(
+              decimalPlaces: widget.inputDecimalPlaces ?? -1,
+            ),
           ],
           style: theme.textTheme.titleMedium?.copyWith(
             fontFeatures: amountFontFeatures,
@@ -352,6 +475,7 @@ class _ChartAmountConverterState extends State<ChartAmountConverter>
                             point: point,
                             baseCode: widget.baseCode,
                             targetCode: widget.targetCode,
+                            maxDecimals: widget.resultDecimalPlaces,
                           ),
                         ),
                     ],
@@ -374,6 +498,7 @@ class _ChartAmountConverterState extends State<ChartAmountConverter>
                       child: _ComparisonRow(
                         comparison: comparison,
                         targetCode: widget.targetCode,
+                        maxDecimals: widget.resultDecimalPlaces,
                         latestLabel: widget.historicalRate
                             ? '최근 기록'
                             : widget.staleRate
@@ -398,11 +523,13 @@ class _SelectedRate extends StatelessWidget {
     required this.point,
     required this.baseCode,
     required this.targetCode,
+    this.maxDecimals,
   });
 
   final ChartPoint point;
   final String baseCode;
   final String targetCode;
+  final int? maxDecimals;
 
   @override
   Widget build(BuildContext context) {
@@ -428,7 +555,8 @@ class _SelectedRate extends StatelessWidget {
           fit: BoxFit.scaleDown,
           child: Text(
             '1 $baseCode = '
-            '${ChartAmountConverter.formatAmount(point.rate)} $targetCode',
+            '${ChartAmountConverter.formatAmount(point.rate, maxDecimals: maxDecimals)}'
+            ' $targetCode',
             key: const ValueKey('market-chart-selected-rate'),
             maxLines: 1,
             style: textTheme.titleSmall?.copyWith(
@@ -447,12 +575,14 @@ class _ComparisonRow extends StatelessWidget {
   const _ComparisonRow({
     required this.comparison,
     required this.targetCode,
+    this.maxDecimals,
     required this.latestLabel,
     required this.progress,
   });
 
   final ChartRateComparison comparison;
   final String targetCode;
+  final int? maxDecimals;
   final String latestLabel;
   final double progress;
 
@@ -468,11 +598,15 @@ class _ComparisonRow extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
-    final differenceText = ChartAmountConverter.formatAmount(
+    final differenceText = ChartAmountConverter.formatChange(
       comparison.difference.abs(),
+      maxDecimals: maxDecimals,
+      compared: [comparison.selectedAmount, comparison.latestAmount],
     );
-    // 표시 글자가 0이면 부호와 색도 없다.
-    final difference = differenceText == '0' ? 0.0 : comparison.difference;
+    // 표시 글자가 0이면(제한 자릿수에서 반올림해 0이 된 경우 포함) 부호와 색도 없다.
+    final difference = ChartAmountConverter.isZeroText(differenceText)
+        ? 0.0
+        : comparison.difference;
     final differenceColor = difference > 0
         ? colorScheme.gain
         : difference < 0
@@ -507,7 +641,7 @@ class _ComparisonRow extends StatelessWidget {
                   valueKey: 'market-chart-compare-selected',
                   label: '선택일',
                   value:
-                      '${ChartAmountConverter.formatAmount(comparison.selectedAmount)}'
+                      '${ChartAmountConverter.formatAmount(comparison.selectedAmount, maxDecimals: maxDecimals)}'
                       ' $targetCode',
                   alignment: AlignmentDirectional.centerStart,
                 ),
@@ -520,7 +654,7 @@ class _ComparisonRow extends StatelessWidget {
                 valueKey: 'market-chart-compare-latest',
                 label: latestLabel,
                 value:
-                    '${ChartAmountConverter.formatAmount(comparison.latestAmount)}'
+                    '${ChartAmountConverter.formatAmount(comparison.latestAmount, maxDecimals: maxDecimals)}'
                     ' $targetCode',
                 alignment: AlignmentDirectional.center,
                 labelOpacity: _arrivedInterval.transform(progress),

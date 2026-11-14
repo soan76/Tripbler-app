@@ -8,6 +8,7 @@ import '../presentation/exchange/display_currency.dart';
 import '../presentation/exchange/exchange_display_provider.dart';
 import '../presentation/exchange/exchange_display_view.dart';
 import '../providers/exchange_provider.dart';
+import '../providers/settings_provider.dart';
 import '../widgets/charts/chart_pair_carousel.dart';
 import '../widgets/exchange/chart_currency_picker_sheet.dart';
 import '../widgets/exchange/currency_management_bottom_sheet.dart';
@@ -203,6 +204,9 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
                   onRemove: charts.canRemove ? chartsNotifier.remove : null,
                   swappedAfterReplace: chartsNotifier.swappedAfterReplace,
                   swappedAfterExchange: chartsNotifier.swappedAfterExchange,
+                  decimalPlaces: ref.watch(
+                    settingsProvider.select((s) => s.decimalPlaces),
+                  ),
                 )
               else
                 const SizedBox(

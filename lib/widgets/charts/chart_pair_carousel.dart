@@ -25,6 +25,7 @@ class ChartPairCarousel extends StatelessWidget {
     this.snapshotStore,
     this.swappedAfterReplace,
     this.swappedAfterExchange,
+    this.decimalPlaces,
   });
 
   /// 지원하지 않는 코인 카드의 안내. 앞 문장은 현재 시세 자리, 뒤 문장은 차트 자리에 둔다.
@@ -52,6 +53,9 @@ class ChartPairCarousel extends StatelessWidget {
   /// 테스트에서 조회를 바꿔 끼울 때 쓴다. 비우면 쌍의 종류에 맞는 실제 소스를 만든다.
   final ChartDataSource Function(ChartPair pair)? createDataSource;
   final ChartSnapshotStore? snapshotStore;
+
+  /// 설정의 자릿수 제한 값([MarketChartCard.decimalPlaces]). null이면 제한하지 않는다.
+  final int? decimalPlaces;
 
   /// 통화를 바꾼 카드를 보여 줄 방향([MarketChartCarousel.swappedAfterReplace]).
   final bool? Function(String oldId, String newId)? swappedAfterReplace;
@@ -104,6 +108,7 @@ class ChartPairCarousel extends StatelessWidget {
             : ({required bool base}) =>
                   onPick(index, base: base, swapped: swapped),
         onRemove: onRemove == null ? null : () => onRemove(index),
+        decimalPlaces: decimalPlaces,
       );
     },
   );

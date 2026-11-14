@@ -27,9 +27,13 @@ class SettingsState {
   final ThemeMode themeMode;
 
   /// 실제로 쓸 최대 소수점 자릿수. 자동이면 국가 통화 2자리, 암호화폐 5자리.
-  int decimalPlacesFor({required bool isCrypto}) {
-    if (decimalPlaces != autoDecimalPlaces) {
-      return decimalPlaces;
+  int decimalPlacesFor({required bool isCrypto}) =>
+      resolveDecimalPlaces(decimalPlaces, isCrypto: isCrypto);
+
+  /// 설정값 [setting](-1이면 자동)을 통화 종류에 맞는 실제 자릿수로 바꾼다.
+  static int resolveDecimalPlaces(int setting, {required bool isCrypto}) {
+    if (setting != autoDecimalPlaces) {
+      return setting;
     }
 
     return isCrypto ? autoCryptoDecimalPlaces : autoFiatDecimalPlaces;
