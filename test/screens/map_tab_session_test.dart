@@ -25,6 +25,7 @@ void main() {
     // Android·iOS가 아닌 테스트 실행 환경에서는 그리다가 UnsupportedError를 낸다.
     // 이 오류만 걸러 내고, 그 밖의 화면·탭 전환·상태 구독은 실제 MainScreen 그대로 쓴다.
     final reportError = FlutterError.onError;
+    addTearDown(() => FlutterError.onError = reportError);
     FlutterError.onError = (details) {
       final fromMapId =
           details.exception is UnsupportedError &&
@@ -137,6 +138,5 @@ void main() {
     // 화면과 상태를 정리해 남는 타이머가 없게 한다.
     map().clearSelectedPlace();
     await tester.pumpWidget(const SizedBox());
-    FlutterError.onError = reportError;
   });
 }

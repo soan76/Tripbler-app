@@ -112,8 +112,11 @@ class ExchangeDisplayNotifier extends Notifier<ExchangeDisplayState> {
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('exchange.displayOrder.v1', order);
-    if (!ref.mounted) return;
-    await Future.wait([cryptoUpdate, fiatUpdate, refreshConversion()]);
+    await Future.wait([
+      cryptoUpdate,
+      fiatUpdate,
+      if (ref.mounted) refreshConversion(),
+    ]);
   }
 
   Future<void> refresh() async {

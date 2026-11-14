@@ -1,7 +1,7 @@
 # 암호화폐 통화 행 연결
 
 - `lib/crypto`: Tripbler 암호화폐 API, 코인/현재가 모델, 목록·선택·현재가 상태.
-- `lib/presentation/exchange`: 공통 `DisplayCurrency`와 두 도메인을 화면에 연결하는 `ExchangeDisplayNotifier`.
+- `lib/presentation/exchange`: 공통 `DisplayCurrency`와 두 도메인을 화면에 연결하는 `ExchangeDisplayNotifier`(행 목록·금액·활성 표시는 `lib/presentation/exchange/exchange_display_view.dart`의 `exchangeDisplayViewProvider`가 구성).
 - 기존 ExchangeNotifier와 환율 API에는 암호화폐 심볼을 전달하지 않는다.
 - 통화 관리와 메인은 공통 모델을 사용한다. 메인의 CurrencyRow/AmountInputField를 재사용한다.
 - 통화 행의 통화명(▾)이나 “통화 추가 / 편집”을 터치로 누를 때 초점이 금액 입력칸에 있으면 먼저 푼다. 창을 닫거나 통화를 고른 뒤 입력칸으로 돌아가 키보드가 뜨거나 화면이 움직이는 일을 막는다. 입력값과 환산값은 입력할 때마다 반영되므로 그대로 남고, 입력칸을 다시 누르면 키보드가 뜬다. 키보드로 열면 초점이 누른 버튼에 있으므로 닫을 때 그 버튼으로 돌아온다. 설정 화면에는 입력칸이 없어 이 처리가 없다.

@@ -83,7 +83,7 @@ class ChartSelectionNotifier extends Notifier<ChartSelectionState> {
 
   // 이미 알려 준 [ChartSelectionState.lastSideEdit]. 위젯 build 중에 불리는 조회는
   // 상태를 바꿀 수 없으므로, 비우는 대신 어떤 변경을 썼는지 기억해 다시 쓰지 않게 한다.
-  Object? _consumedEdit;
+  bool _sideEditConsumed = false;
 
   @override
   ChartSelectionState build() => ChartSelectionState();
@@ -219,8 +219,8 @@ class ChartSelectionNotifier extends Notifier<ChartSelectionState> {
 
   ({String from, String to, bool swapped, bool exchanged})? _takeSideEdit() {
     final edit = state.lastSideEdit;
-    if (edit == null || identical(edit, _consumedEdit)) return null;
-    _consumedEdit = edit;
+    if (edit == null || _sideEditConsumed) return null;
+    _sideEditConsumed = true;
     return edit;
   }
 
@@ -258,6 +258,7 @@ class ChartSelectionNotifier extends Notifier<ChartSelectionState> {
     List<ChartPair> pairs, {
     ({String from, String to, bool swapped, bool exchanged})? sideEdit,
   }) {
+    _sideEditConsumed = false;
     state = state.copyWith(
       pairs: pairs,
       lastSideEdit: sideEdit,
