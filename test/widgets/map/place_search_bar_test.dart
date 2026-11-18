@@ -151,6 +151,23 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
+  testWidgets('검색 중 진행 표시는 스크린리더에 "검색 중"으로 읽힌다', (tester) async {
+    final semantics = tester.ensureSemantics();
+    harness.controller.text = '경복궁';
+    await tester.pumpWidget(harness.build(isSearching: true));
+
+    expect(
+      find.bySemanticsLabel(PlaceSearchBar.searchingLabel),
+      findsOneWidget,
+    );
+
+    // 검색이 끝나면 라벨도 사라진다.
+    await tester.pumpWidget(harness.build());
+    expect(find.bySemanticsLabel(PlaceSearchBar.searchingLabel), findsNothing);
+
+    semantics.dispose();
+  });
+
   testWidgets('폭 320에서 긴 입력과 안내 문구가 넘치지 않는다', (tester) async {
     harness.controller.text = '가' * 120;
     await tester.pumpWidget(harness.build(width: 320));

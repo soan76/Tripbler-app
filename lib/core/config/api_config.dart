@@ -64,8 +64,6 @@ class ApiConfig {
 
   static const String placesPath = '/api/v1/places';
   static const String placesSearchPath = '$placesPath/search';
-  static const String placesNearbyPath = '$placesPath/nearby';
-  static const String placesNearestPath = '$placesPath/nearest';
 
   static Uri get usersUri {
     return Uri.parse(baseUrl).replace(path: usersPath);
@@ -150,38 +148,6 @@ class ApiConfig {
           'lat': latitude.toString(),
           'lng': longitude.toString(),
         },
-      },
-    );
-  }
-
-  static Uri placesNearbyUri({
-    required double latitude,
-    required double longitude,
-    required String type,
-    required int radius,
-  }) {
-    return Uri.parse(baseUrl).replace(
-      path: placesNearbyPath,
-      queryParameters: <String, String>{
-        'lat': latitude.toString(),
-        'lng': longitude.toString(),
-        'type': type,
-        'radius': radius.toString(),
-      },
-    );
-  }
-
-  static Uri placesNearestUri({
-    required double latitude,
-    required double longitude,
-    required int radius,
-  }) {
-    return Uri.parse(baseUrl).replace(
-      path: placesNearestPath,
-      queryParameters: <String, String>{
-        'lat': latitude.toString(),
-        'lng': longitude.toString(),
-        'radius': radius.toString(),
       },
     );
   }

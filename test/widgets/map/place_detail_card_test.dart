@@ -43,6 +43,7 @@ void main() {
     double width = 400,
     double textScale = 1,
     VoidCallback? onRoutePressed,
+    String? distanceLabel,
   }) async {
     tester.view.physicalSize = Size(width, 800);
     tester.view.devicePixelRatio = 1;
@@ -70,6 +71,7 @@ void main() {
               onClose: () => closed++,
               onDetailPressed: () => detailPressed++,
               onRoutePressed: onRoutePressed,
+              distanceLabel: distanceLabel,
             ),
           ),
         ),
@@ -465,6 +467,77 @@ void main() {
         ),
         '10월 11일 14:05 기준',
       );
+    });
+  });
+
+  group('거리', () {
+    testWidgets('분류 옆에 거리를 바로 보여주고 평점·영업 정보는 버튼으로 둔다', (tester) async {
+      await pumpCard(tester, distanceLabel: '350m');
+
+      expect(find.text('박물관 · 350m'), findsOneWidget);
+      expect(
+        buttonWithLabel(PlaceDetailCard.detailButtonLabel),
+        findsOneWidget,
+      );
+      expect(find.text(PlaceDetailCard.noRatingLabel), findsNothing);
+    });
+
+    testWidgets('분류가 없으면 거리만, 거리가 없으면 분류만 보여준다', (tester) async {
+      await pumpCard(
+        tester,
+        place: _place(category: 'unknown_type'),
+        distanceLabel: '1.2km',
+      );
+      expect(find.text('1.2km'), findsOneWidget);
+      expect(find.textContaining(' · '), findsNothing);
+
+      await pumpCard(tester);
+      expect(find.text('박물관'), findsOneWidget);
+      expect(find.textContaining(' · '), findsNothing);
+    });
+
+    testWidgets('조회한 평점·영업 줄과 오래된 정보 안내에는 거리가 섞이지 않는다', (tester) async {
+      await pumpCard(
+        tester,
+        place: _place(rating: 4.6, openNow: true),
+        loaded: true,
+        stale: true,
+        fetchedAt: DateTime(2026, 11, 11, 14, 5),
+        distanceLabel: '350m',
+      );
+
+      final summary = tester.getRect(find.text('박물관 · 350m'));
+      final rating = tester.getRect(find.text('평점 4.6'));
+      final stale = tester.getRect(
+        find.text('${PlaceDetailCard.staleLabel} · 14:05 기준'),
+      );
+      // 거리는 평점·영업 줄보다 위(분류 줄)에 있고, 오래된 안내는 평점·영업 줄 아래다.
+      expect(summary.bottom, lessThanOrEqualTo(rating.top));
+      expect(rating.bottom, lessThanOrEqualTo(stale.top));
+    });
+
+    testWidgets('낭독기는 분류와 거리를 쉼표로 끊고 거리를 현재 위치 기준으로 읽는다', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await pumpCard(tester, distanceLabel: '350m');
+
+      expect(find.bySemanticsLabel('박물관, 현재 위치에서 350m'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets('좁은 화면·큰 글자에서도 넘치지 않는다', (tester) async {
+      await pumpCard(
+        tester,
+        place: _place(rating: 4.6, openNow: false),
+        loaded: true,
+        stale: true,
+        fetchedAt: DateTime(2026, 11, 10, 23, 55),
+        distanceLabel: '12km',
+        width: 320,
+        textScale: 2,
+      );
+
+      expect(find.text('박물관 · 12km'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

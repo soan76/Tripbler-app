@@ -6,6 +6,7 @@ import '../../utils/map/place_category_labels.dart';
 
 /// 검색 결과를 골랐을 때 지도 아래에 열리는 장소 카드.
 ///
+/// 기기 위치에서의 거리([distanceLabel])는 조회 없이 분류 옆에 바로 보여준다("카페 · 350m").
 /// 평점·영업 여부는 "평점·영업 정보" 버튼을 눌러 조회를 마친 뒤에만 보여준다.
 /// 조회 전에는 값이 없어도 "정보 없음"으로 단정하지 않는다.
 /// 받은 지 30분이 지난 값은 지우지 않고 받은 시각과 함께 "오래된 정보"로 보여주며,
@@ -31,6 +32,7 @@ class PlaceDetailCard extends StatelessWidget {
     this.detailsFetchedAt,
     this.detailsErrorMessage,
     this.onRoutePressed,
+    this.distanceLabel,
     this.now = DateTime.now,
   });
 
@@ -81,6 +83,10 @@ class PlaceDetailCard extends StatelessWidget {
   /// 길찾기 열기. null이면 버튼이 꺼진다.
   final VoidCallback? onRoutePressed;
 
+  /// 기기 위치(검색할 때의 위치)에서 이 장소까지의 거리 문구(예: "350m").
+  /// 위치나 장소 좌표를 몰라 계산할 수 없으면 null이고, 거리를 표시하지 않는다.
+  final String? distanceLabel;
+
   bool get _isLoading => detailsStatus == PlaceDetailsStatus.loading;
   bool get _isFailure =>
       !_isLoading && detailsStatus == PlaceDetailsStatus.failure;
@@ -112,6 +118,15 @@ class PlaceDetailCard extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
     final categoryLabel = PlaceCategoryLabels.labelFor(place.category);
+    final distance = distanceLabel;
+    // 분류와 거리를 한 줄에 둔다. 거리는 조회 값이 아니라서 평점·영업 묶음과 떼어 놓아,
+    // 오래된 정보 안내가 거리에 붙어 보이지 않게 한다.
+    final summaryParts = [?categoryLabel, ?distance];
+    // 가운뎃점은 낭독기에서 어색하게 읽히므로 쉼표로 끊고, 거리는 기준을 밝혀 읽힌다.
+    final summarySemantics = [
+      ?categoryLabel,
+      if (distance != null) '현재 위치에서 $distance',
+    ].join(', ');
 
     return Material(
       color: colorScheme.surface,
@@ -156,10 +171,11 @@ class PlaceDetailCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (categoryLabel != null) ...[
+                    if (summaryParts.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
-                        categoryLabel,
+                        summaryParts.join(' · '),
+                        semanticsLabel: summarySemantics,
                         style: textTheme.labelMedium?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),

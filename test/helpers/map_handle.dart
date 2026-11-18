@@ -33,27 +33,10 @@ class MapHandle extends ChangeNotifier {
   DateTime? get selectedPlaceDetailsFetchedAt =>
       state.selectedPlaceDetailsFetchedAt;
   LatLngBounds? get searchResultBounds => state.searchResultBounds;
-  MapPlaceStatus get status => state.status;
-  List<PlaceModel> get places => state.places;
   PlaceModel? get selectedPlace => state.selectedPlace;
-  String? get errorMessage => state.errorMessage;
-  bool get isLoading => state.isLoading;
-  bool get hasPlaces => state.hasPlaces;
   Set<Marker> get markers => state.markers;
 
   DateTime now() => _notifier.now();
-
-  Future<void> loadNearbyPlaces({
-    required double latitude,
-    required double longitude,
-    String type = 'tourist_attraction',
-    int radius = 1500,
-  }) => _notifier.loadNearbyPlaces(
-    latitude: latitude,
-    longitude: longitude,
-    type: type,
-    radius: radius,
-  );
 
   Future<void> search(String query, {LatLng? center, LatLng? userLocation}) =>
       _notifier.search(query, center: center, userLocation: userLocation);
@@ -70,11 +53,7 @@ class MapHandle extends ChangeNotifier {
   Future<void> loadSelectedPlaceDetails() =>
       _notifier.loadSelectedPlaceDetails();
 
-  void selectPlace(PlaceModel place) => _notifier.selectPlace(place);
-
   void clearSelectedPlace() => _notifier.clearSelectedPlace();
-
-  void clearError() => _notifier.clearError();
 
   /// 지도 상태가 든 컨테이너를 폐기한다(기존 `MapProvider.dispose`에 해당).
   @override

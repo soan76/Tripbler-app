@@ -27,12 +27,13 @@ class CurrentLocationButton extends StatelessWidget {
         // 버튼 아이콘 색상
         foregroundColor: colorScheme.onPrimaryContainer,
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 22,
                 height: 22,
+                // 버튼 배경(primaryContainer) 위에서 아이콘과 같은 색으로 대비를 맞춘다.
                 child: CircularProgressIndicator(
                   strokeWidth: 2.5,
-                  color: Colors.white,
+                  color: colorScheme.onPrimaryContainer,
                 ),
               )
             : const Icon(Icons.my_location),

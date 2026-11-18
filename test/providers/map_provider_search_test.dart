@@ -49,10 +49,6 @@ class FakePlaceApiService extends PlaceApiService {
   final List<String> detailCalls = <String>[];
   final List<Completer<PlaceModel>> detailCompleters =
       <Completer<PlaceModel>>[];
-  List<PlaceModel> nearbyResult = const [];
-  Object? nearbyError;
-  final List<Completer<PlaceModel?>> nearestCompleters =
-      <Completer<PlaceModel?>>[];
 
   @override
   Future<List<PlaceModel>> searchPlaces({
@@ -82,33 +78,6 @@ class FakePlaceApiService extends PlaceApiService {
     detailHeaders.add(authorizationHeader);
     final completer = Completer<PlaceModel>();
     detailCompleters.add(completer);
-    return completer.future;
-  }
-
-  @override
-  Future<List<PlaceModel>> fetchNearbyPlaces({
-    required double latitude,
-    required double longitude,
-    String type = 'restaurant',
-    int radius = 1000,
-  }) async {
-    final error = nearbyError;
-
-    if (error != null) {
-      throw error;
-    }
-
-    return nearbyResult;
-  }
-
-  @override
-  Future<PlaceModel?> fetchNearestPlace({
-    required double latitude,
-    required double longitude,
-    int radius = 40,
-  }) {
-    final completer = Completer<PlaceModel?>();
-    nearestCompleters.add(completer);
     return completer.future;
   }
 }
@@ -756,6 +725,45 @@ void main() {
       expect(bounds.southwest, bounds.northeast);
     });
 
+    test('같은 경도가 중복돼도 범위는 그대로 감싼다', () async {
+      await searchAndSucceed('경복궁', [
+        _place('a', latitude: 37.1, longitude: 126.5),
+        _place('b', latitude: 37.6, longitude: 126.5),
+        _place('c', latitude: 37.3, longitude: 127.0),
+      ]);
+
+      final bounds = provider.searchResultBounds!;
+
+      expect(bounds.southwest, const LatLng(37.1, 126.5));
+      expect(bounds.northeast, const LatLng(37.6, 127.0));
+    });
+
+    test('날짜변경선 근처에서 같은 경도가 중복돼도 짧은 구간을 고른다', () async {
+      await searchAndSucceed('피지', [
+        _place('a', latitude: -17.0, longitude: 179.9),
+        _place('b', latitude: -16.5, longitude: 179.9),
+        _place('c', latitude: -16.0, longitude: -179.9),
+      ]);
+
+      final bounds = provider.searchResultBounds!;
+
+      expect(bounds.southwest, const LatLng(-17.0, 179.9));
+      expect(bounds.northeast, const LatLng(-16.0, -179.9));
+    });
+
+    test('모두 같은 경도면 경도 폭이 0인 범위가 된다', () async {
+      await searchAndSucceed('남북', [
+        _place('a', latitude: 37.1, longitude: 127.0),
+        _place('b', latitude: 37.6, longitude: 127.0),
+        _place('c', latitude: 37.3, longitude: 127.0),
+      ]);
+
+      final bounds = provider.searchResultBounds!;
+
+      expect(bounds.southwest, const LatLng(37.1, 127.0));
+      expect(bounds.northeast, const LatLng(37.6, 127.0));
+    });
+
     test('좌표가 있는 결과가 없으면 searchResultBounds는 null', () async {
       await searchAndSucceed('경복궁', [
         _place('no-coords', latitude: null, longitude: null),
@@ -953,13 +961,52 @@ void main() {
       await _flush();
     });
 
+    test('상한을 넘으면 가장 오래 안 쓴 상세 결과부터 지운다', () async {
+      final places = [
+        for (var i = 0; i <= MapNotifier.maxCachedPlaceDetails; i++)
+          _place('p$i'),
+      ];
+      await searchAndSucceed('많은 장소', places);
+
+      Future<void> loadNew(PlaceModel place) async {
+        provider.selectSearchResult(place);
+        final pending = provider.loadSelectedPlaceDetails();
+        service.detailCompleters.last.complete(_place(place.id, rating: 4.0));
+        await pending;
+      }
+
+      // 50개를 채운다(p0 ~ p49).
+      for (final place in places.take(MapNotifier.maxCachedPlaceDetails)) {
+        await loadNew(place);
+      }
+
+      // 가장 먼저 넣은 p0을 다시 쓴다(기억해 둔 결과라 조회하지 않는다).
+      provider.selectSearchResult(places.first);
+      await provider.loadSelectedPlaceDetails();
+      expect(service.detailCalls.length, MapNotifier.maxCachedPlaceDetails);
+
+      // 새 항목 p50을 넣으면 가장 오래 안 쓴 p1이 지워진다.
+      await loadNew(places.last);
+      final callsBefore = service.detailCalls.length;
+
+      provider.selectSearchResult(places.first);
+      await provider.loadSelectedPlaceDetails();
+      expect(service.detailCalls.length, callsBefore, reason: 'p0은 남는다');
+
+      provider.selectSearchResult(places[1]);
+      unawaited(provider.loadSelectedPlaceDetails());
+      expect(service.detailCalls.length, callsBefore + 1, reason: 'p1은 지워졌다');
+      service.detailCompleters.last.complete(_place('p1', rating: 4.0));
+      await _flush();
+    });
+
     test('상세 조회가 실패해도 검색 결과는 유지하고 카드용 오류를 남긴다', () async {
       await searchAndSucceed('경복궁', [_place('a'), _place('b')]);
       provider.selectSearchResult(provider.searchResults.first);
 
       final pending = provider.loadSelectedPlaceDetails();
       service.detailCompleters.single.completeError(
-        const PlaceApiException(message: '장소 상세 정보를 불러오지 못했습니다.'),
+        const ApiException(message: '장소 상세 정보를 불러오지 못했습니다.'),
       );
       await pending;
 
@@ -1022,7 +1069,7 @@ void main() {
       final failed = provider.loadSelectedPlaceDetails();
       expect(provider.selectedPlaceDetailsLoaded, isFalse);
       service.detailCompleters.single.completeError(
-        const PlaceApiException(message: '실패'),
+        const ApiException(message: '실패'),
       );
       await failed;
       expect(provider.selectedPlaceDetailsLoaded, isFalse);
@@ -1088,19 +1135,6 @@ void main() {
       expect(provider.selectedPlaceDetailsLoaded, isTrue);
       expect(provider.selectedPlace?.rating, 4.6);
       expect(service.detailCalls, ['a']);
-    });
-
-    test('카드가 열린 채 주변 장소 경로로 같은 장소를 다시 골라도 보이던 정보를 유지한다', () async {
-      await searchAndSucceed('경복궁', [_place('a')]);
-      provider.selectSearchResult(provider.searchResults.single);
-      final loading = provider.loadSelectedPlaceDetails();
-      service.detailCompleters.last.complete(_place('a', openNow: true));
-      await loading;
-
-      provider.selectPlace(_place('a'));
-
-      expect(provider.selectedPlaceDetailsLoaded, isTrue);
-      expect(provider.selectedPlace?.openNow, isTrue);
     });
 
     test('조회 중 다른 장소를 골랐다 돌아오면 버튼부터이고 늦은 응답은 반영하지 않는다', () async {
@@ -1173,29 +1207,6 @@ void main() {
       expect(provider.selectedPlaceDetailsLoaded, isTrue);
     });
 
-    test('주변 장소에서 고를 때도 기억해 둔 상세 결과를 쓴다', () async {
-      await searchAndSucceed('경복궁', [_place('a')]);
-      provider.selectSearchResult(provider.searchResults.single);
-      final pending = provider.loadSelectedPlaceDetails();
-      service.detailCompleters.single.complete(
-        _place('a', rating: 4.6, openNow: true),
-      );
-      await pending;
-
-      // 카드를 닫고, 상세 값이 없는 같은 장소를 주변 장소 경로로 다시 고른다.
-      provider.clearSelectedPlace();
-      provider.selectPlace(_place('a'));
-
-      // 카드는 버튼부터 보이지만, 누르면 기억해 둔 값이 그대로 나온다.
-      expect(provider.selectedPlaceDetailsLoaded, isFalse);
-
-      await provider.loadSelectedPlaceDetails();
-      expect(provider.selectedPlaceDetailsLoaded, isTrue);
-      expect(provider.selectedPlace?.rating, 4.6);
-      expect(provider.selectedPlace?.openNow, isTrue);
-      expect(service.detailCalls, ['a']);
-    });
-
     test('30분이 지나면 값은 남기고 오래된 정보가 된다', () async {
       await searchAndSucceed('경복궁', [_place('a')]);
       provider.selectSearchResult(provider.searchResults.single);
@@ -1217,27 +1228,6 @@ void main() {
       expect(provider.selectedPlaceDetailsStale, isTrue);
       expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
       expect(provider.selectedPlace?.rating, 4.6);
-    });
-  });
-
-  group('선택이 바뀔 때 상세 상태 초기화', () {
-    test('상세 로딩 중 주변 장소를 불러오면 idle이 된다', () async {
-      await searchAndSucceed('경복궁', [_place('a')]);
-      provider.selectSearchResult(provider.searchResults.single);
-      final details = provider.loadSelectedPlaceDetails();
-      expect(provider.detailsStatus, PlaceDetailsStatus.loading);
-
-      service.nearbyResult = [_place('n1')];
-      await provider.loadNearbyPlaces(latitude: 37.5, longitude: 126.9);
-
-      expect(provider.selectedPlace, isNull);
-      expect(provider.detailsStatus, PlaceDetailsStatus.idle);
-
-      service.detailCompleters.single.complete(_place('a', rating: 4.6));
-      await details;
-
-      expect(provider.selectedPlace, isNull);
-      expect(provider.detailsStatus, PlaceDetailsStatus.idle);
     });
   });
 
@@ -1495,7 +1485,7 @@ void main() {
       expect(provider.selectedPlaceDetailsFetchedAt, fetchedAt);
 
       service.detailCompleters.last.completeError(
-        const PlaceApiException(message: '실패'),
+        const ApiException(message: '실패'),
       );
       await pending;
 
@@ -1520,7 +1510,7 @@ void main() {
 
       final failed = provider.loadSelectedPlaceDetails();
       service.detailCompleters.last.completeError(
-        const PlaceApiException(message: '실패'),
+        const ApiException(message: '실패'),
       );
       await failed;
       expect(provider.detailsStatus, PlaceDetailsStatus.failure);
@@ -1589,16 +1579,6 @@ void main() {
     await _flush();
   });
 
-  test('기존 주변 장소 조회는 그대로 동작한다', () async {
-    service.nearbyResult = [_place('n1')];
-
-    await provider.loadNearbyPlaces(latitude: 37.5, longitude: 126.9);
-
-    expect(provider.status, MapPlaceStatus.success);
-    expect(provider.places.map((p) => p.id), ['n1']);
-    expect(provider.searchStatus, MapSearchStatus.idle);
-  });
-
   group('상세 결과 만료 타이머', () {
     /// 주입한 현재 시각과 테스트의 가짜 타이머 시간을 함께 진행시킨다.
     Future<void> advance(WidgetTester tester, Duration duration) async {
@@ -1646,7 +1626,7 @@ void main() {
 
       final failed = provider.loadSelectedPlaceDetails();
       service.detailCompleters.last.completeError(
-        const PlaceApiException(message: '실패'),
+        const ApiException(message: '실패'),
       );
       await failed;
       expect(provider.detailsStatus, PlaceDetailsStatus.failure);
@@ -1771,31 +1751,6 @@ void main() {
       // 시간을 진행시키지 않고 끝낸다. dispose가 타이머를 끄지 않으면 testWidgets가
       // 테스트 끝에 남은 타이머(A Timer is still pending)로 실패시킨다.
     });
-
-    for (final fails in [false, true]) {
-      testWidgets('주변 장소 조회(${fails ? '실패' : '성공'})로 선택이 풀리면 타이머를 끈다', (
-        tester,
-      ) async {
-        await searchAndSucceed('경복궁', [_place('a')]);
-        provider.selectSearchResult(provider.searchResults.single);
-        await loadDetailsNow(_place('a', openNow: true));
-
-        if (fails) {
-          service.nearbyError = const PlaceApiException(message: '실패');
-        } else {
-          service.nearbyResult = [_place('n1')];
-        }
-
-        await provider.loadNearbyPlaces(latitude: 37.5, longitude: 126.9);
-        expect(provider.selectedPlace, isNull);
-
-        var notified = 0;
-        provider.addListener(() => notified++);
-
-        await advance(tester, MapNotifier.placeDetailsCacheTtl);
-        expect(notified, 0);
-      });
-    }
 
     testWidgets('지도 이벤트 없이 열어 둔 카드에 30분 뒤 새로 고침이 나타난다', (tester) async {
       await searchAndSucceed('경복궁', [_place('a')]);

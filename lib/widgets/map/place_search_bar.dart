@@ -51,6 +51,9 @@ class PlaceSearchBar extends StatelessWidget {
   /// 안내 문구로 높이가 늘어도 같은 값을 써서 지나치게 둥글어지지 않게 한다.
   static const double _radius = 28;
 
+  /// 검색 중 진행 표시의 스크린리더 라벨.
+  static const String searchingLabel = '검색 중';
+
   /// 비로그인 안내. 폭 320에서도 검색 버튼 옆에 한 줄로 들어가게 짧게 쓴다.
   static const String signedOutHint = '로그인 후 장소 검색';
 
@@ -132,7 +135,11 @@ class PlaceSearchBar extends StatelessWidget {
                           child: SizedBox(
                             width: 20,
                             height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            // 검색 버튼 자리를 대신하므로 스크린리더가 진행 중임을 읽게 한다.
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              semanticsLabel: searchingLabel,
+                            ),
                           ),
                         ),
                       )

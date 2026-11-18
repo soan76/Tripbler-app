@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/models/place_model.dart';
 import 'package:tripbler/providers/map_provider.dart';
+import 'package:tripbler/widgets/map/current_location_button.dart';
 import 'package:tripbler/widgets/map/map_overlay_layout.dart';
 import 'package:tripbler/widgets/map/place_detail_card.dart';
 import 'package:tripbler/widgets/map/place_search_bar.dart';
@@ -34,6 +35,7 @@ class _Harness {
     bool withCard = true,
     Widget? card,
     MapSearchStatus panelStatus = MapSearchStatus.success,
+    Widget? mapControls,
   }) {
     return MaterialApp(
       builder: (context, child) => MediaQuery(
@@ -64,7 +66,9 @@ class _Harness {
                   onUnavailable: () {},
                 ),
                 mapControlsHeight: 80,
-                mapControls: const SizedBox(key: _controlsKey, height: 80),
+                mapControls:
+                    mapControls ??
+                    const SizedBox(key: _controlsKey, height: 80),
                 resultsPanel: PlaceSearchResultsPanel(
                   status: panelStatus,
                   results: [for (var i = 0; i < 20; i++) _place('$i')],
@@ -115,6 +119,7 @@ void main() {
     double keyboardHeight = 0,
     Widget? card,
     MapSearchStatus panelStatus = MapSearchStatus.success,
+    Widget? mapControls,
   }) async {
     tester.view.physicalSize = Size(320, height);
     tester.view.devicePixelRatio = 1;
@@ -131,6 +136,7 @@ void main() {
         withCard: withCard,
         card: card,
         panelStatus: panelStatus,
+        mapControls: mapControls,
       ),
     );
   }
@@ -226,6 +232,50 @@ void main() {
 
     await tester.tapAt(Offset(160, (searchBarBottom + controlsTop) / 2));
     expect(harness.mapTapCount, 1);
+  });
+
+  testWidgets('실제 현재 위치 버튼은 목록·카드와 함께 있어도 터치를 받는다', (tester) async {
+    var pressedCount = 0;
+
+    // MapScreen과 같은 구성: 높이 80 영역 안 Stack의 오른쪽 아래에 버튼을 둔다.
+    await pumpAt(
+      tester,
+      height: 900,
+      mapControls: SizedBox(
+        key: _controlsKey,
+        height: 80,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CurrentLocationButton(
+              isLoading: false,
+              bottom: 24,
+              onPressed: () => pressedCount++,
+            ),
+          ],
+        ),
+      ),
+    );
+
+    expect(tester.takeException(), isNull);
+
+    final buttonRect = tester.getRect(find.byType(FloatingActionButton));
+    final controlsRect = tester.getRect(find.byKey(_controlsKey));
+    final panelTop = tester.getRect(find.byType(PlaceSearchResultsPanel)).top;
+
+    // 버튼이 지도 위 버튼 영역 안에 있고 목록과 겹치지 않는다.
+    expect(controlsRect.contains(buttonRect.topLeft), isTrue);
+    expect(
+      controlsRect.contains(buttonRect.bottomRight - const Offset(1, 1)),
+      isTrue,
+    );
+    expect(buttonRect.bottom, lessThanOrEqualTo(panelTop));
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pump();
+
+    expect(pressedCount, 1);
+    expect(harness.mapTapCount, 0, reason: '버튼 터치가 지도로 새지 않는다');
   });
 
   group('실제 상세 카드와 함께', () {

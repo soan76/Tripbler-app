@@ -13,9 +13,7 @@ import '../services/place_api_service.dart';
 import '../utils/map/place_distance.dart';
 import '../utils/map/search_query_normalizer.dart';
 
-enum MapPlaceStatus { idle, loading, success, failure }
-
-/// 장소 검색 진행 상태. 주변 장소·지도 탭용 [MapPlaceStatus]와 따로 관리한다.
+/// 장소 검색 진행 상태.
 enum MapSearchStatus { idle, loading, success, failure }
 
 /// 화면 문구를 고르기 위한 검색 실패 종류.
@@ -94,12 +92,8 @@ class MapState {
     this.detailsStatus = PlaceDetailsStatus.idle,
     this.detailsErrorMessage,
     this.selectedPlaceDetailsFetchedAt,
-    this.status = MapPlaceStatus.idle,
-    this.places = const [],
     this.selectedPlace,
-    this.errorMessage,
     required this.clock,
-    required this.onPlaceMarkerTap,
     required this.onSearchResultMarkerTap,
   });
 
@@ -128,16 +122,10 @@ class MapState {
   /// 누르기 전이거나 받은 적이 없으면 null.
   final DateTime? selectedPlaceDetailsFetchedAt;
 
-  final MapPlaceStatus status;
-  final List<PlaceModel> places;
   final PlaceModel? selectedPlace;
-  final String? errorMessage;
 
   /// 만료 판단에 쓰는 현재 시각([MapNotifier.now]와 같은 시계).
   final DateTime Function() clock;
-
-  /// 주변 장소 마커를 눌렀을 때([MapNotifier.selectPlace]).
-  final void Function(PlaceModel place) onPlaceMarkerTap;
 
   /// 검색 결과 마커를 눌렀을 때([MapNotifier.selectSearchResult]).
   final void Function(PlaceModel place) onSearchResultMarkerTap;
@@ -164,9 +152,6 @@ class MapState {
         clock().difference(fetchedAt) >= MapNotifier.placeDetailsCacheTtl;
   }
 
-  bool get isLoading => status == MapPlaceStatus.loading;
-  bool get hasPlaces => places.isNotEmpty;
-
   MapState copyWith({
     MapSearchStatus? searchStatus,
     List<PlaceModel>? searchResults,
@@ -183,12 +168,8 @@ class MapState {
     bool clearDetailsErrorMessage = false,
     DateTime? selectedPlaceDetailsFetchedAt,
     bool clearSelectedPlaceDetailsFetchedAt = false,
-    MapPlaceStatus? status,
-    List<PlaceModel>? places,
     PlaceModel? selectedPlace,
     bool clearSelectedPlace = false,
-    String? errorMessage,
-    bool clearErrorMessage = false,
   }) {
     return MapState(
       searchStatus: searchStatus ?? this.searchStatus,
@@ -212,16 +193,10 @@ class MapState {
       selectedPlaceDetailsFetchedAt: clearSelectedPlaceDetailsFetchedAt
           ? null
           : selectedPlaceDetailsFetchedAt ?? this.selectedPlaceDetailsFetchedAt,
-      status: status ?? this.status,
-      places: places == null ? this.places : List.unmodifiable(places),
       selectedPlace: clearSelectedPlace
           ? null
           : selectedPlace ?? this.selectedPlace,
-      errorMessage: clearErrorMessage
-          ? null
-          : errorMessage ?? this.errorMessage,
       clock: clock,
-      onPlaceMarkerTap: onPlaceMarkerTap,
       onSearchResultMarkerTap: onSearchResultMarkerTap,
     );
   }
@@ -278,30 +253,9 @@ class MapState {
     );
   }
 
-  // 주변 장소 마커 + 현재 선택한 장소 마커
+  // 검색 결과 마커. 선택한 장소는 색과 겹침 순서로 구분한다.
   Set<Marker> get markers {
     final markers = <Marker>{};
-
-    // Nearby API로 받아온 장소 마커
-    for (final place in places) {
-      // 좌표가 없는 장소는 지도에 표시할 수 없으므로 건너뜀.
-      // (place_model의 좌표 파싱 실패 시 더 이상 (0,0)으로 대체하지 않고
-      // null을 반환하므로, 여기서 명시적으로 걸러줘야 함)
-      if (!place.hasCoordinates) {
-        continue;
-      }
-
-      markers.add(
-        Marker(
-          markerId: MarkerId(place.id),
-          position: LatLng(place.latitude!, place.longitude!),
-          infoWindow: InfoWindow(title: place.name, snippet: place.address),
-          onTap: () {
-            onPlaceMarkerTap(place);
-          },
-        ),
-      );
-    }
 
     // 검색 결과 마커. 탭하면 그 결과를 선택하고, 선택된 마커는 색과 겹침 순서로 구분한다.
     // 모양은 화면 디자인 단계에서 다듬는다.
@@ -333,14 +287,14 @@ class MapState {
   }
 }
 
-/// 지도 화면에서 주변 장소, 장소 검색, 선택한 장소를 관리한다.
+/// 지도 화면에서 장소 검색, 선택한 장소, 상세 조회를 관리한다.
 ///
 /// 검색·상세 요청은 [authorizedRequestRunnerProvider]로 토큰과 함께 실행한다.
 /// 로그인 세션이 바뀌면([AuthState.sessionId]) 검색 결과·선택·상세 캐시를 비운다.
 ///
 /// 작업 중인 값은 이 Notifier의 필드에 두고, 알릴 때마다 [MapState]를 새로 만든다.
 class MapNotifier extends Notifier<MapState> {
-  /// 상세 결과를 기억해 두는 최대 장소 수. 넘으면 오래된 것부터 지운다.
+  /// 상세 결과를 기억해 두는 최대 장소 수. 넘으면 가장 오래 안 쓴 것부터 지운다.
   static const int maxCachedPlaceDetails = 50;
 
   /// 상세 결과(영업 여부 등)를 재사용하는 시간. 지나면 다시 조회한다.
@@ -436,10 +390,7 @@ class MapNotifier extends Notifier<MapState> {
     return _detailsCache[selectedId];
   }
 
-  MapPlaceStatus _status = MapPlaceStatus.idle;
-  List<PlaceModel> _places = [];
   PlaceModel? _selectedPlace;
-  String? _errorMessage;
 
   /// 지금 값으로 화면에 줄 상태를 만든다.
   MapState _snapshot() {
@@ -454,48 +405,10 @@ class MapNotifier extends Notifier<MapState> {
       detailsStatus: _detailsStatus,
       detailsErrorMessage: _detailsErrorMessage,
       selectedPlaceDetailsFetchedAt: _selectedCacheEntry?.storedAt,
-      status: _status,
-      places: List.unmodifiable(_places),
       selectedPlace: _selectedPlace,
-      errorMessage: _errorMessage,
       clock: _now,
-      onPlaceMarkerTap: selectPlace,
       onSearchResultMarkerTap: selectSearchResult,
     );
-  }
-
-  Future<void> loadNearbyPlaces({
-    required double latitude,
-    required double longitude,
-    String type = 'tourist_attraction',
-    int radius = 1500,
-  }) async {
-    _status = MapPlaceStatus.loading;
-    _errorMessage = null;
-    _clearSelectionState();
-    _notify();
-
-    try {
-      final places = await _placeApiService.fetchNearbyPlaces(
-        latitude: latitude,
-        longitude: longitude,
-        type: type,
-        radius: radius,
-      );
-
-      _places = places;
-      _status = MapPlaceStatus.success;
-      _notify();
-    } catch (error, stackTrace) {
-      debugPrint('주변 장소 불러오기 실패: $error');
-      debugPrint('$stackTrace');
-
-      _places = [];
-      _clearSelectionState();
-      _errorMessage = error.toString();
-      _status = MapPlaceStatus.failure;
-      _notify();
-    }
   }
 
   // ----- 장소 검색 -----
@@ -783,6 +696,7 @@ class MapNotifier extends Notifier<MapState> {
     final cachedPlace = _freshCachedDetails(selectedPlace.id);
 
     if (cachedPlace != null) {
+      _markCachedDetailsUsed(selectedPlace.id);
       _applyPlaceDetails(cachedPlace);
       _resetDetailsState();
       _notify();
@@ -947,7 +861,17 @@ class MapNotifier extends Notifier<MapState> {
     }
   }
 
-  // 상세 결과로 선택한 장소와, 같은 id의 주변 장소·검색 결과 항목을 함께 갱신한다.
+  /// 받아 둔 상세 결과를 썼다: 맨 뒤로 옮겨 상한을 넘을 때 가장 오래 안 쓴 것부터
+  /// 지워지게 한다. 저장 시각(만료 판단 기준)은 그대로 둔다.
+  void _markCachedDetailsUsed(String placeId) {
+    final entry = _detailsCache.remove(placeId);
+
+    if (entry != null) {
+      _detailsCache[placeId] = entry;
+    }
+  }
+
+  // 상세 결과로 선택한 장소와, 같은 id의 검색 결과 항목을 함께 갱신한다.
   //
   // 상세 조회는 평점·영업 여부만 쓴다. 이름·주소·분류·좌표는 검색 결과 값을 그대로
   // 둔다(상세 응답은 언어 설정이 달라 이름·주소가 영어로 올 수 있다).
@@ -961,7 +885,6 @@ class MapNotifier extends Notifier<MapState> {
       _selectedPlace = replace(selectedPlace);
     }
 
-    _places = _places.map(replace).toList();
     _searchResults = _searchResults.map(replace).toList();
   }
 
@@ -983,7 +906,13 @@ class MapNotifier extends Notifier<MapState> {
   /// 받아 둔 상세 결과가 있으면 평점·영업 여부만 반영한 장소를 돌려준다.
   PlaceModel _withCachedDetails(PlaceModel place) {
     final cached = _detailsCache[place.id]?.place;
-    return cached == null ? place : _withDetails(place, cached);
+
+    if (cached == null) {
+      return place;
+    }
+
+    _markCachedDetailsUsed(place.id);
+    return _withDetails(place, cached);
   }
 
   void _resetDetailsState() {
@@ -992,19 +921,6 @@ class MapNotifier extends Notifier<MapState> {
     _detailsStatus = PlaceDetailsStatus.idle;
     _detailsErrorMessage = null;
     _syncDetailsDisplayTimer();
-  }
-
-  void selectPlace(PlaceModel place) {
-    // 카드가 열린 채 같은 장소를 다시 고르면 보이던 정보를 그대로 둔다.
-    if (_selectedPlace?.id == place.id) {
-      return;
-    }
-
-    // 받아 둔 상세 결과로 장소 값은 맞춰 두되, 카드는 버튼부터 보인다.
-    _selectedPlace = _withCachedDetails(place);
-    _detailsRevealedPlaceId = null;
-    _resetDetailsState();
-    _notify();
   }
 
   /// 상세 카드만 닫는다. 검색 결과는 그대로 둔다.
@@ -1028,16 +944,6 @@ class MapNotifier extends Notifier<MapState> {
     if (ref.mounted) {
       state = _snapshot();
     }
-  }
-
-  void clearError() {
-    _errorMessage = null;
-
-    if (_status == MapPlaceStatus.failure) {
-      _status = MapPlaceStatus.idle;
-    }
-
-    _notify();
   }
 }
 

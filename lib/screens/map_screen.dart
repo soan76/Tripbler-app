@@ -10,6 +10,7 @@ import '../services/map/location_service.dart';
 import '../services/map/map_location_controller.dart';
 import '../services/map/map_marker_icon_service.dart';
 import '../services/map/route_launcher.dart';
+import '../utils/map/place_distance.dart';
 import '../utils/map/scale_bar_calculator.dart';
 import '../utils/map/search_query_normalizer.dart';
 import 'auth/login_screen.dart';
@@ -72,6 +73,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // 결과 목록 펼침 여부
   bool _resultsExpanded = false;
 
+  // 검색창에 글자가 있는지. 뒤로가기 판정(PopScope.canPop)에 쓰며, 비었다↔찼다가
+  // 바뀔 때만 다시 그린다.
+  bool _hasSearchText = false;
+
   // 가장 최근 검색 제출 번호(늦게 끝난 이전 제출의 카메라 이동을 막는다)
   int _searchSubmitId = 0;
 
@@ -115,6 +120,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     // 위치 또는 방향 상태 변경 시 화면 갱신
     _locationController.addListener(_onLocationStateChanged);
 
+    _searchController.addListener(_onSearchTextChanged);
+
     final auth = ref.read(authProvider);
     _lastAvailability = _availabilityOf(auth);
     _lastSessionId = auth.sessionId;
@@ -137,6 +144,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     // Google Map Controller 종료
     _mapController?.dispose();
 
+    _searchController.removeListener(_onSearchTextChanged);
     _searchController.dispose();
     _searchFocusNode.dispose();
 
@@ -151,6 +159,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     setState(() {});
+  }
+
+  void _onSearchTextChanged() {
+    final hasText = _searchController.text.isNotEmpty;
+
+    if (!mounted || hasText == _hasSearchText) {
+      return;
+    }
+
+    setState(() {
+      _hasSearchText = hasText;
+    });
   }
 
   /// Google Map 생성 완료 처리
@@ -339,7 +359,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
 
       // 장소 마커보다 위에 표시
-      zIndex: 9999,
+      zIndexInt: 9999,
     );
   }
 
@@ -363,6 +383,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       ..showSnackBar(
         SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
       );
+  }
+
+  /// [origin](검색할 때의 기기 위치)에서 [place]까지의 거리 문구. 계산할 수 없으면 null.
+  static String? _distanceLabel(LatLng? origin, PlaceModel place) {
+    final meters = PlaceDistance.metersTo(origin, place);
+    return meters == null ? null : PlaceDistance.format(meters);
   }
 
   /// 선택한 장소로 Google 지도 길찾기를 연다. 실패하면 카드는 그대로 두고 안내한다.
@@ -487,6 +513,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       return;
     }
 
+    // 검색창이 아직 다시 그려지기 전에 로그인이 풀렸으면 검색이 시작되지 않는다.
+    // 목록 펼침만 남지 않게 여기서 멈추고 안내한다.
+    if (!_canSearchNow()) {
+      _onSearchUnavailable();
+      return;
+    }
+
     final mapNotifier = ref.read(mapProvider.notifier);
     final submitId = ++_searchSubmitId;
 
@@ -516,9 +549,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
+  /// 다시 시도: 처음 검색처럼 결과 목록을 펼치고, 성공하면 결과에 카메라를 맞춘다.
   Future<void> _retrySearch() async {
+    if (!_canSearchNow()) {
+      _onSearchUnavailable();
+      return;
+    }
+
     final mapNotifier = ref.read(mapProvider.notifier);
     final submitId = ++_searchSubmitId;
+
+    setState(() {
+      _resultsExpanded = true;
+    });
 
     await mapNotifier.retrySearch();
 
@@ -531,6 +574,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     if (mapState.searchStatus == MapSearchStatus.success) {
       await _fitCameraToResults(mapState);
     }
+  }
+
+  /// 지금 로그인 상태로 검색할 수 있는지. 화면의 검색창 상태는 한 프레임 늦을 수 있어
+  /// 제출 순간의 값을 다시 읽는다.
+  bool _canSearchNow() {
+    return _availabilityOf(ref.read(authProvider)) ==
+        PlaceSearchAvailability.ready;
   }
 
   void _clearSearch() {
@@ -611,7 +661,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     return mapState.selectedPlace != null ||
         _resultsExpanded ||
         mapState.searchStatus != MapSearchStatus.idle ||
-        _searchController.text.isNotEmpty;
+        _hasSearchText;
   }
 
   void _handleBack() {
@@ -785,6 +835,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             // Google 지도 길찾기 열기
                             onRoutePressed: () =>
                                 _openDirections(selectedPlace),
+
+                            // 결과 목록과 같은 기준(검색할 때의 기기 위치)의 거리
+                            distanceLabel: _distanceLabel(
+                              mapState.searchResultsOrigin,
+                              selectedPlace,
+                            ),
                           )
                         : null,
                   ),

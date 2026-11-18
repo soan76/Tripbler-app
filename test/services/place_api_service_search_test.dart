@@ -89,34 +89,6 @@ void main() {
       expect(uri.hasQuery, isFalse);
       expect(uri.hasFragment, isFalse);
     });
-
-    test('주변·최근접 URL은 기존과 같은 파라미터를 쓴다', () {
-      final nearby = ApiConfig.placesNearbyUri(
-        latitude: 37.5,
-        longitude: 126.9,
-        type: 'restaurant',
-        radius: 1000,
-      );
-      final nearest = ApiConfig.placesNearestUri(
-        latitude: 37.5,
-        longitude: 126.9,
-        radius: 40,
-      );
-
-      expect(nearby.path, '/api/v1/places/nearby');
-      expect(nearby.queryParameters, <String, String>{
-        'lat': '37.5',
-        'lng': '126.9',
-        'type': 'restaurant',
-        'radius': '1000',
-      });
-      expect(nearest.path, '/api/v1/places/nearest');
-      expect(nearest.queryParameters, <String, String>{
-        'lat': '37.5',
-        'lng': '126.9',
-        'radius': '40',
-      });
-    });
   });
 
   group('PlaceApiService searchPlaces', () {
