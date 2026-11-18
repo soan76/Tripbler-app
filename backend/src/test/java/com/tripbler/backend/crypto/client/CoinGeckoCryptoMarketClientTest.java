@@ -18,6 +18,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import com.tripbler.backend.common.cache.ProviderFailures;
 import com.tripbler.backend.common.exception.BusinessException;
 import com.tripbler.backend.common.exception.ErrorCode;
 import com.tripbler.backend.crypto.config.CoinGeckoProperties;
@@ -57,12 +58,38 @@ class CoinGeckoCryptoMarketClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {401, 403, 429, 500, 503})
+    @ValueSource(ints = {401, 403})
     void providerErrorsUseCommon503Code(int status) {
         server.expect(requestTo(URL)).andRespond(withStatus(HttpStatusCode.valueOf(status))
             .body("provider-private-response").contentType(MediaType.TEXT_PLAIN));
         assertUnavailable();
         server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {429, 500, 503})
+    void throttlingAndServerErrorsAreMarkedTransientWithoutProviderDetails(int status) {
+        server.expect(requestTo(URL)).andRespond(withStatus(HttpStatusCode.valueOf(status))
+            .body("provider-private-response").contentType(MediaType.TEXT_PLAIN));
+        assertTransientUnavailable();
+        server.verify();
+    }
+
+    @Test
+    void connectionRefusedIsMarkedTransient() {
+        server.expect(requestTo(URL)).andRespond(withException(new java.net.ConnectException("refused")));
+        assertTransientUnavailable();
+        server.verify();
+    }
+
+    private void assertTransientUnavailable() {
+        BusinessException error = assertThrows(BusinessException.class,
+            () -> client.getCurrentPrice(CryptoCoin.BTC, "KRW"));
+        assertEquals(ErrorCode.CRYPTO_PROVIDER_UNAVAILABLE, error.getErrorCode());
+        assertEquals(ErrorCode.CRYPTO_PROVIDER_UNAVAILABLE.getMessage(), error.getMessage());
+        assertInstanceOf(ProviderFailures.TransientProviderFailure.class, error.getCause());
+        assertNull(error.getCause().getCause());
+        assertFalse(error.getCause().getMessage().contains("provider-private-response"));
     }
 
     @ParameterizedTest

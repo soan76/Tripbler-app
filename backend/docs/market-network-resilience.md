@@ -1,6 +1,6 @@
 # 느린 외부 응답과 History 전송 최적화
 
-| 데이터 | 정상 TTL | TTL 만료 후 타임아웃 fallback 허용 기간 |
+| 데이터 | 정상 TTL | TTL 만료 후 일시적 장애 fallback 허용 기간 |
 |---|---|---|
 | Crypto 현재가 | 60초 | 10분 |
 | Crypto History | 15분 | 24시간 |
@@ -11,8 +11,12 @@ Crypto 설정은 `crypto.cache.price-ttl`, `history-ttl`, `price-stale-window`, 
 캐시는 서버 인스턴스 메모리에 저장한다. 재시작 시 비워지며 서버 간 공유되지 않는다.
 국가 통화는 현재가 256개/History 512개, Crypto는 각각 최대 64개 키로 제한한다.
 
-timeout 원인만 fallback 대상이다. HTTP 인증 오류, 잘못된 응답, 유효성 오류 등은 성공으로 바꾸지 않는다.
-CoinGecko 타임아웃은 안전한 종류 정보만 보존하고 외부 URL/키/본문이 포함될 수 있는 원본 예외는 전달하지 않는다.
+일시적 장애만 fallback 대상이다(`common/cache/ProviderFailures.isTransient`).
+- 대상: 시간 초과, 연결 실패(연결 거부·끊김 등 `SocketException`, 호스트 조회 실패 `UnknownHostException`), 제공자의 429·5xx 응답.
+- 제외: 그 밖의 4xx(인증 오류, 잘못된 통화·날짜 등), 잘못된 응답 본문, 유효성 오류, TLS 오류. 다시 요청해도 나아지지 않으므로 성공으로 바꾸지 않는다.
+- 429·5xx는 클라이언트가 예외 원인에 `ProviderFailures.TransientProviderFailure` 표시를 붙여 알린다(Frankfurter는 `ExchangeProviderException(int)`, CoinGecko는 클라이언트 안에서).
+CoinGecko 장애는 안전한 종류 정보(시간 초과는 `SocketTimeoutException`, 그 밖의 일시적 장애는 `TransientProviderFailure`)만 보존하고 외부 URL/키/본문이 포함될 수 있는 원본 예외는 전달하지 않는다.
+캐시에 값이 없거나 허용 기간이 지났으면 일시적 장애라도 원래 오류를 그대로 돌려준다.
 fallback 응답은 `stale: true`, 정상 응답은 `stale: false`이며, 원래 `fetchedAt`을 보존한다.
 fallback 후 15초 동안 같은 키의 재시도 폭주를 억제한다. 이 기간은 원래 만료/fallback 기한을 연장하지 않는다.
 캐시 키에는 코인/통화 또는 기준·대상 통화/기간(법정 통화는 시작·종료일)이 포함된다.

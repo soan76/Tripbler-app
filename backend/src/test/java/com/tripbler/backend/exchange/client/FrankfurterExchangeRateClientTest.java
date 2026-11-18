@@ -337,4 +337,121 @@ class FrankfurterExchangeRateClientTest {
 
         mockServer.verify();
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "429, true", "500, true", "502, true", "503, true",
+        "400, false", "401, false", "404, false", "422, false"
+    })
+    void marksOnlyThrottlingAndServerErrorsAsTransient(int status, boolean expectedTransient) {
+        // 429·5xx만 일시적 장애로 표시해 캐시가 마지막 성공값으로 대신 응답할 수 있게 한다.
+        mockServer
+            .expect(requestTo(BASE_URL + "/latest?base=KRW&symbols=USD"))
+            .andRespond(
+                org.springframework.test.web.client.response.MockRestResponseCreators
+                    .withStatus(org.springframework.http.HttpStatusCode.valueOf(status))
+            );
+
+        ExchangeProviderException exception = assertThrows(
+            ExchangeProviderException.class,
+            () -> exchangeRateClient.getLatestRates("KRW", List.of("USD"))
+        );
+
+        assertEquals(
+            expectedTransient,
+            com.tripbler.backend.common.cache.ProviderFailures.isTransient(exception)
+        );
+        mockServer.verify();
+    }
+
+    @Test
+    void marksConnectionFailureAsTransient() {
+        // 연결 거부도 일시적 장애로 판정되어야 한다.
+        mockServer
+            .expect(requestTo(BASE_URL + "/latest?base=KRW&symbols=USD"))
+            .andRespond(withException(new java.net.ConnectException("Connection refused")));
+
+        ExchangeProviderException exception = assertThrows(
+            ExchangeProviderException.class,
+            () -> exchangeRateClient.getLatestRates("KRW", List.of("USD"))
+        );
+
+        assertEquals(
+            true,
+            com.tripbler.backend.common.cache.ProviderFailures.isTransient(exception)
+        );
+        mockServer.verify();
+    }
+
+    private static final String HISTORY_URL =
+        BASE_URL + "/2026-07-01..2026-07-03?base=KRW&symbols=USD";
+
+    private ExchangeProviderException requestHistoryExpectingFailure() {
+        return assertThrows(
+            ExchangeProviderException.class,
+            () -> exchangeRateClient.getHistoricalRates(
+                "KRW",
+                "USD",
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 3)
+            )
+        );
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "429, true", "500, true", "503, true", "400, false", "404, false"
+    })
+    void marksOnlyThrottlingAndServerErrorsAsTransientForHistory(int status, boolean expectedTransient) {
+        // 기간별 시세 경로도 429·5xx만 일시적 장애로 표시해야 한다.
+        mockServer
+            .expect(requestTo(HISTORY_URL))
+            .andRespond(
+                org.springframework.test.web.client.response.MockRestResponseCreators
+                    .withStatus(org.springframework.http.HttpStatusCode.valueOf(status))
+            );
+
+        ExchangeProviderException exception = requestHistoryExpectingFailure();
+
+        assertEquals(
+            expectedTransient,
+            com.tripbler.backend.common.cache.ProviderFailures.isTransient(exception)
+        );
+        mockServer.verify();
+    }
+
+    @Test
+    void marksHistoryConnectionFailureAsTransient() {
+        // RestClientException을 ExchangeProviderException으로 감싸도 연결 실패 원인이 유지되어야 한다.
+        mockServer
+            .expect(requestTo(HISTORY_URL))
+            .andRespond(withException(new java.net.ConnectException("Connection refused")));
+
+        ExchangeProviderException exception = requestHistoryExpectingFailure();
+
+        assertEquals(
+            true,
+            com.tripbler.backend.common.cache.ProviderFailures.isTransient(exception)
+        );
+        mockServer.verify();
+    }
+
+    @Test
+    void doesNotMarkInvalidResponseAsTransient() {
+        // 응답 형식 오류는 다시 요청해도 나아지지 않으므로 대신 응답 대상이 아니다.
+        mockServer
+            .expect(requestTo(BASE_URL + "/latest?base=KRW&symbols=USD"))
+            .andRespond(withSuccess("{}", MediaType.APPLICATION_JSON));
+
+        ExchangeProviderException exception = assertThrows(
+            ExchangeProviderException.class,
+            () -> exchangeRateClient.getLatestRates("KRW", List.of("USD"))
+        );
+
+        assertEquals(
+            false,
+            com.tripbler.backend.common.cache.ProviderFailures.isTransient(exception)
+        );
+        mockServer.verify();
+    }
 }

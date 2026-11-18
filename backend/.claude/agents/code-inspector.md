@@ -30,7 +30,7 @@ model: sonnet
 `CLAUDE.md`와 `AGENTS.md`의 규칙 전체를 기준으로 확인한다. 아래는 그중 자주 어긋나는 항목이다.
 - 기능 패키지가 `controller → service → client` 구조를 지키는지. 외부 API 호출은 `*Client` 인터페이스와 구현체를 거치는지.
 - 예외는 `BusinessException` + `ErrorCode`로 던지고 `GlobalExceptionHandler`가 `ErrorResponse`로 바꾸는지. 외부 서비스 실패는 전용 예외(`ExchangeProviderException` 등)를 쓰는지.
-- 외부 시세 캐시는 **시간 초과일 때만** 마지막 값을 `stale: true`와 원래 `fetchedAt`으로 돌려주는지. 다른 오류를 성공으로 바꾸지 않는지(`common/cache/TimeoutFallbackCache`, `Timeouts`, `docs/market-network-resilience.md`).
+- 외부 시세 캐시는 **일시적 장애(시간 초과, 연결 실패, 429·5xx)일 때만** 마지막 값을 `stale: true`와 원래 `fetchedAt`으로 돌려주는지. 다른 오류를 성공으로 바꾸지 않는지(`common/cache/TimeoutFallbackCache`, `ProviderFailures`, `Timeouts`, `docs/market-network-resilience.md`).
 - 외부 API 키, JWT 비밀값, 비밀번호, 토큰이 코드, 로그, 예외 메시지, 응답에 노출되지 않는지. 키는 설정·환경 변수로만 읽는지.
 
 ## 3. 성능 점검 (보고만 한다)

@@ -5,7 +5,10 @@ import java.util.*;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
-/** 성공값만 보관한다. 타임아웃 fallback은 원래 TTL과 조회 시각을 연장하지 않는다. */
+/**
+ * 성공값만 보관한다. 일시적 장애(ProviderFailures.isTransient)일 때만 마지막 성공값으로 fallback하며,
+ * fallback은 원래 TTL과 조회 시각을 연장하지 않는다.
+ */
 public final class TimeoutFallbackCache<K, V> {
     private static final class Slot<V> {
         V value;
@@ -47,8 +50,8 @@ public final class TimeoutFallbackCache<K, V> {
                 slot.retryAt = Instant.MIN;
                 return loaded;
             } catch (RuntimeException failure) {
-                if (!Timeouts.isTimeout(failure) || !canFallback(slot, clock.instant())) throw failure;
-                // 같은 키로 몰려온 요청이 연속으로 타임아웃을 기다리지 않도록 짧게 쉬고 재시도한다.
+                if (!ProviderFailures.isTransient(failure) || !canFallback(slot, clock.instant())) throw failure;
+                // 같은 키로 몰려온 요청이 장애 중인 제공자를 연속으로 호출하지 않도록 짧게 쉬고 재시도한다.
                 slot.retryAt = clock.instant().plusSeconds(15);
                 return stale.apply(slot.value);
             }

@@ -19,6 +19,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import com.tripbler.backend.common.cache.ProviderFailures;
 import com.tripbler.backend.common.exception.BusinessException;
 import com.tripbler.backend.common.exception.ErrorCode;
 import com.tripbler.backend.crypto.config.CoinGeckoProperties;
@@ -93,12 +94,27 @@ class CoinGeckoCryptoHistoryClientTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {401, 403, 404, 429, 500, 503})
+    @ValueSource(ints = {401, 403, 404})
     void providerFailureUsesSafeCommonError(int status) {
         server.expect(requestTo(url(CryptoHistoryPeriod.SEVEN_DAYS)))
             .andRespond(withStatus(HttpStatusCode.valueOf(status))
                 .body("private-provider-error").contentType(MediaType.TEXT_PLAIN));
         assertUnavailable();
+        server.verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {429, 500, 503})
+    void throttlingAndServerErrorsAreMarkedTransientWithoutProviderDetails(int status) {
+        server.expect(requestTo(url(CryptoHistoryPeriod.SEVEN_DAYS)))
+            .andRespond(withStatus(HttpStatusCode.valueOf(status))
+                .body("private-provider-error").contentType(MediaType.TEXT_PLAIN));
+        var error = assertThrows(BusinessException.class,
+            () -> client.getHistoricalPrices(CryptoCoin.BTC, "KRW", CryptoHistoryPeriod.SEVEN_DAYS));
+        assertEquals(ErrorCode.CRYPTO_PROVIDER_UNAVAILABLE, error.getErrorCode());
+        assertEquals(ErrorCode.CRYPTO_PROVIDER_UNAVAILABLE.getMessage(), error.getMessage());
+        assertInstanceOf(ProviderFailures.TransientProviderFailure.class, error.getCause());
+        assertNull(error.getCause().getCause());
         server.verify();
     }
 

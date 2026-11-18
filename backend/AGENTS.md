@@ -48,7 +48,7 @@
 | 인증, 회원, 구글 계정 연동, 프로필 이미지 | `auth`, `user` | 인증 코드 메일은 Gmail SMTP |
 
 기능 패키지마다 `controller → service → client` 구조다. `*Client` 인터페이스와 외부 서비스별 구현체(예: `FrankfurterExchangeRateClient`)가 있고, `dto/`에 API 응답과 외부 응답 형식을 둔다. 외부 API 키는 서버에만 두며 앱으로 내려보내지 않는다. 공통 요소는 `common/`에 있다.
-- `common/cache/TimeoutFallbackCache` + 기능별 `*ResponseCache`: 메모리 TTL 캐시. **외부 응답 시간 초과일 때만** 마지막 캐시 값을 `stale: true`와 원래 `fetchedAt`으로 돌려준다. 다른 오류는 성공으로 바꾸지 않는다. TTL, 허용 기간, 키 개수 제한, 15초 재시도 억제는 `docs/market-network-resilience.md`에 있다.
+- `common/cache/TimeoutFallbackCache` + 기능별 `*ResponseCache`: 메모리 TTL 캐시. **외부 제공자의 일시적 장애(시간 초과, 연결 실패, 429·5xx)일 때만** 마지막 캐시 값을 `stale: true`와 원래 `fetchedAt`으로 돌려준다(`common/cache/ProviderFailures`). 다른 오류는 성공으로 바꾸지 않는다. TTL, 허용 기간, 키 개수 제한, 15초 재시도 억제는 `docs/market-network-resilience.md`에 있다.
 - `common/chart/HistoryDownsampler`: 기간별 시세 엔드포인트는 `maxPoints`(기본 300, 16~1000)를 받는다. 응답할 때만 샘플링하며 첫·마지막 점과 구간별 최저·최고점을 보존한다.
 - `common/exception`: `BusinessException` + `ErrorCode` → `GlobalExceptionHandler` → `ErrorResponse`. 외부 서비스 실패는 전용 예외(`ExchangeProviderException`, `PlacesProviderException`, `TranslationProviderException`)를 쓴다.
 - `common/config/SecurityConfig`: JWT 액세스 토큰을 쓰는 OAuth2 리소스 서버. 리프레시 토큰은 DB(`auth/RefreshToken`)에 저장하고, 인증 없이 열리는 엔드포인트는 여기서 지정한다.

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import com.tripbler.backend.common.cache.ProviderFailures;
 import com.tripbler.backend.common.exception.BusinessException;
 import com.tripbler.backend.common.exception.ErrorCode;
 import com.tripbler.backend.crypto.config.CoinGeckoProperties;
@@ -68,7 +69,7 @@ public class CoinGeckoCryptoMarketClient implements CryptoMarketClient {
                 .header("x-cg-demo-api-key", apiKey.trim())
                 .retrieve()
                 .onStatus(status -> status.isError(), (request, providerResponse) -> {
-                    throw unavailable();
+                    throw unavailable(providerResponse.getStatusCode().value());
                 })
                 .body(PRICE_TYPE);
 
@@ -83,6 +84,7 @@ public class CoinGeckoCryptoMarketClient implements CryptoMarketClient {
             );
         } catch (RestClientException exception) {
             if (com.tripbler.backend.common.cache.Timeouts.isTimeout(exception)) throw timeout();
+            if (ProviderFailures.isTransient(exception)) throw transientFailure();
             // 외부 응답 본문/인증 정보가 공통 오류 응답이나 예외 로그에 섞이지 않게 한다.
             throw unavailable();
         }
@@ -109,7 +111,7 @@ public class CoinGeckoCryptoMarketClient implements CryptoMarketClient {
                 .header("x-cg-demo-api-key", apiKey.trim())
                 .retrieve()
                 .onStatus(status -> status.isError(), (request, providerResponse) -> {
-                    throw unavailable();
+                    throw unavailable(providerResponse.getStatusCode().value());
                 })
                 .body(HISTORY_TYPE);
 
@@ -138,6 +140,7 @@ public class CoinGeckoCryptoMarketClient implements CryptoMarketClient {
             );
         } catch (RestClientException | ArithmeticException exception) {
             if (com.tripbler.backend.common.cache.Timeouts.isTimeout(exception)) throw timeout();
+            if (ProviderFailures.isTransient(exception)) throw transientFailure();
             // 제공자의 오류 본문이나 인증 정보를 공통 오류에 노출하지 않는다.
             throw unavailable();
         }
@@ -151,5 +154,15 @@ public class CoinGeckoCryptoMarketClient implements CryptoMarketClient {
 
     private BusinessException unavailable() {
         return new BusinessException(ErrorCode.CRYPTO_PROVIDER_UNAVAILABLE);
+    }
+
+    private BusinessException unavailable(int providerStatus) {
+        return ProviderFailures.isTransientStatus(providerStatus) ? transientFailure() : unavailable();
+    }
+
+    private BusinessException transientFailure() {
+        // 연결 실패·429·5xx는 일시적 장애로만 표시하고 외부 URL/키/본문이 담긴 원본 예외는 전달하지 않는다.
+        return new BusinessException(ErrorCode.CRYPTO_PROVIDER_UNAVAILABLE,
+            ErrorCode.CRYPTO_PROVIDER_UNAVAILABLE.getMessage(), new ProviderFailures.TransientProviderFailure());
     }
 }
