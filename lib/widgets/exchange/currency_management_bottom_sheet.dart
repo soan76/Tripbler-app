@@ -284,53 +284,58 @@ class _CurrencyManagementBottomSheetState
   }) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
+    return Padding(
       key: key,
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
+      padding: const EdgeInsets.only(bottom: 8),
+      // 배경은 ListTile이 물결 효과를 그리는 Material에 둔다(DecoratedBox에 두면 가려진다).
+      child: Material(
         color: colorScheme.surfaceContainerLow,
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: ListTile(
-        leading: CurrencyIcon(currency: currency),
+        shape: Border.all(color: colorScheme.outlineVariant),
+        child: ListTile(
+          leading: CurrencyIcon(currency: currency),
 
-        title: Text(
-          '${currency.code} · ${currency.countryName}',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: colorScheme.onSurface,
-          ),
-        ),
-
-        subtitle: Text(
-          currency.currencyName,
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  editableCurrencies.removeAt(index);
-                });
-              },
-              child: Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: colorScheme.error,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.remove, color: colorScheme.onError, size: 18),
-              ),
+          title: Text(
+            '${currency.code} · ${currency.countryName}',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurface,
             ),
+          ),
 
-            const SizedBox(width: 12),
+          subtitle: Text(
+            currency.currencyName,
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
 
-            Icon(Icons.drag_handle, color: colorScheme.onSurfaceVariant),
-          ],
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    editableCurrencies.removeAt(index);
+                  });
+                },
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: colorScheme.error,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.remove,
+                    color: colorScheme.onError,
+                    size: 18,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Icon(Icons.drag_handle, color: colorScheme.onSurfaceVariant),
+            ],
+          ),
         ),
       ),
     );

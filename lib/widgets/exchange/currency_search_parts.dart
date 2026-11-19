@@ -131,30 +131,31 @@ class CurrencyOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      // 배경은 ListTile이 물결 효과를 그리는 Material에 둔다(DecoratedBox에 두면 가려진다).
+      child: Material(
         color: selected
             ? colorScheme.secondaryContainer
             : colorScheme.surfaceContainerLowest,
-        border: Border.all(color: colorScheme.outlineVariant),
-      ),
-      child: ListTile(
-        leading: CurrencyIcon(currency: currency),
-        title: Text(
-          '${currency.code} · ${currency.countryName}',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: colorScheme.onSurface,
+        shape: Border.all(color: colorScheme.outlineVariant),
+        child: ListTile(
+          leading: CurrencyIcon(currency: currency),
+          title: Text(
+            '${currency.code} · ${currency.countryName}',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: colorScheme.onSurface,
+            ),
           ),
+          subtitle: Text(
+            currency.currencyName,
+            style: TextStyle(color: colorScheme.onSurfaceVariant),
+          ),
+          trailing: trailing,
+          selected: selected,
+          onTap: onTap,
         ),
-        subtitle: Text(
-          currency.currencyName,
-          style: TextStyle(color: colorScheme.onSurfaceVariant),
-        ),
-        trailing: trailing,
-        selected: selected,
-        onTap: onTap,
       ),
     );
   }
