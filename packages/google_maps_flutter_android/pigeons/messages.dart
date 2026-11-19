@@ -8,8 +8,7 @@ import 'package:pigeon/pigeon.dart';
   PigeonOptions(
     dartOut: 'lib/src/messages.g.dart',
     kotlinOptions: KotlinOptions(package: 'io.flutter.plugins.googlemaps'),
-    kotlinOut:
-        'android/src/main/kotlin/io/flutter/plugins/googlemaps/Messages.kt',
+    kotlinOut: 'android/src/main/kotlin/io/flutter/plugins/googlemaps/Messages.kt',
     copyrightHeader: 'pigeons/copyright.txt',
   ),
 )
@@ -609,11 +608,7 @@ class PlatformBitmapAsset {
 /// Pigeon equivalent of [AssetImageBitmap]. See
 /// https://developers.google.com/maps/documentation/android-sdk/reference/com/google/android/libraries/maps/model/BitmapDescriptorFactory#public-static-bitmapdescriptor-fromasset-string-assetname
 class PlatformBitmapAssetImage {
-  PlatformBitmapAssetImage({
-    required this.name,
-    required this.scale,
-    this.size,
-  });
+  PlatformBitmapAssetImage({required this.name, required this.scale, this.size});
   final String name;
   final double scale;
   final PlatformDoublePair? size;
@@ -706,10 +701,7 @@ abstract class MapsApi {
   );
 
   /// Updates the set of custer managers for clusters on the map.
-  void updateClusterManagers(
-    List<PlatformClusterManager> toAdd,
-    List<String> idsToRemove,
-  );
+  void updateClusterManagers(List<PlatformClusterManager> toAdd, List<String> idsToRemove);
 
   /// Updates the set of markers on the map.
   void updateMarkers(
@@ -761,10 +753,7 @@ abstract class MapsApi {
 
   /// Moves the camera according to [cameraUpdate], animating the update using a
   /// duration in milliseconds if provided.
-  void animateCamera(
-    PlatformCameraUpdate cameraUpdate,
-    int? durationMilliseconds,
-  );
+  void animateCamera(PlatformCameraUpdate cameraUpdate, int? durationMilliseconds);
 
   /// Gets the current map zoom level.
   double getZoomLevel();
@@ -786,10 +775,9 @@ abstract class MapsApi {
   /// style string.
   bool setStyle(String style);
 
-  /// Sets the Google Map color scheme.
+  /// [Tripbler] Sets the map's light / dark color scheme.
   ///
-  /// true = dark mode
-  /// false = light mode
+  /// true = dark mode, false = light mode.
   void setMapColorScheme(bool isDarkMode);
 
   /// Returns true if the last attempt to set a style, either via initial map
@@ -848,6 +836,12 @@ abstract class MapsCallbackApi {
   /// Called when a circle is tapped.
   void onCircleTap(String circleId);
 
+  /// Called when a point of interest is tapped.
+  ///
+  /// [Tripbler] Also passes the name and position the SDK reports, so the app
+  /// can show the place without another lookup.
+  void onPointOfInterestTap(String placeId, String name, PlatformLatLng position);
+
   /// Called when a marker cluster is tapped.
   void onClusterTap(PlatformCluster cluster);
 
@@ -862,11 +856,7 @@ abstract class MapsCallbackApi {
 
   /// Called to get data for a map tile.
   @async
-  PlatformTile getTileOverlayTile(
-    String tileOverlayId,
-    PlatformPoint location,
-    int zoom,
-  );
+  PlatformTile getTileOverlayTile(String tileOverlayId, PlatformPoint location, int zoom);
 }
 
 /// Interface for global SDK initialization.
@@ -879,9 +869,7 @@ abstract class MapsInitializerApi {
   /// Calling this more than once in the lifetime of an application will result
   /// in an error.
   @async
-  PlatformRendererType initializeWithPreferredRenderer(
-    PlatformRendererType? type,
-  );
+  PlatformRendererType initializeWithPreferredRenderer(PlatformRendererType? type);
 
   /// Attempts to trigger any thread-blocking work
   /// the Google Maps SDK normally does when a map is shown for the first time.

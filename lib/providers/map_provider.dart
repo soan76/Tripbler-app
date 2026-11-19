@@ -93,6 +93,8 @@ class MapState {
     this.detailsErrorMessage,
     this.selectedPlaceDetailsFetchedAt,
     this.selectedPlace,
+    this.selectedPlaceDistanceOrigin,
+    this.isSelectedPlaceFromMap = false,
     required this.clock,
     required this.onSearchResultMarkerTap,
   });
@@ -123,6 +125,14 @@ class MapState {
   final DateTime? selectedPlaceDetailsFetchedAt;
 
   final PlaceModel? selectedPlace;
+
+  /// 선택한 장소의 거리 기준(기기 위치). 검색 결과는 검색할 때의 위치, 지도에서 고른
+  /// 장소는 고른 순간의 위치다. 위치를 몰랐으면 null이다.
+  final LatLng? selectedPlaceDistanceOrigin;
+
+  /// 선택한 장소가 검색 결과가 아니라 지도의 장소 아이콘에서 고른 것인지.
+  /// 이때는 검색 결과 마커가 없으므로 [markers]가 그 장소의 마커를 따로 만든다.
+  final bool isSelectedPlaceFromMap;
 
   /// 만료 판단에 쓰는 현재 시각([MapNotifier.now]와 같은 시계).
   final DateTime Function() clock;
@@ -170,6 +180,8 @@ class MapState {
     bool clearSelectedPlaceDetailsFetchedAt = false,
     PlaceModel? selectedPlace,
     bool clearSelectedPlace = false,
+    LatLng? selectedPlaceDistanceOrigin,
+    bool? isSelectedPlaceFromMap,
   }) {
     return MapState(
       searchStatus: searchStatus ?? this.searchStatus,
@@ -196,6 +208,13 @@ class MapState {
       selectedPlace: clearSelectedPlace
           ? null
           : selectedPlace ?? this.selectedPlace,
+      // 선택을 지우면 선택에 딸린 거리 기준과 출처도 함께 지운다.
+      selectedPlaceDistanceOrigin: clearSelectedPlace
+          ? null
+          : selectedPlaceDistanceOrigin ?? this.selectedPlaceDistanceOrigin,
+      isSelectedPlaceFromMap: clearSelectedPlace
+          ? false
+          : isSelectedPlaceFromMap ?? this.isSelectedPlaceFromMap,
       clock: clock,
       onSearchResultMarkerTap: onSearchResultMarkerTap,
     );
@@ -283,6 +302,22 @@ class MapState {
       );
     }
 
+    // 지도의 장소 아이콘에서 고른 장소. 검색 결과 마커처럼 선택 색으로 표시한다.
+    final selected = selectedPlace;
+
+    if (isSelectedPlaceFromMap && selected != null && selected.hasCoordinates) {
+      markers.add(
+        Marker(
+          markerId: MarkerId('map_${selected.id}'),
+          position: LatLng(selected.latitude!, selected.longitude!),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            BitmapDescriptor.hueAzure,
+          ),
+          zIndexInt: 2,
+        ),
+      );
+    }
+
     return markers;
   }
 }
@@ -360,6 +395,10 @@ class MapNotifier extends Notifier<MapState> {
 
   bool _hasSessionExpiryNotice = false;
 
+  /// 기다리는 만료 안내를 띄울 때의 세션 번호. 그 뒤 세션이 또 바뀌면(다시 로그인,
+  /// 로그아웃 등) 안내는 지난 일이라 표시하지 않는다.
+  int? _noticeSessionId;
+
   // ----- 상세 조회 상태 -----
   PlaceDetailsStatus _detailsStatus = PlaceDetailsStatus.idle;
   String? _detailsErrorMessage;
@@ -392,6 +431,12 @@ class MapNotifier extends Notifier<MapState> {
 
   PlaceModel? _selectedPlace;
 
+  /// 지도의 장소 아이콘에서 고른 장소의 거리 기준(고른 순간의 기기 위치).
+  LatLng? _mapPlaceOrigin;
+
+  /// 선택한 장소를 지도의 장소 아이콘에서 골랐는지.
+  bool _isSelectedPlaceFromMap = false;
+
   /// 지금 값으로 화면에 줄 상태를 만든다.
   MapState _snapshot() {
     return MapState(
@@ -406,6 +451,12 @@ class MapNotifier extends Notifier<MapState> {
       detailsErrorMessage: _detailsErrorMessage,
       selectedPlaceDetailsFetchedAt: _selectedCacheEntry?.storedAt,
       selectedPlace: _selectedPlace,
+      selectedPlaceDistanceOrigin: _selectedPlace == null
+          ? null
+          : _isSelectedPlaceFromMap
+          ? _mapPlaceOrigin
+          : _resultsRequest?.origin,
+      isSelectedPlaceFromMap: _selectedPlace != null && _isSelectedPlaceFromMap,
       clock: _now,
       onSearchResultMarkerTap: selectSearchResult,
     );
@@ -563,6 +614,7 @@ class MapNotifier extends Notifier<MapState> {
     }
 
     _hasSessionExpiryNotice = true;
+    _noticeSessionId = ref.read(authProvider).sessionId;
     _notify();
   }
 
@@ -607,12 +659,46 @@ class MapNotifier extends Notifier<MapState> {
 
   /// 검색 결과 목록이나 마커에서 장소를 고른다. 상세 카드에 표시된다.
   void selectSearchResult(PlaceModel place) {
-    if (_selectedPlace?.id == place.id) {
+    if (_selectedPlace?.id == place.id && !_isSelectedPlaceFromMap) {
       return;
     }
 
-    // 받아 둔 상세 결과로 장소 값은 맞춰 두되, 카드는 버튼부터 보인다.
-    _selectedPlace = _withCachedDetails(place);
+    _selectPlace(place, fromMap: false);
+  }
+
+  /// 지도의 장소 아이콘(POI)을 눌렀을 때. [place]는 지도 SDK가 준 장소 ID·이름·좌표만
+  /// 가진다(주소·분류는 비어 있다). 탭 자체로는 서버를 호출하지 않는다.
+  ///
+  /// 같은 장소가 검색 결과에 있으면 그 결과를 고른 것으로 본다(검색 결과의 이름·주소·
+  /// 분류와 검색할 때의 거리 기준을 쓴다). 없으면 [userLocation](고른 순간의 기기
+  /// 위치)을 거리 기준으로 카드를 연다. 검색 결과 목록은 그대로 둔다.
+  void selectMapPlace(PlaceModel place, {LatLng? userLocation}) {
+    for (final result in _searchResults) {
+      if (result.id == place.id) {
+        selectSearchResult(result);
+        return;
+      }
+    }
+
+    if (_selectedPlace?.id == place.id && _isSelectedPlaceFromMap) {
+      return;
+    }
+
+    _mapPlaceOrigin = userLocation;
+    _selectPlace(place, fromMap: true);
+  }
+
+  void _selectPlace(PlaceModel place, {required bool fromMap}) {
+    _isSelectedPlaceFromMap = fromMap;
+
+    if (!fromMap) {
+      _mapPlaceOrigin = null;
+    }
+
+    // 받아 둔 상세 결과로 장소 값과 같은 id의 결과 목록 항목을 함께 맞춰 두되,
+    // 카드는 버튼부터 보인다.
+    _selectedPlace = place;
+    _applyCachedDetails(place.id);
     _detailsRevealedPlaceId = null;
     _resetDetailsState();
     _notify();
@@ -648,8 +734,10 @@ class MapNotifier extends Notifier<MapState> {
       _onSessionChanged();
     }
 
-    // 새로 로그인했다: 아직 표시하지 않은 이전 세션의 만료 안내는 무효다.
-    if (isAuthenticated && _hasSessionExpiryNotice) {
+    // 새로 로그인했거나, 안내를 기다리는 동안 세션이 또 바뀌었다: 아직 표시하지 않은
+    // 이전 세션의 만료 안내는 무효다.
+    if (_hasSessionExpiryNotice &&
+        (isAuthenticated || sessionId != _noticeSessionId)) {
       _hasSessionExpiryNotice = false;
       _notify();
     }
@@ -903,16 +991,17 @@ class MapNotifier extends Notifier<MapState> {
     );
   }
 
-  /// 받아 둔 상세 결과가 있으면 평점·영업 여부만 반영한 장소를 돌려준다.
-  PlaceModel _withCachedDetails(PlaceModel place) {
-    final cached = _detailsCache[place.id]?.place;
+  /// 받아 둔 상세 결과가 있으면 선택한 장소와 같은 id의 결과 목록 항목에 평점·영업
+  /// 여부를 함께 반영한다. 한쪽만 바꾸면 카드와 목록 값이 어긋날 수 있다.
+  void _applyCachedDetails(String placeId) {
+    final cached = _detailsCache[placeId]?.place;
 
     if (cached == null) {
-      return place;
+      return;
     }
 
-    _markCachedDetailsUsed(place.id);
-    return _withDetails(place, cached);
+    _markCachedDetailsUsed(placeId);
+    _applyPlaceDetails(cached);
   }
 
   void _resetDetailsState() {
@@ -935,6 +1024,8 @@ class MapNotifier extends Notifier<MapState> {
 
   void _clearSelectionState() {
     _selectedPlace = null;
+    _isSelectedPlaceFromMap = false;
+    _mapPlaceOrigin = null;
     _detailsRevealedPlaceId = null;
     _resetDetailsState();
   }

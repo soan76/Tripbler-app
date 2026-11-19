@@ -633,6 +633,153 @@ void main() {
     });
   });
 
+  group('지도에서 장소 아이콘 선택', () {
+    const here = LatLng(37.5663, 126.9779);
+    const tapped = LatLng(37.57, 126.98);
+
+    // 지도 SDK가 주는 값만 있는 장소(주소·분류 없음).
+    PlaceModel poi(String id, {String name = '카페'}) => PlaceModel(
+      id: id,
+      name: name,
+      latitude: tapped.latitude,
+      longitude: tapped.longitude,
+      address: '',
+      rating: null,
+      category: '',
+      openNow: null,
+    );
+
+    test('검색 없이도 카드를 열고, 고른 순간의 위치를 거리 기준으로 둔다', () {
+      provider.selectMapPlace(poi('poi'), userLocation: here);
+
+      expect(provider.selectedPlace?.id, 'poi');
+      expect(provider.isSelectedPlaceFromMap, isTrue);
+      expect(provider.selectedPlaceDistanceOrigin, here);
+      // 탭 자체로는 서버를 부르지 않는다.
+      expect(service.searchCalls, isEmpty);
+      expect(service.detailCalls, isEmpty);
+    });
+
+    test('로그인하지 않아도 카드를 연다', () {
+      authState.signOut();
+
+      provider.selectMapPlace(poi('poi'), userLocation: here);
+
+      expect(provider.selectedPlace?.id, 'poi');
+    });
+
+    test('고른 장소에 선택 색 마커를 따로 만든다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+
+      provider.selectMapPlace(poi('poi'));
+
+      final markers = {
+        for (final marker in provider.markers) marker.markerId.value: marker,
+      };
+      expect(markers.keys, containsAll(['search_a', 'map_poi']));
+      expect(markers['map_poi']!.position, tapped);
+      expect(markers['map_poi']!.zIndexInt, 2);
+      // 검색 결과는 그대로 둔다.
+      expect(provider.searchResults.map((p) => p.id), ['a']);
+    });
+
+    test('검색 결과에 있는 장소를 누르면 그 결과를 고른 것으로 본다', () async {
+      final pending = provider.search(
+        '경복궁',
+        center: center,
+        userLocation: here,
+      );
+      service.searchCalls.last.completer.complete([_place('a'), _place('b')]);
+      await pending;
+
+      provider.selectMapPlace(
+        poi('b', name: 'Place B'),
+        userLocation: const LatLng(35.1, 129.0),
+      );
+
+      expect(provider.selectedPlace?.name, '장소 b');
+      expect(provider.selectedPlace?.address, '주소 b');
+      expect(provider.isSelectedPlaceFromMap, isFalse);
+      expect(provider.selectedPlaceDistanceOrigin, here);
+      expect(provider.markers.any((m) => m.markerId.value == 'map_b'), isFalse);
+    });
+
+    test('검색 결과를 고르면 지도에서 고른 장소와 그 마커는 사라진다', () async {
+      final pending = provider.search(
+        '경복궁',
+        center: center,
+        userLocation: here,
+      );
+      service.searchCalls.last.completer.complete([_place('a')]);
+      await pending;
+      provider.selectMapPlace(poi('poi'), userLocation: tapped);
+
+      provider.selectSearchResult(provider.searchResults.single);
+
+      expect(provider.selectedPlace?.id, 'a');
+      expect(provider.isSelectedPlaceFromMap, isFalse);
+      expect(provider.selectedPlaceDistanceOrigin, here);
+      expect(
+        provider.markers.any((m) => m.markerId.value == 'map_poi'),
+        isFalse,
+      );
+    });
+
+    test('카드를 닫거나 새로 검색하면 지도에서 고른 장소를 지운다', () async {
+      provider.selectMapPlace(poi('poi'), userLocation: here);
+      provider.clearSelectedPlace();
+
+      expect(provider.selectedPlace, isNull);
+      expect(provider.isSelectedPlaceFromMap, isFalse);
+      expect(provider.selectedPlaceDistanceOrigin, isNull);
+      expect(provider.markers, isEmpty);
+
+      provider.selectMapPlace(poi('poi'), userLocation: here);
+      final pending = provider.search('덕수궁');
+      expect(provider.selectedPlace, isNull);
+      service.searchCalls.last.completer.complete(const []);
+      await pending;
+    });
+
+    test('같은 장소를 다시 눌러도 열린 카드를 그대로 둔다', () async {
+      provider.selectMapPlace(poi('poi'), userLocation: here);
+      final loading = provider.loadSelectedPlaceDetails();
+      expect(provider.detailsStatus, PlaceDetailsStatus.loading);
+
+      provider.selectMapPlace(poi('poi'), userLocation: tapped);
+
+      expect(provider.detailsStatus, PlaceDetailsStatus.loading);
+      expect(provider.selectedPlaceDistanceOrigin, here);
+      service.detailCompleters.single.complete(_place('poi', rating: 4.2));
+      await loading;
+    });
+
+    test('평점·영업 조회는 SDK 이름을 유지하고 두 값만 반영한다', () async {
+      provider.selectMapPlace(poi('poi'), userLocation: here);
+
+      final loading = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(
+        _place('poi', rating: 4.2, openNow: true),
+      );
+      await loading;
+
+      expect(service.detailCalls, ['poi']);
+      expect(provider.selectedPlace?.name, '카페');
+      expect(provider.selectedPlace?.address, '');
+      expect(provider.selectedPlace?.rating, 4.2);
+      expect(provider.selectedPlace?.openNow, isTrue);
+    });
+
+    test('로그인 세션이 바뀌면 지도에서 고른 장소도 지운다', () {
+      provider.selectMapPlace(poi('poi'), userLocation: here);
+
+      authState.signOut();
+
+      expect(provider.selectedPlace, isNull);
+      expect(provider.isSelectedPlaceFromMap, isFalse);
+    });
+  });
+
   group('마커와 범위', () {
     test('좌표가 있는 결과만 마커로 만들고 선택된 마커를 위로 올린다', () async {
       await searchAndSucceed('경복궁', [
@@ -930,6 +1077,23 @@ void main() {
 
       expect(service.detailCalls, ['a']);
       expect(provider.selectedPlace?.rating, 4.6);
+    });
+
+    test('기억해 둔 상세 결과로 장소를 고르면 결과 목록 항목도 같은 값으로 맞춘다', () async {
+      await searchAndSucceed('경복궁', [_place('a')]);
+      provider.selectSearchResult(provider.searchResults.single);
+      final pending = provider.loadSelectedPlaceDetails();
+      service.detailCompleters.single.complete(_place('a', rating: 4.6));
+      await pending;
+
+      // 새 검색으로 평점 없는 같은 장소가 다시 나온다.
+      await searchAndSucceed('경복궁 근처', [_place('a')]);
+      expect(provider.searchResults.single.rating, isNull);
+
+      provider.selectSearchResult(provider.searchResults.single);
+
+      expect(provider.selectedPlace?.rating, 4.6);
+      expect(provider.searchResults.single.rating, 4.6);
     });
 
     test('상세 결과는 최대 50개까지 기억하고 오래된 것부터 지운다', () async {

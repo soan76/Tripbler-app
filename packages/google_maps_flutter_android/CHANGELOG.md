@@ -1,3 +1,33 @@
+## 2.21.0
+
+* Switches to Pigeon's new 'suspend' support for platform communication.
+
+## 2.20.0
+
+* Adds support for tapping points of interest on the map.
+* Updates minimum supported SDK version to Flutter 3.41/Dart 3.11.
+
+## 2.19.13
+
+* Updates pigeon dev_dependency to ^27.3.2 for analyzer 14 compatibility.
+
+## 2.19.12
+
+* Bumps the androidx group across 10 directories with 1 update.
+
+## 2.19.11
+
+* Migrates to Built-in Kotlin to support AGP 9.
+* Updates minimum supported SDK version to Flutter 3.44/Dart 3.12.
+
+## 2.19.10
+
+* Updates README to include setup information.
+
+## 2.19.9
+
+* Adds attribution ID for Google Maps SDK usage.
+
 ## 2.19.8
 
 * Updates internal implementation to use Kotlin Pigeon.

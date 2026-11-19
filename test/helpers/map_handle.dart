@@ -34,6 +34,8 @@ class MapHandle extends ChangeNotifier {
       state.selectedPlaceDetailsFetchedAt;
   LatLngBounds? get searchResultBounds => state.searchResultBounds;
   PlaceModel? get selectedPlace => state.selectedPlace;
+  LatLng? get selectedPlaceDistanceOrigin => state.selectedPlaceDistanceOrigin;
+  bool get isSelectedPlaceFromMap => state.isSelectedPlaceFromMap;
   Set<Marker> get markers => state.markers;
 
   DateTime now() => _notifier.now();
@@ -47,6 +49,9 @@ class MapHandle extends ChangeNotifier {
 
   void selectSearchResult(PlaceModel place) =>
       _notifier.selectSearchResult(place);
+
+  void selectMapPlace(PlaceModel place, {LatLng? userLocation}) =>
+      _notifier.selectMapPlace(place, userLocation: userLocation);
 
   void clearSearch() => _notifier.clearSearch();
 

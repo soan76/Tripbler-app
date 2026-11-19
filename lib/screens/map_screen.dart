@@ -11,6 +11,7 @@ import '../services/map/map_location_controller.dart';
 import '../services/map/map_marker_icon_service.dart';
 import '../services/map/route_launcher.dart';
 import '../utils/map/place_distance.dart';
+import '../utils/map/point_of_interest_place.dart';
 import '../utils/map/scale_bar_calculator.dart';
 import '../utils/map/search_query_normalizer.dart';
 import 'auth/login_screen.dart';
@@ -22,6 +23,7 @@ import '../widgets/map/place_detail_card.dart';
 import '../widgets/map/place_search_bar.dart';
 import '../widgets/map/place_search_results_panel.dart';
 import '../widgets/map/session_expiry_notice_listener.dart';
+import '../widgets/map/tab_scoped_snack_bar.dart';
 import '../widgets/map/tripbler_google_map.dart';
 
 /// 구글 맵 화면을 구성하는 StatefulWidget 클래스
@@ -80,6 +82,19 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // 가장 최근 검색 제출 번호(늦게 끝난 이전 제출의 카메라 이동을 막는다)
   int _searchSubmitId = 0;
 
+  // 다른 탭에 있는 동안 검색이 끝나 아직 결과에 카메라를 맞추지 못했는지.
+  // 지도가 보이지 않으면 카메라 이동이 조용히 실패하므로, 지도 탭에 돌아왔을 때 맞춘다.
+  bool _pendingResultsFit = false;
+
+  // 지도 탭이 아닐 때 생긴 안내 중 지도 탭에 들어올 때 보여줄 마지막 한 건.
+  // 앱은 홈 탭으로 시작하지만 MapScreen은 바로 만들어져, 시작 때 위치 안내가 여기 남는다.
+  String? _pendingMapMessage;
+
+  // 지도 화면이 띄운 안내. 지도 탭을 떠나면 닫는다(만료 안내는 리스너가 따로 맡는다).
+  late final TabScopedSnackBar _snackBar = TabScopedSnackBar(
+    isActive: () => mounted && _isMapTabActive(),
+  );
+
   // 마지막으로 확인한 검색 가능 상태, 로그인 세션 번호, 선택 장소 id
   // (로그인 해제·장소 선택 순간을 감지한다)
   late PlaceSearchAvailability _lastAvailability;
@@ -130,6 +145,53 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     // 구독은 화면이 사라질 때 함께 닫힌다.
     ref.listenManual(authProvider, (_, auth) => _onAuthStateChanged(auth));
     ref.listenManual(mapProvider, (_, map) => _onMapStateChanged(map));
+    ref.listenManual(
+      tabProvider.select((tab) => tab.selectedIndex == _mapTabIndex),
+      (_, isActive) => _onMapTabActiveChanged(isActive),
+    );
+  }
+
+  /// 지도 탭에 들어오거나 떠날 때.
+  void _onMapTabActiveChanged(bool isActive) {
+    if (!mounted) {
+      return;
+    }
+
+    if (!isActive) {
+      _snackBar.closeForInactiveTab();
+      return;
+    }
+
+    _snackBar.cancelPendingClose();
+
+    final pendingMessage = _pendingMapMessage;
+    final fitResults = _pendingResultsFit;
+    _pendingMapMessage = null;
+    _pendingResultsFit = false;
+
+    if (pendingMessage == null && !fitResults) {
+      return;
+    }
+
+    // 탭 전환으로 지도가 다시 배치된 뒤에 보여주고 맞춘다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_isMapTabActive()) {
+        return;
+      }
+
+      if (pendingMessage != null) {
+        _showMapSnackBar(pendingMessage);
+      }
+
+      final mapState = ref.read(mapProvider);
+
+      // 그사이 장소를 골라 카드가 열려 있으면 그 장소를 보고 있으므로 옮기지 않는다.
+      if (fitResults &&
+          mapState.searchStatus == MapSearchStatus.success &&
+          mapState.selectedPlace == null) {
+        _fitCameraToResults(mapState);
+      }
+    });
   }
 
   @override
@@ -156,6 +218,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _onLocationStateChanged() {
     if (!mounted) {
       return;
+    }
+
+    // 위치를 확인했으면 기다리던 위치 안내("확인하고 있습니다" 등)는 지난 일이다.
+    if (_locationController.currentPosition != null) {
+      _pendingMapMessage = null;
     }
 
     setState(() {});
@@ -364,28 +431,30 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   /// 지도 관련 안내 메시지 표시
-  void _showMapSnackBar(String message) {
+  ///
+  /// 기존 SnackBar는 내리고 새 메시지만 표시해 같은 안내가 쌓이지 않게 한다.
+  /// 지도 탭이 아닐 때는 마지막 한 건을 보관했다가 지도 탭에 들어올 때 띄운다.
+  /// [dropWhenHidden]이면(예: 다른 탭으로 옮긴 뒤 끝난 길찾기 실패) 보관하지 않고 버린다.
+  void _showMapSnackBar(String message, {bool dropWhenHidden = false}) {
     if (!mounted) {
       return;
     }
 
-    /*
-     * 기존 SnackBar가 남아있으면 제거하고
-     * 새로운 메시지만 표시함.
-     *
-     * 같은 위치 오류 메시지가 화면에
-     * 여러 개 쌓이는 것을 방지함.
-     */
-    final messenger = ScaffoldMessenger.of(context);
+    if (!_isMapTabActive()) {
+      if (!dropWhenHidden) {
+        _pendingMapMessage = message;
+      }
+      return;
+    }
 
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(content: Text(message), duration: const Duration(seconds: 3)),
-      );
+    _snackBar.show(
+      ScaffoldMessenger.of(context),
+      content: Text(message),
+      duration: const Duration(seconds: 3),
+    );
   }
 
-  /// [origin](검색할 때의 기기 위치)에서 [place]까지의 거리 문구. 계산할 수 없으면 null.
+  /// [origin](검색하거나 장소를 고른 순간의 기기 위치)에서 [place]까지의 거리 문구. 계산할 수 없으면 null.
   static String? _distanceLabel(LatLng? origin, PlaceModel place) {
     final meters = PlaceDistance.metersTo(origin, place);
     return meters == null ? null : PlaceDistance.format(meters);
@@ -396,7 +465,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final result = await _routeLauncher.openDirections(place);
 
     if (result == RouteLaunchResult.failed) {
-      _showMapSnackBar(PlaceDetailCard.routeFailedMessage);
+      _showMapSnackBar(
+        PlaceDetailCard.routeFailedMessage,
+        dropWhenHidden: true,
+      );
     }
   }
 
@@ -440,6 +512,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
 
     _searchSubmitId++;
+    _pendingResultsFit = false;
     _searchFocusNode.unfocus();
     _searchController.clear();
 
@@ -480,17 +553,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     _searchFocusNode.unfocus();
 
-    final messenger = ScaffoldMessenger.of(context);
-
-    messenger
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: const Text('로그인하면 장소를 검색할 수 있습니다.'),
-          duration: SessionExpiryNoticeListener.displayDuration,
-          action: SnackBarAction(label: '로그인', onPressed: _openLogin),
-        ),
-      );
+    _snackBar.show(
+      ScaffoldMessenger.of(context),
+      content: const Text('로그인하면 장소를 검색할 수 있습니다.'),
+      duration: SessionExpiryNoticeListener.displayDuration,
+      action: SnackBarAction(label: '로그인', onPressed: _openLogin),
+    );
   }
 
   void _openLogin() {
@@ -522,6 +590,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     final mapNotifier = ref.read(mapProvider.notifier);
     final submitId = ++_searchSubmitId;
+    _pendingResultsFit = false;
 
     // 지도가 준비되지 않았으면 중심 좌표 없이 검색한다.
     final center = _mapController != null ? _currentCameraTarget : null;
@@ -545,7 +614,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     if (mapState.searchStatus == MapSearchStatus.success &&
         mapState.lastSearchQuery == normalizedQuery) {
-      await _fitCameraToResults(mapState);
+      await _fitCameraToResultsWhenVisible(mapState);
     }
   }
 
@@ -558,6 +627,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
     final mapNotifier = ref.read(mapProvider.notifier);
     final submitId = ++_searchSubmitId;
+    _pendingResultsFit = false;
 
     setState(() {
       _resultsExpanded = true;
@@ -572,8 +642,18 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final mapState = ref.read(mapProvider);
 
     if (mapState.searchStatus == MapSearchStatus.success) {
-      await _fitCameraToResults(mapState);
+      await _fitCameraToResultsWhenVisible(mapState);
     }
+  }
+
+  /// 지도 탭이 보이면 바로, 다른 탭에 있으면 지도 탭으로 돌아왔을 때 결과에 카메라를 맞춘다.
+  Future<void> _fitCameraToResultsWhenVisible(MapState mapState) async {
+    if (!_isMapTabActive()) {
+      _pendingResultsFit = true;
+      return;
+    }
+
+    await _fitCameraToResults(mapState);
   }
 
   /// 지금 로그인 상태로 검색할 수 있는지. 화면의 검색창 상태는 한 프레임 늦을 수 있어
@@ -585,6 +665,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   void _clearSearch() {
     _searchSubmitId++;
+    _pendingResultsFit = false;
     _searchController.clear();
     ref.read(mapProvider.notifier).clearSearch();
 
@@ -653,6 +734,21 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   void _onMapTapped() {
     _searchFocusNode.unfocus();
     ref.read(mapProvider.notifier).clearSelectedPlace();
+  }
+
+  /// 지도에 원래 보이는 장소 아이콘(POI) 탭: 그 장소의 카드를 연다.
+  ///
+  /// 장소 ID·이름·좌표는 지도 SDK가 준 값이라 서버를 부르지 않는다. 거리는 누른 순간의
+  /// 기기 위치에서 잰다. 카메라는 옮기지 않는다(이미 화면에 보이는 곳을 눌렀다).
+  void _onPointOfInterestTapped(TappedPointOfInterest pointOfInterest) {
+    _searchFocusNode.unfocus();
+
+    ref
+        .read(mapProvider.notifier)
+        .selectMapPlace(
+          placeFromPointOfInterest(pointOfInterest),
+          userLocation: _locationController.currentPosition,
+        );
   }
 
   /// Android 뒤로가기: 카드 닫기 → 목록 접기 → 검색 해제 → 기본 동작.
@@ -736,6 +832,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
                   // 빈 곳 탭: 열린 카드만 닫고 검색 결과는 유지한다.
                   onTap: (_) => _onMapTapped(),
+
+                  // 장소 아이콘 탭: 그 장소의 카드를 연다.
+                  onPointOfInterestTap: _onPointOfInterestTapped,
 
                   // 지도 이동/확대/축소 시
                   // Scale Bar 계산 기준과 검색 기준 좌표 갱신
@@ -836,9 +935,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                             onRoutePressed: () =>
                                 _openDirections(selectedPlace),
 
-                            // 결과 목록과 같은 기준(검색할 때의 기기 위치)의 거리
+                            // 검색 결과는 검색할 때, 지도에서 고른 장소는 고른
+                            // 순간의 기기 위치에서의 거리
                             distanceLabel: _distanceLabel(
-                              mapState.searchResultsOrigin,
+                              mapState.selectedPlaceDistanceOrigin,
                               selectedPlace,
                             ),
                           )

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show Tristate;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -930,7 +931,7 @@ void main() {
 
       var data = tester.getSemantics(refreshButton).getSemanticsData();
       expect(data.flagsCollection.isButton, isTrue);
-      expect(data.flagsCollection.isEnabled, isTrue);
+      expect(data.flagsCollection.isEnabled, Tristate.isTrue);
       expect(data.hasAction(SemanticsAction.tap), isTrue);
       expect(data.tooltip, '새로고침');
 
@@ -947,8 +948,8 @@ void main() {
       });
       data = wrapper.getSemanticsData();
       expect(data.flagsCollection.isButton, isTrue);
-      expect(data.flagsCollection.hasEnabledState, isTrue);
-      expect(data.flagsCollection.isEnabled, isFalse);
+      // 꺼진 버튼: 사용 가능 여부가 있고 그 값이 false다(Flutter 3.50부터 Tristate).
+      expect(data.flagsCollection.isEnabled, Tristate.isFalse);
       expect(data.hasAction(SemanticsAction.tap), isFalse);
       expect(data.hasAction(SemanticsAction.focus), isFalse);
       expect(data.tooltip, isEmpty);
@@ -956,7 +957,7 @@ void main() {
 
       await page.loaded();
       data = tester.getSemantics(refreshButton).getSemanticsData();
-      expect(data.flagsCollection.isEnabled, isTrue);
+      expect(data.flagsCollection.isEnabled, Tristate.isTrue);
       expect(data.hasAction(SemanticsAction.tap), isTrue);
       await tester.pumpWidget(const SizedBox());
       semantics.dispose();
@@ -1133,7 +1134,7 @@ void main() {
               .getSemanticsData()
               .flagsCollection
               .isEnabled,
-          isFalse,
+          Tristate.isFalse,
         );
         if (!isLoading) {
           final icon = tester.element(find.byIcon(Icons.refresh));

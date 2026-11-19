@@ -4,7 +4,7 @@ import '../../models/place_model.dart';
 import '../../providers/map_provider.dart';
 import '../../utils/map/place_category_labels.dart';
 
-/// 검색 결과를 골랐을 때 지도 아래에 열리는 장소 카드.
+/// 검색 결과나 지도의 장소 아이콘을 골랐을 때 지도 아래에 열리는 장소 카드.
 ///
 /// 기기 위치에서의 거리([distanceLabel])는 조회 없이 분류 옆에 바로 보여준다("카페 · 350m").
 /// 평점·영업 여부는 "평점·영업 정보" 버튼을 눌러 조회를 마친 뒤에만 보여준다.

@@ -11,6 +11,11 @@ class TripblerGoogleMap extends ConsumerStatefulWidget {
   final Set<Marker> markers;
   final void Function(GoogleMapController controller) onMapCreated;
   final void Function(LatLng latLng) onTap;
+
+  /// 지도에 원래 보이는 장소 아이콘(POI)을 눌렀을 때. 장소 ID·이름·좌표는 지도 SDK가
+  /// 준 값이다(서버 호출 없음).
+  final void Function(TappedPointOfInterest pointOfInterest)
+  onPointOfInterestTap;
   final void Function(CameraPosition position) onCameraMove;
 
   const TripblerGoogleMap({
@@ -19,6 +24,7 @@ class TripblerGoogleMap extends ConsumerStatefulWidget {
     required this.markers,
     required this.onMapCreated,
     required this.onTap,
+    required this.onPointOfInterestTap,
     required this.onCameraMove,
   });
 
@@ -61,16 +67,19 @@ class _TripblerGoogleMapState extends ConsumerState<TripblerGoogleMap> {
 
     return GoogleMap(
       // 플랫폼별 Google Cloud Map ID 적용
-      cloudMapId: MapIdConfig.current,
+      mapId: MapIdConfig.current,
 
       initialCameraPosition: widget.initialCameraPosition,
       onMapCreated: _onMapCreated,
 
-      // 백엔드에서 받아온 장소 목록 + 현재 위치 방향 마커를 함께 표시함.
+      // 검색 결과·지도에서 고른 장소 마커와 현재 위치 방향 마커를 함께 표시함.
       markers: widget.markers,
 
       // 지도 탭 좌표를 상위 화면으로 전달함.
       onTap: widget.onTap,
+
+      // 장소 아이콘 탭을 상위 화면으로 전달함(이름·좌표 포함).
+      onPointOfInterestDetailsTap: widget.onPointOfInterestTap,
 
       // 지도를 이동/확대/축소할 때마다 카메라 정보를 상위 화면으로 전달함.
       onCameraMove: widget.onCameraMove,

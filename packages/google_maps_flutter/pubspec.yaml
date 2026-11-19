@@ -2,11 +2,11 @@ name: google_maps_flutter
 description: A Flutter plugin for integrating Google Maps in iOS and Android applications.
 repository: https://github.com/flutter/packages/tree/main/packages/google_maps_flutter/google_maps_flutter
 issue_tracker: https://github.com/flutter/flutter/issues?q=is%3Aissue+is%3Aopen+label%3A%22p%3A+maps%22
-version: 2.14.2
+version: 2.19.0
 
 environment:
-  sdk: ^3.8.0
-  flutter: ">=3.32.0"
+  sdk: ^3.13.0
+  flutter: ">=3.47.0"
 
 flutter:
   plugin:
@@ -14,17 +14,19 @@ flutter:
       android:
         default_package: google_maps_flutter_android
       ios:
-        default_package: google_maps_flutter_ios
+        # [Tripbler] SDK 10.x implementation (the legacy google_maps_flutter_ios is no longer updated).
+        default_package: google_maps_flutter_ios_sdk10
       web:
         default_package: google_maps_flutter_web
 
 dependencies:
   flutter:
     sdk: flutter
-  google_maps_flutter_android: ^2.16.1
-  google_maps_flutter_ios: ^2.15.4
-  google_maps_flutter_platform_interface: ^2.14.0
-  google_maps_flutter_web: ^0.5.14
+  google_maps_flutter_android: ^2.20.0
+  # [Tripbler] For the runtime color scheme and POI details on iOS.
+  google_maps_flutter_ios_sdk10: ^2.19.0
+  google_maps_flutter_platform_interface: ^2.17.0
+  google_maps_flutter_web: ^0.6.4
 
 dev_dependencies:
   flutter_test:
@@ -42,8 +44,9 @@ topics:
 false_secrets:
   - /example/web/index.html
 
+# [Tripbler] Use the locally patched platform packages.
 dependency_overrides:
   google_maps_flutter_android:
     path: ../google_maps_flutter_android
-  google_maps_flutter_ios:
-    path: ../google_maps_flutter_ios
+  google_maps_flutter_ios_sdk10:
+    path: ../google_maps_flutter_ios_sdk10

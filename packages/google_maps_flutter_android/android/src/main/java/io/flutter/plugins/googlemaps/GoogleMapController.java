@@ -34,17 +34,18 @@ import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.model.Circle;
 import com.google.android.gms.maps.model.GroundOverlay;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.MapColorScheme;
 import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MapCapabilities;
 import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.Marker;
+import com.google.android.gms.maps.model.PointOfInterest;
 import com.google.android.gms.maps.model.Polygon;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.TileOverlay;
 import com.google.maps.android.clustering.Cluster;
 import com.google.maps.android.clustering.ClusterManager;
 import com.google.maps.android.collections.MarkerManager;
-import com.google.android.gms.maps.model.MapColorScheme;
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding;
 import io.flutter.plugin.common.BinaryMessenger;
 import io.flutter.plugin.platform.PlatformView;
@@ -53,10 +54,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
-import kotlin.Result;
 import kotlin.Unit;
-import kotlin.jvm.functions.Function1;
-import org.jetbrains.annotations.NotNull;
+import kotlin.coroutines.Continuation;
 
 /** Controller of a single GoogleMaps MapView instance. */
 class GoogleMapController
@@ -88,8 +87,7 @@ class GoogleMapController
   private boolean buildingsEnabled = true;
   private boolean disposed = false;
   @VisibleForTesting final float density;
-  private @Nullable Function1<? super @NotNull Result<@NotNull Unit>, @NotNull Unit>
-      mapReadyCallback;
+  private @Nullable Continuation<? super Unit> mapReadyContinuation;
   private final Context context;
   private final LifecycleProvider lifecycleProvider;
   private final MarkersController markersController;
@@ -207,9 +205,9 @@ class GoogleMapController
     this.googleMap.setTrafficEnabled(this.trafficEnabled);
     this.googleMap.setBuildingsEnabled(this.buildingsEnabled);
     installInvalidator();
-    if (mapReadyCallback != null) {
-      ResultUtilsKt.completeWithUnitSuccess(mapReadyCallback);
-      mapReadyCallback = null;
+    if (mapReadyContinuation != null) {
+      ResultUtilsKt.resumeWithUnitSuccess(mapReadyContinuation);
+      mapReadyContinuation = null;
     }
     setGoogleMapListener(this);
     markerManager = new MarkerManager(googleMap);
@@ -246,18 +244,6 @@ class GoogleMapController
       updateMapStyle(initialMapStyle);
       initialMapStyle = null;
     }
-  }
-
-  @Override
-  public void setMapColorScheme(boolean isDarkMode) {
-    if (googleMap == null) {
-      return;
-    }
-
-    googleMap.setMapColorScheme(
-        isDarkMode
-            ? MapColorScheme.DARK
-            : MapColorScheme.LIGHT);
   }
 
   // Returns the first TextureView found in the view hierarchy.
@@ -329,17 +315,17 @@ class GoogleMapController
 
   @Override
   public void onMapClick(@NonNull LatLng latLng) {
-    flutterApi.onTap(Convert.latLngToPigeon(latLng), (Result<Unit> result) -> Unit.INSTANCE);
+    flutterApi.onTap(Convert.latLngToPigeon(latLng), ResultUtilsKt.emptyContinuation());
   }
 
   @Override
   public void onMapLongClick(@NonNull LatLng latLng) {
-    flutterApi.onLongPress(Convert.latLngToPigeon(latLng), (Result<Unit> result) -> Unit.INSTANCE);
+    flutterApi.onLongPress(Convert.latLngToPigeon(latLng), ResultUtilsKt.emptyContinuation());
   }
 
   @Override
   public void onCameraMoveStarted(int reason) {
-    flutterApi.onCameraMoveStarted((Result<Unit> result) -> Unit.INSTANCE);
+    flutterApi.onCameraMoveStarted(ResultUtilsKt.emptyContinuation());
   }
 
   @Override
@@ -354,13 +340,13 @@ class GoogleMapController
     }
     flutterApi.onCameraMove(
         Convert.cameraPositionToPigeon(googleMap.getCameraPosition()),
-        (Result<Unit> result) -> Unit.INSTANCE);
+        ResultUtilsKt.emptyContinuation());
   }
 
   @Override
   public void onCameraIdle() {
     clusterManagersController.onCameraIdle();
-    flutterApi.onCameraIdle((Result<Unit> result) -> Unit.INSTANCE);
+    flutterApi.onCameraIdle(ResultUtilsKt.emptyContinuation());
   }
 
   @Override
@@ -399,6 +385,19 @@ class GoogleMapController
   }
 
   @Override
+  public void onPoiClick(PointOfInterest pointOfInterest) {
+    if (pointOfInterest.placeId != null) {
+      // [Tripbler] Pass the name and position too, so the app can show the place
+      // without another lookup.
+      flutterApi.onPointOfInterestTap(
+          pointOfInterest.placeId,
+          pointOfInterest.name == null ? "" : pointOfInterest.name,
+          Convert.latLngToPigeon(pointOfInterest.latLng),
+          ResultUtilsKt.emptyContinuation());
+    }
+  }
+
+  @Override
   public void onGroundOverlayClick(@NonNull GroundOverlay groundOverlay) {
     groundOverlaysController.onGroundOverlayTap(groundOverlay.getId());
   }
@@ -434,6 +433,7 @@ class GoogleMapController
     googleMap.setOnPolygonClickListener(listener);
     googleMap.setOnPolylineClickListener(listener);
     googleMap.setOnCircleClickListener(listener);
+    googleMap.setOnPoiClickListener(listener);
     googleMap.setOnMapClickListener(listener);
     googleMap.setOnMapLongClickListener(listener);
     googleMap.setOnGroundOverlayClickListener(listener);
@@ -867,29 +867,22 @@ class GoogleMapController
   }
 
   private boolean updateMapStyle(String style) {
-    if (googleMap == null) {
-      throw new FlutterError(
-          "GoogleMap uninitialized",
-          "setMapStyle called prior to map initialization",
-          null);
-    }
-
-    final MapStyleOptions styleOptions =
-        style == null || style.isEmpty()
-            ? null
-            : new MapStyleOptions(style);
-    lastSetStyleSucceeded = Objects.requireNonNull(googleMap).setMapStyle(styleOptions);
+    // Dart passes an empty string to indicate that the style should be cleared.
+    final MapStyleOptions mapStyleOptions =
+        style == null || style.isEmpty() ? null : new MapStyleOptions(style);
+    lastSetStyleSucceeded = Objects.requireNonNull(googleMap).setMapStyle(mapStyleOptions);
     return lastSetStyleSucceeded;
   }
 
   /** MapsApi implementation */
+  @Nullable
   @Override
-  public void waitForMap(
-      @NonNull Function1<? super @NotNull Result<@NotNull Unit>, @NotNull Unit> callback) {
+  public Object waitForMap(@NonNull Continuation<? super Unit> continuation) {
     if (googleMap == null) {
-      mapReadyCallback = callback;
+      mapReadyContinuation = continuation;
+      return ResultUtilsKt.coroutineSuspended();
     } else {
-      ResultUtilsKt.completeWithUnitSuccess(callback);
+      return Unit.INSTANCE;
     }
   }
 
@@ -1062,6 +1055,16 @@ class GoogleMapController
     return updateMapStyle(style);
   }
 
+  // [Tripbler] Switches the map between light and dark color schemes at runtime.
+  @Override
+  public void setMapColorScheme(boolean isDarkMode) {
+    if (googleMap == null) {
+      return;
+    }
+
+    googleMap.setMapColorScheme(isDarkMode ? MapColorScheme.DARK : MapColorScheme.LIGHT);
+  }
+
   @Override
   public boolean didLastStyleSucceed() {
     return lastSetStyleSucceeded;
@@ -1084,27 +1087,27 @@ class GoogleMapController
     tileOverlaysController.clearTileCache(tileOverlayId);
   }
 
+  @Nullable
   @Override
-  public void takeSnapshot(
-      @NonNull Function1<? super @NotNull Result<byte @NotNull []>, Unit> callback) {
+  public Object takeSnapshot(@NonNull Continuation<? super byte[]> continuation) {
     if (googleMap == null) {
-      ResultUtilsKt.completeWithError(
-          callback, new FlutterError("GoogleMap uninitialized", "takeSnapshot", null));
-    } else {
-      googleMap.snapshot(
-          bitmap -> {
-            if (bitmap == null) {
-              ResultUtilsKt.completeWithError(
-                  callback, new FlutterError("Snapshot failure", "Unable to take snapshot", null));
-            } else {
-              ByteArrayOutputStream stream = new ByteArrayOutputStream();
-              bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
-              byte[] byteArray = stream.toByteArray();
-              bitmap.recycle();
-              ResultUtilsKt.completeWithValue(callback, byteArray);
-            }
-          });
+      throw new FlutterError("GoogleMap uninitialized", "takeSnapshot", null);
     }
+    googleMap.snapshot(
+        bitmap -> {
+          if (bitmap == null) {
+            ResultUtilsKt.resumeWithException(
+                continuation,
+                new FlutterError("Snapshot failure", "Unable to take snapshot", null));
+          } else {
+            ByteArrayOutputStream stream = new ByteArrayOutputStream();
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream);
+            byte[] byteArray = stream.toByteArray();
+            bitmap.recycle();
+            ResultUtilsKt.resumeWithValue(continuation, byteArray);
+          }
+        });
+    return ResultUtilsKt.coroutineSuspended();
   }
 
   /** MapsInspectorApi implementation */

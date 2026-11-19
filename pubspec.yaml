@@ -42,7 +42,9 @@ dependencies:
   shared_preferences: ^2.5.5
   intl: ^0.20.3
   fl_chart: ^1.2.0
-  google_maps_flutter: ^2.14.2
+  google_maps_flutter: ^2.19.0
+  # iOS는 Google Maps SDK 10.x 구현을 쓴다(기본 google_maps_flutter_ios는 더 이상 갱신되지 않음).
+  google_maps_flutter_ios_sdk10: ^2.19.0
   camera: ^0.12.0+1
   permission_handler: ^12.0.3
   image_picker: ^1.2.2
@@ -117,9 +119,9 @@ flutter:
 dependency_overrides:
   google_maps_flutter:
     path: packages/google_maps_flutter
-    
+
   google_maps_flutter_android:
     path: packages/google_maps_flutter_android
 
-  google_maps_flutter_ios:
-    path: packages/google_maps_flutter_ios
+  google_maps_flutter_ios_sdk10:
+    path: packages/google_maps_flutter_ios_sdk10

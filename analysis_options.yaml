@@ -17,6 +17,13 @@ analyzer:
 
     - packages/google_maps_flutter/example/**
     - packages/google_maps_flutter/test/**
+    - build/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
 
     
 linter:

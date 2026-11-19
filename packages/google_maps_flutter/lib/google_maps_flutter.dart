@@ -9,16 +9,21 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
-import 'package:google_maps_flutter_ios/google_maps_flutter_ios.dart';
+import 'package:google_maps_flutter_android/google_maps_flutter_android.dart' as android;
+import 'package:google_maps_flutter_android/google_maps_flutter_android.dart'
+    hide PointOfInterestDetailsTapEvent;
+import 'package:google_maps_flutter_ios_sdk10/google_maps_flutter_ios_sdk10.dart' as ios;
 import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 export 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart'
     show
+        AdvancedMarker,
+        AdvancedMarkerGlyph,
         ArgumentCallback,
         ArgumentCallbacks,
         AssetMapBitmap,
         BitmapDescriptor,
+        BitmapGlyph,
         BytesMapBitmap,
         CameraPosition,
         CameraPositionCallback,
@@ -26,6 +31,7 @@ export 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
         CameraUpdate,
         Cap,
         Circle,
+        CircleGlyph,
         CircleId,
         Cluster,
         ClusterManager,
@@ -42,17 +48,22 @@ export 'package:google_maps_flutter_platform_interface/google_maps_flutter_platf
         LatLng,
         LatLngBounds,
         MapBitmapScaling,
+        MapColorScheme,
         MapStyleException,
         MapType,
         Marker,
+        MarkerCollisionBehavior,
         MarkerId,
         MinMaxZoomPreference,
         PatternItem,
+        PinConfig,
+        PointOfInterestId,
         Polygon,
         PolygonId,
         Polyline,
         PolylineId,
         ScreenCoordinate,
+        TextGlyph,
         Tile,
         TileOverlay,
         TileOverlayId,
