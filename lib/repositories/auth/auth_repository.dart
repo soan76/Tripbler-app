@@ -1,8 +1,6 @@
 import 'dart:async';
 
 import '../../core/network/api_exception.dart';
-import '../../models/auth/token_refresh_request.dart';
-import '../../models/auth/token_refresh_response.dart';
 import '../../models/auth/user_login_request.dart';
 import '../../models/auth/user_login_response.dart';
 import '../../models/auth/social_account_status_response.dart';
@@ -14,6 +12,12 @@ import '../../services/auth/google_auth_service.dart';
 import '../../services/auth/token_storage_service.dart';
 
 import 'package:flutter/foundation.dart';
+
+import 'auth_exceptions.dart';
+import 'auth_token_refresher.dart';
+import 'auth_token_session.dart';
+
+export 'auth_exceptions.dart';
 
 /// 인증 API와 로컬 토큰 저장소를 연결하는 Repository.
 ///
@@ -28,55 +32,25 @@ class AuthRepository {
     TokenStorageService? tokenStorageService,
     GoogleAuthService? googleAuthService,
   }) : _authApiService = authApiService ?? AuthApiService(),
-       _tokenStorageService = tokenStorageService ?? TokenStorageService(),
+       _session = AuthTokenSession(
+         tokenStorageService ?? TokenStorageService(),
+       ),
        _googleAuthService = googleAuthService ?? GoogleAuthService();
 
   final AuthApiService _authApiService;
-  final TokenStorageService _tokenStorageService;
   final GoogleAuthService _googleAuthService;
 
-  /// 로그인 세션 번호.
-  ///
-  /// 로그인(새 토큰 저장)과 세션 종료(로그아웃·탈퇴·토큰 삭제) 때만 바뀌고,
-  /// 같은 세션에서 Access Token만 재발급할 때는 그대로다.
-  /// 인증 요청은 시작할 때 이 번호를 기록해 두고, 재시도·토큰 저장·만료 처리를
-  /// 원래 세션에만 적용한다. AuthNotifier도 같은 번호를 참조한다.
-  int _sessionId = 0;
+  /// 세션 번호와 토큰 저장소 순차 경로. 모든 토큰 작업은 이 객체 하나를 거친다.
+  final AuthTokenSession _session;
 
-  int get sessionId => _sessionId;
+  /// 세션별 Access Token 재발급. [_session]의 순차 경로를 함께 쓴다.
+  late final AuthTokenRefresher _refresher = AuthTokenRefresher(
+    session: _session,
+    authApiService: _authApiService,
+  );
 
-  /// 토큰 저장소 작업을 한 줄로 처리하는 꼬리 Future.
-  ///
-  /// 세션 번호 변경과 토큰 저장·삭제, 인증 요청의 "번호 + 토큰" 읽기를 모두 이 경로로
-  /// 순서대로 실행해 새 번호와 이전 토큰이 한 쌍으로 읽히지 않게 한다.
-  /// 네트워크 호출은 이 경로에 넣지 않는다(느린 요청이 다른 인증 요청을 막지 않도록).
-  Future<void> _storageTail = Future<void>.value();
-
-  /// 진행 중인 Access Token 재발급. 같은 세션의 요청끼리만 공유한다.
-  _RefreshTask? _ongoingRefresh;
-
-  Future<T> _serialized<T>(Future<T> Function() operation) {
-    final result = _storageTail.then((_) => operation());
-    _storageTail = result.then<void>((_) {}, onError: (Object _) {});
-    return result;
-  }
-
-  /// 현재 세션 번호와 저장된 Authorization 헤더를 한 쌍으로 읽는다.
-  Future<({int sessionId, String? header})> _readSessionAuth() {
-    return _serialized(() async {
-      return (
-        sessionId: _sessionId,
-        header: await _tokenStorageService.readAuthorizationHeader(),
-      );
-    });
-  }
-
-  /// 요청을 시작한 세션이 아직 유지되는지 확인한다.
-  void _ensureSameSession(int sessionId) {
-    if (_sessionId != sessionId) {
-      throw const SessionChangedException();
-    }
-  }
+  /// 로그인 세션 번호([AuthTokenSession.sessionId]).
+  int get sessionId => _session.sessionId;
 
   /// 회원가입
   Future<UserResponse> signup({
@@ -172,15 +146,11 @@ class AuthRepository {
 
     // 인증에 성공한 뒤 새 토큰을 반영하기 직전에 세션을 바꾼다.
     // 같은 순차 경로 안에서 번호 변경과 저장을 함께 처리한다.
-    await _serialized(() async {
-      _sessionId++;
-
-      await _tokenStorageService.saveTokens(
-        accessToken: response.accessToken,
-        refreshToken: response.refreshToken,
-        tokenType: response.tokenType,
-      );
-    });
+    await _session.startSession(
+      accessToken: response.accessToken,
+      refreshToken: response.refreshToken,
+      tokenType: response.tokenType,
+    );
 
     return response;
   }
@@ -210,123 +180,9 @@ class AuthRepository {
   ///
   /// 같은 세션에서 이미 재발급이 진행 중이면 그 결과를 함께 쓴다.
   Future<String> refreshAccessToken() async {
-    final session = await _readSessionAuth();
+    final session = await _session.readSessionAuth();
 
-    return _refreshForSession(session.sessionId, failedHeader: null);
-  }
-
-  /// [sessionId] 세션의 Access Token을 재발급한다.
-  ///
-  /// - 같은 세션의 진행 중인 재발급이 있으면 합류한다. 다른 세션의 재발급에는 합류하지 않는다.
-  /// - [failedHeader]보다 새 토큰이 이미 저장돼 있으면(다른 요청이 먼저 재발급함) 그 토큰을 쓴다.
-  /// - 결과는 순차 경로에서 세션이 그대로일 때만 저장한다. 세션이 바뀌었으면
-  ///   [SessionChangedException]을 던지고, 이전 세션의 실패가 새 세션의 만료로 판정되지 않게 한다.
-  Future<String> _refreshForSession(
-    int sessionId, {
-    required String? failedHeader,
-  }) {
-    final ongoing = _ongoingRefresh;
-
-    if (ongoing != null && ongoing.sessionId == sessionId) {
-      return ongoing.future;
-    }
-
-    final task = _RefreshTask(
-      sessionId,
-      _performRefresh(sessionId, failedHeader: failedHeader),
-    );
-
-    _ongoingRefresh = task;
-
-    // 늦게 끝난 다른 세션의 재발급이 진행 중인 참조를 지우지 않도록 자기 것만 지운다.
-    task.future.then<void>(
-      (_) => _clearOngoingRefresh(task),
-      onError: (Object _) => _clearOngoingRefresh(task),
-    );
-
-    return task.future;
-  }
-
-  void _clearOngoingRefresh(_RefreshTask task) {
-    if (identical(_ongoingRefresh, task)) {
-      _ongoingRefresh = null;
-    }
-  }
-
-  Future<String> _performRefresh(
-    int sessionId, {
-    required String? failedHeader,
-  }) async {
-    final stored = await _serialized(() async {
-      return (
-        sessionId: _sessionId,
-        header: await _tokenStorageService.readAuthorizationHeader(),
-        refreshToken: await _tokenStorageService.readRefreshToken(),
-      );
-    });
-
-    if (stored.sessionId != sessionId) {
-      throw const SessionChangedException();
-    }
-
-    final storedHeader = stored.header;
-
-    if (failedHeader != null &&
-        storedHeader != null &&
-        storedHeader.isNotEmpty &&
-        storedHeader != failedHeader) {
-      debugPrint('다른 요청에서 Access Token 재발급 완료 → 저장된 토큰 사용');
-      return storedHeader;
-    }
-
-    final refreshToken = stored.refreshToken;
-
-    if (refreshToken == null || refreshToken.isEmpty) {
-      throw const AuthSessionException('저장된 Refresh Token이 없습니다.');
-    }
-
-    final TokenRefreshResponse response;
-
-    try {
-      response = await _authApiService.refresh(
-        TokenRefreshRequest(refreshToken: refreshToken),
-      );
-    } catch (_) {
-      // 재발급 중 세션이 바뀌었다면 이전 세션의 실패(만료 포함)는 세션 변경으로 바꾼다.
-      _ensureSameSession(sessionId);
-      rethrow;
-    }
-
-    final saved = await _serialized(() async {
-      if (_sessionId != sessionId) {
-        return (sameSession: false, header: null);
-      }
-
-      await _tokenStorageService.saveAccessToken(
-        accessToken: response.accessToken,
-        tokenType: response.tokenType,
-      );
-
-      return (
-        sameSession: true,
-        header: await _tokenStorageService.readAuthorizationHeader(),
-      );
-    });
-
-    if (!saved.sameSession) {
-      // 재발급 응답이 오기 전에 로그아웃·재로그인됨: 이전 세션의 토큰은 저장하지 않는다.
-      throw const SessionChangedException();
-    }
-
-    final refreshedHeader = saved.header;
-
-    if (refreshedHeader == null || refreshedHeader.isEmpty) {
-      // 서버는 새 Access Token을 발급했지만 기기 저장소에서 다시 읽지 못했다.
-      // 세션 만료가 아니라 로컬 저장·읽기 실패이므로 Refresh Token은 지우지 않는다.
-      throw const TokenStorageException('재발급한 Access Token을 기기에서 읽지 못했습니다.');
-    }
-
-    return refreshedHeader;
+    return _refresher.refreshForSession(session.sessionId, failedHeader: null);
   }
 
   /// 현재 로그인 사용자 정보를 조회한다.
@@ -393,7 +249,7 @@ class AuthRepository {
   /// 현재 로그인 사용자의 계정을 삭제한다.
   /// 서버 계정 삭제가 성공한 뒤 로컬 Access / Refresh Token도 제거한다.
   Future<void> deleteAccount() async {
-    final sessionId = _sessionId;
+    final sessionId = _session.sessionId;
 
     // 탈퇴 요청 중 세션이 바뀌면 authorizedRequest가 SessionChangedException을 던진다.
     await authorizedRequest<void>((authorizationHeader) {
@@ -422,40 +278,18 @@ class AuthRepository {
   /// 로컬 토큰 삭제가 실패하면 한 번 더 시도한다. 그래도 실패하면 서버 로그아웃은
   /// 그대로 보내 서버 세션을 끝낸 뒤 삭제 오류를 던져 호출부가 사용자에게 알리게 한다.
   Future<void> logout() async {
-    String? refreshToken;
-    Object? clearError;
-    StackTrace? clearStackTrace;
+    // 순차 경로 안에서 Refresh Token 읽기 → 세션 번호 변경 → 로컬 토큰 삭제(실패 시 1회 재시도).
+    final local = await _session.endSessionForLogout();
 
-    await _serialized(() async {
-      try {
-        // 서버는 이 Refresh Token과 일치하는 토큰만 폐기한다(같은 계정의 새 로그인 세션은 보존).
-        refreshToken = await _tokenStorageService.readRefreshToken();
-      } catch (error) {
-        debugPrint('로그아웃용 토큰 읽기 실패: $error');
-      }
+    _sendServerLogout(local.refreshToken);
 
-      _sessionId++;
-
-      try {
-        await _tokenStorageService.clearTokens();
-      } catch (error) {
-        debugPrint('로컬 토큰 삭제 실패, 한 번 더 시도: $error');
-
-        try {
-          await _tokenStorageService.clearTokens();
-        } catch (retryError, stackTrace) {
-          clearError = retryError;
-          clearStackTrace = stackTrace;
-        }
-      }
-    });
-
-    _sendServerLogout(refreshToken);
-
-    final error = clearError;
+    final error = local.clearError;
 
     if (error != null) {
-      Error.throwWithStackTrace(error, clearStackTrace ?? StackTrace.current);
+      Error.throwWithStackTrace(
+        error,
+        local.clearStackTrace ?? StackTrace.current,
+      );
     }
   }
 
@@ -479,30 +313,27 @@ class AuthRepository {
 
   /// Access Token 조회
   Future<String?> readAccessToken() {
-    return _tokenStorageService.readAccessToken();
+    return _session.readAccessToken();
   }
 
   /// Refresh Token 조회
   Future<String?> readRefreshToken() {
-    return _tokenStorageService.readRefreshToken();
+    return _session.readRefreshToken();
   }
 
   /// API Authorization 헤더 값 조회
   Future<String?> readAuthorizationHeader() {
-    return _tokenStorageService.readAuthorizationHeader();
+    return _session.readAuthorizationHeader();
   }
 
   /// Access Token / Refresh Token 저장 여부 확인
   Future<bool> hasTokens() {
-    return _tokenStorageService.hasTokens();
+    return _session.hasTokens();
   }
 
   /// 현재 세션을 끝내고 저장된 토큰을 모두 지운다(세션 번호 한 번 변경).
   Future<void> clearTokens() {
-    return _serialized(() async {
-      _sessionId++;
-      await _tokenStorageService.clearTokens();
-    });
+    return _session.clearTokens();
   }
 
   /// [sessionId] 세션이 아직 현재 세션일 때만 끝내고 토큰을 지운다.
@@ -510,16 +341,7 @@ class AuthRepository {
   /// 세션 만료 처리나 탈퇴처럼 늦게 끝날 수 있는 작업이 그 사이 로그인한
   /// 다른 계정의 토큰을 지우지 않게 한다. 지웠으면 true.
   Future<bool> clearTokensIfSession(int sessionId) {
-    return _serialized(() async {
-      if (_sessionId != sessionId) {
-        return false;
-      }
-
-      _sessionId++;
-      await _tokenStorageService.clearTokens();
-
-      return true;
-    });
+    return _session.clearTokensIfSession(sessionId);
   }
 
   /// 저장된 Access Token으로 [request]를 실행한다.
@@ -536,7 +358,7 @@ class AuthRepository {
   Future<T> authorizedRequest<T>(
     Future<T> Function(String authorizationHeader) request,
   ) async {
-    final start = await _readSessionAuth();
+    final start = await _session.readSessionAuth();
     final sessionId = start.sessionId;
     final authorizationHeader = start.header;
 
@@ -544,16 +366,16 @@ class AuthRepository {
       throw const AuthSessionException('저장된 Access Token이 없습니다.');
     }
 
-    _ensureSameSession(sessionId);
+    _session.ensureSameSession(sessionId);
 
     try {
       final result = await request(authorizationHeader);
-      _ensureSameSession(sessionId);
+      _session.ensureSameSession(sessionId);
       return result;
     } on SessionChangedException {
       rethrow;
     } on ApiException catch (error) {
-      _ensureSameSession(sessionId);
+      _session.ensureSameSession(sessionId);
 
       if (error.statusCode != 401) {
         rethrow;
@@ -561,24 +383,24 @@ class AuthRepository {
 
       debugPrint('Access Token 인증 실패 → 같은 세션에서 재발급 후 재시도');
 
-      final retryHeader = await _refreshForSession(
+      final retryHeader = await _refresher.refreshForSession(
         sessionId,
         failedHeader: authorizationHeader,
       );
 
-      _ensureSameSession(sessionId);
+      _session.ensureSameSession(sessionId);
 
       try {
         final result = await request(retryHeader);
-        _ensureSameSession(sessionId);
+        _session.ensureSameSession(sessionId);
         return result;
       } catch (_) {
-        _ensureSameSession(sessionId);
+        _session.ensureSameSession(sessionId);
         rethrow;
       }
     } catch (_) {
       // 네트워크 오류 등도 세션이 바뀌었다면 이전 세션의 결과로 보고 버린다.
-      _ensureSameSession(sessionId);
+      _session.ensureSameSession(sessionId);
       rethrow;
     }
   }
@@ -607,62 +429,4 @@ class AuthRepository {
   void dispose() {
     _authApiService.dispose();
   }
-}
-
-/// 로컬 인증 세션 자체에 문제가 있을 때 사용하는 예외(저장된 토큰이 없음).
-/// 세션 만료로 판정된다([AuthRepository.isSessionExpiredError]).
-class AuthSessionException implements Exception {
-  final String message;
-
-  const AuthSessionException(this.message);
-
-  @override
-  String toString() => message;
-}
-
-/// 기기 토큰 저장소의 저장·읽기가 기대와 다르게 끝났을 때의 예외.
-///
-/// 세션 만료가 아니므로 [AuthRepository.isSessionExpiredError]는 false다.
-/// 세션 복구에서는 토큰을 남기고 상단 배너의 다시 시도로 보낸다.
-class TokenStorageException implements Exception {
-  final String message;
-
-  const TokenStorageException(this.message);
-
-  @override
-  String toString() => message;
-}
-
-/// 세션 만료가 확인되어 로그인 상태를 해제했음을 알리는 예외.
-///
-/// AuthNotifier.runAuthorizedRequest가 던진다. 앱은 비로그인으로도 쓸 수 있어 화면은
-/// 그대로 남으므로, 안내가 필요하면 호출한 화면이 맡는다(예: 지도 검색의 만료 안내).
-class SessionExpiredException implements Exception {
-  const SessionExpiredException([this.sessionId]);
-
-  /// 만료된 요청이 시작된 로그인 세션 번호([AuthRepository.sessionId]).
-  /// 같은 세션의 만료 안내를 한 번만 띄우는 데 쓴다.
-  final int? sessionId;
-
-  @override
-  String toString() => '로그인이 만료되었습니다. 다시 로그인해 주세요.';
-}
-
-/// 요청을 시작한 로그인 세션이 그 사이 바뀌어(로그아웃·재로그인) 작업을 중단했음을 알리는 예외.
-///
-/// 세션 만료가 아니므로 [AuthRepository.isSessionExpiredError]는 false다.
-/// 이전 화면에서 시작한 작업이므로 호출부는 현재 화면의 데이터와 오류 문구를 그대로 두고 무시한다.
-class SessionChangedException implements Exception {
-  const SessionChangedException();
-
-  @override
-  String toString() => '로그인 세션이 바뀌어 이전 요청을 중단했습니다.';
-}
-
-/// 세션별 Access Token 재발급 작업.
-class _RefreshTask {
-  _RefreshTask(this.sessionId, this.future);
-
-  final int sessionId;
-  final Future<String> future;
 }
