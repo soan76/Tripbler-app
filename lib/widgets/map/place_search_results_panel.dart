@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../models/place_model.dart';
-import '../../providers/map_provider.dart';
+import '../../providers/map/map_provider.dart';
 import '../../utils/map/place_category_labels.dart';
 import '../../utils/map/place_distance.dart';
 

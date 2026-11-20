@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/providers/auth/auth_provider.dart';
-import 'package:tripbler/providers/map_provider.dart';
+import 'package:tripbler/providers/map/map_provider.dart';
 
 import '../helpers/fake_auth_notifier.dart';
 import '../helpers/fake_place_api.dart';

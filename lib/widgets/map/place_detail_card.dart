@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/place_model.dart';
-import '../../providers/map_provider.dart';
+import '../../providers/map/map_provider.dart';
 import '../../utils/map/place_category_labels.dart';
 
 /// 검색 결과나 지도의 장소 아이콘을 골랐을 때 지도 아래에 열리는 장소 카드.

@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/main.dart' show TripblerApp;
 import 'package:tripbler/providers/auth/auth_provider.dart';
-import 'package:tripbler/providers/map_provider.dart';
+import 'package:tripbler/providers/map/map_provider.dart';
 import 'package:tripbler/providers/tab_provider.dart';
 import 'package:tripbler/screens/main_screen.dart';
 import 'package:tripbler/screens/map_screen.dart';

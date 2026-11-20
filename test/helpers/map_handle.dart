@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'
     show ProviderContainer, ProviderSubscription;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:tripbler/models/place_model.dart';
-import 'package:tripbler/providers/map_provider.dart';
+import 'package:tripbler/providers/map/map_provider.dart';
 
 /// 테스트 컨테이너의 지도 상태를 읽고 바꾼다. 상태가 바뀔 때마다 리스너에 알린다.
 class MapHandle extends ChangeNotifier {

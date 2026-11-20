@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/models/place_model.dart';
-import 'package:tripbler/providers/map_provider.dart';
+import 'package:tripbler/providers/map/map_provider.dart';
 import 'package:tripbler/widgets/map/current_location_button.dart';
 import 'package:tripbler/widgets/map/map_overlay_layout.dart';
 import 'package:tripbler/widgets/map/place_detail_card.dart';

@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/place_model.dart';
 import '../providers/auth/auth_provider.dart';
-import '../providers/map_provider.dart';
+import '../providers/map/map_provider.dart';
 import '../providers/tab_provider.dart';
 import '../services/map/location_service.dart';
 import '../services/map/map_location_controller.dart';
