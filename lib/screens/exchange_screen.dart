@@ -7,7 +7,7 @@ import '../presentation/charts/chart_selection_provider.dart';
 import '../presentation/exchange/display_currency.dart';
 import '../presentation/exchange/exchange_display_provider.dart';
 import '../presentation/exchange/exchange_display_view.dart';
-import '../providers/exchange_provider.dart';
+import '../providers/exchange/exchange_provider.dart';
 import '../providers/settings_provider.dart';
 import '../widgets/charts/chart_pair_carousel.dart';
 import '../widgets/exchange/chart_currency_picker_sheet.dart';

@@ -10,7 +10,7 @@ import 'package:tripbler/models/currency_model.dart';
 import 'package:tripbler/presentation/exchange/display_currency.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_provider.dart';
 import 'package:tripbler/presentation/exchange/exchange_display_view.dart';
-import 'package:tripbler/providers/exchange_provider.dart';
+import 'package:tripbler/providers/exchange/exchange_provider.dart';
 import 'package:tripbler/services/exchange_rate_api_service.dart';
 import 'package:tripbler/services/local_storage_service.dart';
 

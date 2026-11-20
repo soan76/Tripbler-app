@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' show Provider;
 
 import '../../crypto/providers/crypto_provider.dart';
 import '../../models/currency_model.dart';
-import '../../providers/exchange_provider.dart';
+import '../../providers/exchange/exchange_provider.dart';
 import 'display_currency.dart';
 import 'exchange_display_provider.dart';
 

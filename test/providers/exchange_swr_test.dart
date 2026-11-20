@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/models/exchange_rate_response.dart';
-import 'package:tripbler/providers/exchange_provider.dart';
+import 'package:tripbler/providers/exchange/exchange_provider.dart';
 import 'package:tripbler/services/exchange_rate_api_service.dart';
 import 'package:tripbler/services/local_storage_service.dart';
 

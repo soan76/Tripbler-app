@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../crypto/providers/crypto_provider.dart';
 import '../../models/currency_model.dart';
-import '../../providers/exchange_provider.dart';
+import '../../providers/exchange/exchange_provider.dart';
 import 'display_currency.dart';
 
 /// 국가 통화와 코인을 한 목록으로 보여 줄 때 이 계층만 가진 값.
