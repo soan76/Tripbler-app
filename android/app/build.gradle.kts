@@ -3,7 +3,8 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
-    id("kotlin-android")
+    // kotlin-android(KGP)는 붙이지 않는다(Flutter Built-in Kotlin 전환 가이드).
+    // Kotlin 컴파일 방식은 gradle.properties의 android.builtInKotlin을 따른다.
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
