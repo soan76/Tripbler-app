@@ -1,8 +1,8 @@
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+
 /// 지도 마커 아이콘을 생성하는 서비스 클래스
 class MapMarkerIconService {
   const MapMarkerIconService();
@@ -36,6 +36,13 @@ class MapMarkerIconService {
       throw Exception('지도 마커 아이콘 변환에 실패했습니다.');
     }
 
-    return BitmapDescriptor.fromBytes(resizedData.buffer.asUint8List());
+    // 예전 BitmapDescriptor.fromBytes처럼 이미지 1픽셀을 화면 1픽셀로 그린다.
+    // 기기 픽셀 비율을 넘기면 Android는 크기를 그대로 두고, iOS는 같은 비율로 읽는다
+    // (MapBitmapScaling.none은 iOS에서 1픽셀을 1포인트로 그려 2~3배 커진다).
+    return BitmapDescriptor.bytes(
+      resizedData.buffer.asUint8List(),
+      imagePixelRatio:
+          ui.PlatformDispatcher.instance.implicitView?.devicePixelRatio ?? 1.0,
+    );
   }
 }

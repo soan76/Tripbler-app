@@ -153,12 +153,9 @@ class _CurrencyManagementBottomSheetState
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: displayedCurrencies.length,
 
-                        onReorder: (oldIndex, newIndex) {
+                        // onReorderItem은 옮긴 항목을 뺀 뒤의 위치를 newIndex로 준다.
+                        onReorderItem: (oldIndex, newIndex) {
                           setState(() {
-                            if (newIndex > oldIndex) {
-                              newIndex -= 1;
-                            }
-
                             final item = editableCurrencies.removeAt(oldIndex);
 
                             editableCurrencies.insert(newIndex, item);

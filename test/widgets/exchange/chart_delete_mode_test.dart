@@ -559,7 +559,7 @@ void main() {
     expect(find.bySemanticsLabel('차트 삭제'), findsOneWidget);
     expect(
       tester.getSemantics(remove),
-      containsSemantics(label: '차트 삭제', isButton: true, hasTapAction: true),
+      isSemantics(label: '차트 삭제', isButton: true, hasTapAction: true),
     );
     semantics.dispose();
     await tester.pumpWidget(const SizedBox());
@@ -983,32 +983,30 @@ void main() {
   }
 
   // 초점 관리자가 앱 비활성화에 반응하는 것은 데스크톱·웹이다(모바일은 초점이 그대로다).
-  testWidgets(
-    'leaving the app keeps the mode and gives focus back',
-    (tester) async {
-      addTearDown(
-        () => tester.binding.handleAppLifecycleStateChanged(
-          AppLifecycleState.resumed,
-        ),
-      );
-      await tester.pumpWidget(app(const [usd, jpy]));
-      await tester.pumpAndSettle();
-      await open(tester);
-      final button = tester.widget<TextButton>(remove).focusNode!;
+  testWidgets('leaving the app keeps the mode and gives focus back', (
+    tester,
+  ) async {
+    addTearDown(
+      () => tester.binding.handleAppLifecycleStateChanged(
+        AppLifecycleState.resumed,
+      ),
+    );
+    await tester.pumpWidget(app(const [usd, jpy]));
+    await tester.pumpAndSettle();
+    await open(tester);
+    final button = tester.widget<TextButton>(remove).focusNode!;
 
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-      await tester.pumpAndSettle();
-      expect(button.hasFocus, isFalse);
-      expect(remove, findsOneWidget);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pumpAndSettle();
+    expect(button.hasFocus, isFalse);
+    expect(remove, findsOneWidget);
 
-      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      await tester.pumpAndSettle();
-      expect(remove, findsOneWidget);
-      expect(removeHasFocus(tester), isTrue);
-      await tester.pumpWidget(const SizedBox());
-    },
-    variant: TargetPlatformVariant.only(TargetPlatform.windows),
-  );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(remove, findsOneWidget);
+    expect(removeHasFocus(tester), isTrue);
+    await tester.pumpWidget(const SizedBox());
+  }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets('content under the layer cannot take focus', (tester) async {
     await tester.pumpWidget(app(const [usd, jpy]));
@@ -1042,7 +1040,7 @@ void main() {
     // 라벨 없는 노드가 맡으면 읽을 내용이 없다.
     expect(
       tester.getSemantics(remove),
-      containsSemantics(
+      isSemantics(
         label: '차트 삭제',
         isButton: true,
         isLiveRegion: true,

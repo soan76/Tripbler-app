@@ -156,14 +156,8 @@ class SettingsScreen extends ConsumerWidget {
       builder: (dialogContext) {
         return SimpleDialog(
           title: const Text('자릿수 제한'),
-          children: decimalOptions.map((decimal) {
-            final label = decimal == -1
-                ? SettingsState.autoDecimalPlacesLabel
-                : '$decimal';
-
-            return RadioListTile<int>(
-              title: Text(label),
-              value: decimal,
+          children: [
+            RadioGroup<int>(
               groupValue: settings.decimalPlaces,
               onChanged: (value) {
                 if (value == null) {
@@ -174,8 +168,18 @@ class SettingsScreen extends ConsumerWidget {
 
                 Navigator.of(dialogContext).pop();
               },
-            );
-          }).toList(),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: decimalOptions.map((decimal) {
+                  final label = decimal == -1
+                      ? SettingsState.autoDecimalPlacesLabel
+                      : '$decimal';
+
+                  return RadioListTile<int>(title: Text(label), value: decimal);
+                }).toList(),
+              ),
+            ),
+          ],
         );
       },
     );

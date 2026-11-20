@@ -105,11 +105,7 @@ void main() {
       // 카드의 글자 묶음이 아니라 입력칸 자체의 이름이어야 한다.
       expect(
         tester.getSemantics(find.byType(EditableText)),
-        containsSemantics(
-          label: 'USD 금액',
-          isTextField: true,
-          hasTapAction: true,
-        ),
+        isSemantics(label: 'USD 금액', isTextField: true, hasTapAction: true),
       );
       semantics.dispose();
     });

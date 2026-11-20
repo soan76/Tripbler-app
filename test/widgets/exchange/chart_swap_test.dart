@@ -507,7 +507,7 @@ void main() {
     expect(find.byTooltip('BTC 기준으로 바꾸기'), findsNothing);
     expect(
       tester.getSemantics(find.byKey(swapKey)),
-      containsSemantics(label: '기준 통화 바꾸기', isButton: true, isEnabled: false),
+      isSemantics(label: '기준 통화 바꾸기', isButton: true, isEnabled: false),
     );
     await tester.pumpAndSettle();
     expect(swapCallback(tester), isNotNull);
