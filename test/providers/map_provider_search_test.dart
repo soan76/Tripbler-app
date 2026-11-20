@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:tripbler/core/network/api_exception.dart';
 import 'package:tripbler/models/place_model.dart';
-import 'package:tripbler/providers/auth_provider.dart';
+import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/providers/map_provider.dart';
 import 'package:tripbler/repositories/auth/auth_repository.dart';
 import 'package:tripbler/services/place_api_service.dart';

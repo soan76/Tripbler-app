@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/auth_provider.dart';
+import '../../providers/auth/auth_provider.dart';
 import 'signup_screen.dart';
 import 'find_id_screen.dart';
 import 'find_password_screen.dart';

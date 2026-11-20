@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/core/network/api_exception.dart';
-import 'package:tripbler/providers/auth_provider.dart';
+import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/providers/map_provider.dart';
 import 'package:tripbler/providers/tab_provider.dart';
 import 'package:tripbler/screens/map_screen.dart';

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/auth_provider.dart';
+import '../../providers/auth/auth_provider.dart';
+import '../../providers/auth/login_id_check_provider.dart';
 import '../../utils/auth/signup_validator.dart';
 import '../../widgets/auth/signup/signup_form_label.dart';
 import '../../widgets/auth/signup/signup_input_decoration.dart';
@@ -67,7 +68,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     }
 
     // 아이디 중복확인
-    if (!ref.read(authProvider).isLoginIdCheckedAndAvailable(loginId)) {
+    if (!ref.read(loginIdCheckProvider).isLoginIdCheckedAndAvailable(loginId)) {
       setState(() {
         _loginIdHasError = true;
       });

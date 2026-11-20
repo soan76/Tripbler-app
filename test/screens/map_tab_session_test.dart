@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/main.dart' show TripblerApp;
-import 'package:tripbler/providers/auth_provider.dart';
+import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/providers/map_provider.dart';
 import 'package:tripbler/providers/tab_provider.dart';
 import 'package:tripbler/screens/main_screen.dart';

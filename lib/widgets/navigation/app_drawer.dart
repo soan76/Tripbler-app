@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../screens/settings_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/user/user_page.dart';
-import '../../providers/auth_provider.dart';
+import '../../providers/auth/auth_provider.dart';
 
 /// 햄버거 메뉴로 여는 앱 서랍.
 ///

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
     show ProviderContainer, ProviderSubscription;
-import 'package:tripbler/providers/auth_provider.dart';
+import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/repositories/auth/auth_repository.dart';
 
 /// [repository]를 쓰는 인증 상태를 새 테스트 컨테이너에 두고 읽고 바꾼다.
@@ -23,7 +23,6 @@ class AuthHandle extends ChangeNotifier {
   bool get isInitialized => state.isInitialized;
   bool get isLoading => state.isLoading;
   bool get isAuthenticated => state.isAuthenticated;
-  bool get isCheckingLoginId => state.isCheckingLoginId;
   bool get isLoadingSocialAccounts => state.isLoadingSocialAccounts;
   bool get sessionRestoreFailed => state.sessionRestoreFailed;
   bool? get googleLinked => state.googleLinked;

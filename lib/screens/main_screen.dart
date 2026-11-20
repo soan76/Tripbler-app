@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/tab_item.dart';
-import '../providers/auth_provider.dart';
+import '../providers/auth/auth_provider.dart';
 import '../providers/tab_provider.dart';
 import '../widgets/auth/session_restore_banner.dart';
 import '../widgets/bottom_tab_bar.dart';

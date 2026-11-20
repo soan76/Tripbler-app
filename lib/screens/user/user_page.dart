@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/auth_provider.dart';
+import '../../providers/auth/auth_provider.dart';
 import '../../services/user/profile_image_picker_service.dart';
 import '../../widgets/user/user_account_section.dart';
 import '../../widgets/user/user_app_section.dart';

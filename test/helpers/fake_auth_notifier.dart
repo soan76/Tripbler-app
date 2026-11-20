@@ -1,4 +1,4 @@
-import 'package:tripbler/providers/auth_provider.dart';
+import 'package:tripbler/providers/auth/auth_provider.dart';
 
 /// 테스트가 로그인·로그아웃·세션 만료를 직접 일으키는 가짜 인증 상태.
 ///

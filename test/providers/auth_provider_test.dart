@@ -6,7 +6,7 @@ import 'package:tripbler/models/auth/social_account_status_response.dart';
 import 'package:tripbler/models/auth/user_login_response.dart';
 import 'package:tripbler/models/user/login_id_availability_response.dart';
 import 'package:tripbler/models/user/user_response.dart';
-import 'package:tripbler/providers/auth_provider.dart';
+import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/repositories/auth/auth_repository.dart';
 
 import '../helpers/auth_handle.dart';

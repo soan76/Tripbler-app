@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../providers/auth_provider.dart';
+import '../../providers/auth/auth_provider.dart';
 import '../main_screen.dart';
 
 class AuthGate extends ConsumerStatefulWidget {

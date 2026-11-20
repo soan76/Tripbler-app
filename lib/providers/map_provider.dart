@@ -7,7 +7,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../core/network/api_exception.dart';
 import '../models/place_model.dart';
-import 'auth_provider.dart';
+import 'auth/auth_provider.dart';
 import '../repositories/auth/auth_repository.dart';
 import '../services/place_api_service.dart';
 import '../utils/map/place_distance.dart';

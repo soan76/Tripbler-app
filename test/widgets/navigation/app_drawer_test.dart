@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/main.dart' show buildAppScope;
-import 'package:tripbler/providers/auth_provider.dart';
+import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/screens/auth/login_screen.dart';
 import 'package:tripbler/screens/settings_screen.dart';
 import 'package:tripbler/screens/user/user_page.dart';
