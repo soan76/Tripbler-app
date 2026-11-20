@@ -145,15 +145,41 @@ class ApiConfig {
       queryParameters: <String, String>{
         'query': query,
         if (latitude != null && longitude != null) ...<String, String>{
-          'lat': latitude.toString(),
-          'lng': longitude.toString(),
+          'lat': _formatCoordinate(latitude),
+          'lng': _formatCoordinate(longitude),
         },
       },
     );
   }
 
+  /// 좌표를 지수 표기 없이 소수 7자리(약 1cm)까지 쓴다. `double.toString()`은 0에 가까운 값을
+  /// `1e-7`처럼 쓰는데, 서버가 받는 형식과 맞추려고 고정 소수로 바꾸고 끝의 0은 지운다.
+  /// 무한대·NaN은 보낼 수 없어 [ArgumentError]를 던진다.
+  static String _formatCoordinate(double value) {
+    if (!value.isFinite) {
+      throw ArgumentError.value(value, 'coordinate', '좌표가 올바르지 않습니다.');
+    }
+
+    var text = value.toStringAsFixed(7);
+
+    if (text.contains('.')) {
+      text = text
+          .replaceFirst(RegExp(r'0+$'), '')
+          .replaceFirst(RegExp(r'\.$'), '');
+    }
+
+    return text == '-0' ? '0' : text;
+  }
+
   /// 장소 상세. placeId는 경로 조각으로 넣어 `/`, `?` 같은 문자도 인코딩한다.
+  ///
+  /// 비었거나 공백뿐인 값, `.`·`..`은 경로 조각으로 넣으면 다른 경로(목록 등)를 가리키게 되므로
+  /// [ArgumentError]를 던진다.
   static Uri placeDetailsUri({required String placeId}) {
+    if (placeId.trim().isEmpty || placeId == '.' || placeId == '..') {
+      throw ArgumentError.value(placeId, 'placeId', '장소 ID가 올바르지 않습니다.');
+    }
+
     final baseUri = Uri.parse(baseUrl);
 
     return baseUri.replace(

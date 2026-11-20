@@ -89,6 +89,67 @@ void main() {
       expect(uri.hasQuery, isFalse);
       expect(uri.hasFragment, isFalse);
     });
+
+    test('좌표는 지수 표기 없이 소수 7자리까지 쓰고 끝의 0은 지운다', () {
+      Map<String, String> coords(double lat, double lng) => Map.of(
+        ApiConfig.placesSearchUri(
+          query: '경복궁',
+          latitude: lat,
+          longitude: lng,
+        ).queryParameters,
+      )..remove('query');
+
+      expect(coords(1e-7, -0.0000001), {
+        'lat': '0.0000001',
+        'lng': '-0.0000001',
+      });
+      expect(coords(1e-9, -1e-9), {'lat': '0', 'lng': '0'});
+      expect(coords(37.56651234567, 126.0), {
+        'lat': '37.5665123',
+        'lng': '126',
+      });
+      expect(coords(-90, 180), {'lat': '-90', 'lng': '180'});
+    });
+
+    test('좌표가 무한대나 NaN이면 ArgumentError를 던진다', () {
+      for (final bad in [
+        double.nan,
+        double.infinity,
+        double.negativeInfinity,
+      ]) {
+        expect(
+          () => ApiConfig.placesSearchUri(
+            query: '경복궁',
+            latitude: bad,
+            longitude: 0,
+          ),
+          throwsArgumentError,
+        );
+        expect(
+          () => ApiConfig.placesSearchUri(
+            query: '경복궁',
+            latitude: 0,
+            longitude: bad,
+          ),
+          throwsArgumentError,
+        );
+      }
+    });
+
+    test('상세 URL은 비었거나 공백뿐인 placeId와 . .. 을 막는다', () {
+      for (final bad in ['', '   ', '.', '..']) {
+        expect(
+          () => ApiConfig.placeDetailsUri(placeId: bad),
+          throwsArgumentError,
+          reason: '"$bad"',
+        );
+      }
+
+      expect(
+        ApiConfig.placeDetailsUri(placeId: '...').pathSegments.last,
+        '...',
+      );
+    });
   });
 
   group('PlaceApiService searchPlaces', () {
@@ -275,6 +336,28 @@ void main() {
 
       expect(error.isNetworkError, isTrue);
       expect(error.message, contains('연결할 수 없습니다'));
+    });
+
+    test('통신 예외가 아닌 프로그램 오류는 네트워크 오류로 바꾸지 않는다', () async {
+      final service = PlaceApiService(
+        client: MockClient((_) async => throw StateError('bug')),
+      );
+
+      await expectLater(
+        service.searchPlaces(
+          query: '경복궁',
+          authorizationHeader: _authorizationHeader,
+        ),
+        throwsStateError,
+      );
+    });
+
+    test('ClientException이 아닌 통신 예외도 네트워크 오류로 던진다', () async {
+      final error = await _searchError(
+        MockClient((_) async => throw const FormatException('tls')),
+      );
+
+      expect(error.isNetworkError, isTrue);
     });
 
     test('기본 제한 시간은 8초다', () {

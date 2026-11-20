@@ -87,4 +87,50 @@ void main() {
       ),
     );
   });
+
+  test('상세 연결 실패는 statusCode가 null인 ApiException', () async {
+    final service = PlaceApiService(
+      client: MockClient((_) async => throw http.ClientException('연결 실패')),
+    );
+
+    await expectLater(
+      service.fetchPlaceDetails(placeId: 'a', authorizationHeader: 'Bearer t'),
+      throwsA(
+        isA<ApiException>().having((e) => e.statusCode, 'statusCode', isNull),
+      ),
+    );
+  });
+
+  test('상세 요청 중 프로그램 오류는 네트워크 오류로 바꾸지 않는다', () async {
+    final service = PlaceApiService(
+      client: MockClient((_) async => throw StateError('bug')),
+    );
+
+    await expectLater(
+      service.fetchPlaceDetails(placeId: 'a', authorizationHeader: 'Bearer t'),
+      throwsStateError,
+    );
+  });
+
+  test('placeId가 비었거나 .. 이면 요청을 보내지 않는다', () async {
+    var requests = 0;
+    final service = PlaceApiService(
+      client: MockClient((_) async {
+        requests++;
+        return _json(const <String, Object?>{}, 200);
+      }),
+    );
+
+    for (final bad in ['', ' ', '.', '..']) {
+      await expectLater(
+        service.fetchPlaceDetails(
+          placeId: bad,
+          authorizationHeader: 'Bearer t',
+        ),
+        throwsArgumentError,
+      );
+    }
+
+    expect(requests, 0);
+  });
 }

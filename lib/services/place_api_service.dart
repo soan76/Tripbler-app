@@ -54,7 +54,9 @@ class PlaceApiService {
       throw const ApiException(
         message: '장소 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.',
       );
-    } catch (_) {
+    } on Exception {
+      // 연결 실패·TLS 오류 같은 통신 예외만 네트워크 오류로 바꾼다. 프로그램 오류(Error)는
+      // 연결 문제로 가리지 않고 그대로 던진다.
       throw const ApiException(
         message: '장소 서버에 연결할 수 없습니다. 인터넷 연결 상태를 확인해 주세요.',
       );
@@ -157,7 +159,8 @@ class PlaceApiService {
           .timeout(_timeout);
     } on TimeoutException {
       throw const ApiException(message: '장소 상세 정보 요청 시간이 초과되었습니다.');
-    } catch (_) {
+    } on Exception {
+      // 검색과 같이 통신 예외만 네트워크 오류로 바꾼다.
       throw const ApiException(message: '장소 서버에 연결할 수 없습니다.');
     }
 
