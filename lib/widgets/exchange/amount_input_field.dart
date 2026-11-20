@@ -158,23 +158,29 @@ class _AmountInputFieldState extends State<AmountInputField> {
     );
   }
 
+  // 패턴별 금액 형식. 자릿수 설정은 몇 가지뿐이라 한 번 만든 형식을 모든 입력칸이 함께 쓴다.
+  static final Map<String, NumberFormat> _amountFormats = {};
+
+  static NumberFormat _amountFormat(String pattern) =>
+      _amountFormats.putIfAbsent(pattern, () => NumberFormat(pattern));
+
   // 현재 설정된 자릿수 제한에 맞게 금액 문자열 생성
   String _formatAmount(double amount) {
     if (widget.unavailable) return '—';
     // 자동
     if (widget.decimalPlaces == -1) {
-      return NumberFormat('#,##0.########').format(amount);
+      return _amountFormat('#,##0.########').format(amount);
     }
 
     // 소수점 없음
     if (widget.decimalPlaces == 0) {
-      return NumberFormat('#,##0').format(amount);
+      return _amountFormat('#,##0').format(amount);
     }
 
     // 최대 소수점 자릿수
     final decimalPattern = '#' * widget.decimalPlaces;
 
-    return NumberFormat('#,##0.$decimalPattern').format(amount);
+    return _amountFormat('#,##0.$decimalPattern').format(amount);
   }
 
   // 입력 영역을 넘어가지 않도록 적절한 글자 크기 계산

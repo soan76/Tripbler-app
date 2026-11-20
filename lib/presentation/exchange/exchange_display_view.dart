@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart' show Provider;
 
 import '../../crypto/providers/crypto_provider.dart';
@@ -21,6 +22,17 @@ class DisplayRowView {
 
   // 지금 금액을 입력하고 있는 행인지
   final bool isActive;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DisplayRowView &&
+          other.currency == currency &&
+          other.amount == amount &&
+          other.isActive == isActive);
+
+  @override
+  int get hashCode => Object.hash(currency, amount, isActive);
 }
 
 /// 환율·암호화폐·표시 순서를 합친 화면용 값.
@@ -46,6 +58,60 @@ class ExchangeDisplayView {
 
   DisplayRowView rowOf(DisplayCurrency currency) =>
       rows.firstWhere((row) => row.currency.id == currency.id);
+
+  /// 금액·입력 행을 뺀 통화 목록. 통화 목록만 쓰는 화면은 이 값을 `select`로 읽어
+  /// 금액·시세가 바뀔 때 다시 그려지지 않게 한다.
+  ExchangeDisplayCurrencies get currencies => ExchangeDisplayCurrencies(
+    base: base,
+    visible: visible,
+    available: available,
+  );
+
+  // 값이 같으면 Provider가 구독자에게 알리지 않는다(Riverpod 3의 Provider는
+  // 이전 값과 `!=`로 비교한다). 그래서 로딩 표시처럼 화면 값과 무관한 변경은 전파되지 않는다.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExchangeDisplayView &&
+          other.base == base &&
+          listEquals(other.available, available) &&
+          listEquals(other.rows, rows));
+
+  @override
+  int get hashCode =>
+      Object.hash(base, Object.hashAll(available), Object.hashAll(rows));
+}
+
+/// 기준 통화·표시 통화·고를 수 있는 통화. 금액은 담지 않는다.
+class ExchangeDisplayCurrencies {
+  const ExchangeDisplayCurrencies({
+    required this.base,
+    required this.visible,
+    required this.available,
+  });
+
+  final DisplayCurrency base;
+
+  // 기준 통화를 뺀 표시 통화(화면 순서)
+  final List<DisplayCurrency> visible;
+
+  // 고를 수 있는 모든 통화(국가 통화 + 지원 코인)
+  final List<DisplayCurrency> available;
+
+  /// 화면에 보이는 순서의 모든 통화(기준 통화 먼저).
+  List<DisplayCurrency> get displayed => [base, ...visible];
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ExchangeDisplayCurrencies &&
+          other.base == base &&
+          listEquals(other.visible, visible) &&
+          listEquals(other.available, available));
+
+  @override
+  int get hashCode =>
+      Object.hash(base, Object.hashAll(visible), Object.hashAll(available));
 }
 
 final exchangeDisplayViewProvider = Provider<ExchangeDisplayView>((ref) {

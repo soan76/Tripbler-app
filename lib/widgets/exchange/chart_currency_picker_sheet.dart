@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart' show Consumer;
+import 'package:flutter_riverpod/flutter_riverpod.dart'
+    show Consumer, ProviderListenableSelect;
 
 import '../../crypto/providers/crypto_provider.dart';
 import '../../presentation/exchange/display_currency.dart';
@@ -230,8 +231,15 @@ Future<DisplayCurrency?> showChartCurrencyPicker({
   backgroundColor: Theme.of(context).colorScheme.surface,
   builder: (sheetContext) => Consumer(
     builder: (_, ref, _) {
-      final available = ref.watch(exchangeDisplayViewProvider).available;
-      final crypto = ref.watch(cryptoProvider);
+      // 고를 수 있는 통화와 코인 목록 상태만 쓰므로 금액·시세가 바뀔 때는 다시 그리지 않는다.
+      final available = ref
+          .watch(exchangeDisplayViewProvider.select((view) => view.currencies))
+          .available;
+      final catalog = ref.watch(
+        cryptoProvider.select(
+          (state) => (loading: state.loading, error: state.catalogError),
+        ),
+      );
       return SizedBox(
         height: MediaQuery.of(sheetContext).size.height * 0.85,
         child: ChartCurrencyPicker(
@@ -239,8 +247,8 @@ Future<DisplayCurrency?> showChartCurrencyPicker({
           current: current,
           options: optionsOf(available),
           note: note,
-          loading: crypto.loading,
-          error: crypto.catalogError,
+          loading: catalog.loading,
+          error: catalog.error,
           onRetry: ref.read(cryptoProvider.notifier).refreshCatalog,
         ),
       );

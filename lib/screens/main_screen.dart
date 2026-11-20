@@ -44,7 +44,16 @@ class MainScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final tabState = ref.watch(tabProvider);
-    final auth = ref.watch(authProvider);
+    // 세션 복구 배너에 쓰는 값만 읽는다. 배너가 없을 때의 로딩 변경이나 닉네임 같은
+    // 다른 인증 필드가 바뀔 때는 화면 전체(탭 스택)를 다시 그리지 않는다.
+    final restoreBanner = ref.watch(
+      authProvider.select(
+        (auth) => (
+          show: auth.sessionRestoreFailed,
+          retrying: auth.sessionRestoreFailed && auth.isLoading,
+        ),
+      ),
+    );
     final colorScheme = Theme.of(context).colorScheme;
 
     final selectedIndex = tabState.selectedIndex;
@@ -70,9 +79,9 @@ class MainScreen extends ConsumerWidget {
                 AppTopBar(title: screenTitle),
 
                 // 세션 만료가 확인되지 않은 오류로 세션 복구에 실패하면 상단 바 아래에서 다시 시도를 안내한다.
-                if (auth.sessionRestoreFailed)
+                if (restoreBanner.show)
                   SessionRestoreBanner(
-                    isRetrying: auth.isLoading,
+                    isRetrying: restoreBanner.retrying,
                     onRetry: ref
                         .read(authProvider.notifier)
                         .retryRestoreSession,

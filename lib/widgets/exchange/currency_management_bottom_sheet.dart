@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart'
-    show Consumer, ProviderScope;
+    show Consumer, ProviderListenableSelect, ProviderScope;
 import '../../crypto/providers/crypto_provider.dart';
 import '../../presentation/exchange/display_currency.dart';
 import '../../presentation/exchange/exchange_display_provider.dart';
@@ -424,16 +424,23 @@ Future<void> showCurrencyManagementBottomSheet({
         }
         return Consumer(
           builder: (_, ref, _) {
-            final view = ref.watch(exchangeDisplayViewProvider);
-            final crypto = ref.watch(cryptoProvider);
+            // 통화 목록과 코인 목록 상태만 쓰므로 금액·시세가 바뀔 때는 다시 그리지 않는다.
+            final currencies = ref.watch(
+              exchangeDisplayViewProvider.select((view) => view.currencies),
+            );
+            final catalog = ref.watch(
+              cryptoProvider.select(
+                (state) => (loading: state.loading, error: state.catalogError),
+              ),
+            );
             return SizedBox(
               height: MediaQuery.of(sheetContext).size.height * 0.85,
               child: CurrencyManagementBottomSheet(
-                baseCurrency: view.base,
-                visibleCurrencies: view.visible,
-                availableCurrencies: view.available,
-                loading: crypto.loading,
-                error: crypto.catalogError,
+                baseCurrency: currencies.base,
+                visibleCurrencies: currencies.visible,
+                availableCurrencies: currencies.available,
+                loading: catalog.loading,
+                error: catalog.error,
                 onRetry: ref.read(cryptoProvider.notifier).refreshCatalog,
                 onApply: (rows) async {
                   try {

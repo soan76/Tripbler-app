@@ -52,4 +52,20 @@ class DisplayCurrency {
       currencyName,
     ].any((text) => text.toLowerCase().contains(value));
   }
+
+  // 같은 통화를 다시 만들어도 같은 값으로 본다. 화면에 쓰는 글자까지 비교해
+  // 카탈로그 갱신으로 이름이 바뀐 코인은 다른 값으로 보고 다시 그린다.
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DisplayCurrency &&
+          other.isCrypto == isCrypto &&
+          other.code == code &&
+          other.countryName == countryName &&
+          other.currencyName == currencyName &&
+          other.flagEmoji == flagEmoji);
+
+  @override
+  int get hashCode =>
+      Object.hash(isCrypto, code, countryName, currencyName, flagEmoji);
 }

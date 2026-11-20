@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
-    show ConsumerWidget, WidgetRef;
+    show ConsumerWidget, ProviderListenableSelect, WidgetRef;
 
 import '../presentation/exchange/exchange_display_view.dart';
 import '../providers/settings_provider.dart';
@@ -14,12 +14,15 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final view = ref.watch(exchangeDisplayViewProvider);
+    // 통화 목록만 쓰므로 금액·시세가 바뀔 때는 다시 그리지 않는다.
+    final currencies = ref.watch(
+      exchangeDisplayViewProvider.select((view) => view.currencies),
+    );
     final settings = ref.watch(settingsProvider);
     final settingsNotifier = ref.read(settingsProvider.notifier);
 
     // 현재 환율 화면에 표시되고 있는 모든 통화
-    final displayedCurrencies = [for (final row in view.rows) row.currency];
+    final displayedCurrencies = currencies.displayed;
 
     final displayedCurrencyCodes = displayedCurrencies
         .map((currency) => currency.code)

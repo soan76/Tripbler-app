@@ -656,7 +656,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final mapState = ref.watch(mapProvider);
-    final auth = ref.watch(authProvider);
+    // 검색창에는 검색 가능 여부만 쓴다. 닉네임 같은 다른 인증 필드가 바뀌어도 다시 그리지 않는다.
+    // 로그아웃·세션 변경 감지는 initState의 listenManual이 그대로 맡는다.
+    final searchAvailability = ref.watch(authProvider.select(_availabilityOf));
     final mapNotifier = ref.read(mapProvider.notifier);
     final isMapTabActive = ref.watch(tabProvider).selectedIndex == _mapTabIndex;
 
@@ -729,7 +731,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                     searchBar: PlaceSearchBar(
                       controller: _searchController,
                       focusNode: _searchFocusNode,
-                      availability: _availabilityOf(auth),
+                      availability: searchAvailability,
                       isSearching: mapState.isSearching,
                       onSubmitted: _submitSearch,
                       onCleared: _clearSearch,

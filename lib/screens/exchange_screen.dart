@@ -26,6 +26,10 @@ class ExchangeScreen extends ConsumerStatefulWidget {
 
 // 환율 화면을 구성하는 StatefulWidget
 class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
+  // 코인 행 상태 문구의 시세·시각 형식. 행마다 새로 만들지 않고 재사용한다.
+  static final _coinPriceFormat = NumberFormat('#,##0.########');
+  static final _quoteTimeFormat = DateFormat('MM.dd HH:mm');
+
   // State 내부에서만 사용하는 초기화 여부 값이므로 private 필드로 변경.
   bool _hasInitialized = false;
 
@@ -51,7 +55,18 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
   // 환율 화면의 상태를 관리하는 State 클래스
   @override
   Widget build(BuildContext context) {
-    final provider = ref.watch(exchangeProvider);
+    // 금액·환율은 exchangeDisplayViewProvider로 받으므로 여기서는 화면에 쓰는 필드만 읽는다.
+    final (:visibleCurrencies, :isLoading, :errorMessage, :lastUpdated) = ref
+        .watch(
+          exchangeProvider.select(
+            (state) => (
+              visibleCurrencies: state.visibleCurrencies,
+              isLoading: state.isLoading,
+              errorMessage: state.errorMessage,
+              lastUpdated: state.lastUpdated,
+            ),
+          ),
+        );
     final exchange = ref.read(exchangeProvider.notifier);
     final view = ref.watch(exchangeDisplayViewProvider);
     final crypto = ref.watch(cryptoProvider);
@@ -62,11 +77,6 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
     final charts = ref.watch(chartSelectionProvider);
     final chartsNotifier = ref.read(chartSelectionProvider.notifier);
 
-    // 한 번의 build 안에서 동일한 Provider 상태 snapshot을 사용하도록 지역 변수로 정리.
-    final visibleCurrencies = provider.visibleCurrencies;
-    final isLoading = provider.isLoading;
-    final errorMessage = provider.errorMessage;
-    final lastUpdated = provider.lastUpdated;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
@@ -92,7 +102,7 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
           ? null
           : quote == null
           ? (priceError != null ? '조회 실패 · 아래로 당겨 재시도' : '현재가 조회 중')
-          : '${crypto.isStale(row.code) ? '저장값 · ' : ''}${crypto.isLoading(row.code) ? '갱신 중 · ' : ''}1 ${row.code} = ${NumberFormat('#,##0.########').format(quote.price)} KRW · ${DateFormat('MM.dd HH:mm').format(time!)}';
+          : '${crypto.isStale(row.code) ? '저장값 · ' : ''}${crypto.isLoading(row.code) ? '갱신 중 · ' : ''}1 ${row.code} = ${_coinPriceFormat.format(quote.price)} KRW · ${_quoteTimeFormat.format(time!)}';
       return CurrencyRow(
         key: ValueKey(row.id),
         currency: row,
