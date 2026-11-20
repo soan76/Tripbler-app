@@ -3,11 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/models/chart_point.dart';
 import 'package:tripbler/models/exchange_rate_history_model.dart';
+import 'package:tripbler/presentation/charts/chart_amount_format.dart';
 import 'package:tripbler/presentation/charts/chart_data_source.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
 import 'package:tripbler/providers/settings_provider.dart';
 import 'package:tripbler/screens/exchange_screen.dart';
 import 'package:tripbler/widgets/charts/chart_amount_converter.dart';
+import 'package:tripbler/widgets/charts/chart_amount_scope.dart';
 import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 import 'package:tripbler/widgets/charts/chart_rate_summary.dart';
 
@@ -104,78 +106,72 @@ void main() {
   group('formatAmount maxDecimals', () {
     test('자릿수까지 반올림하고 천 단위 쉼표를 넣는다', () {
       expect(
-        ChartAmountConverter.formatAmount(1234.5678, maxDecimals: 2),
+        ChartAmountFormat.formatAmount(1234.5678, maxDecimals: 2),
         '1,234.57',
       );
       expect(
-        ChartAmountConverter.formatAmount(1234.5678, maxDecimals: 0),
+        ChartAmountFormat.formatAmount(1234.5678, maxDecimals: 0),
         '1,235',
       );
-      expect(ChartAmountConverter.formatAmount(0.0123, maxDecimals: 2), '0.01');
-      expect(ChartAmountConverter.formatAmount(2, maxDecimals: 5), '2');
-      expect(ChartAmountConverter.formatAmount(0, maxDecimals: 2), '0');
+      expect(ChartAmountFormat.formatAmount(0.0123, maxDecimals: 2), '0.01');
+      expect(ChartAmountFormat.formatAmount(2, maxDecimals: 5), '2');
+      expect(ChartAmountFormat.formatAmount(0, maxDecimals: 2), '0');
     });
 
     test('0이 아니고 표시 단위보다 작은 값만 제한 없이 표시한다', () {
       expect(
-        ChartAmountConverter.formatAmount(0.00072, maxDecimals: 2),
-        ChartAmountConverter.formatAmount(0.00072),
+        ChartAmountFormat.formatAmount(0.00072, maxDecimals: 2),
+        ChartAmountFormat.formatAmount(0.00072),
       );
-      expect(ChartAmountConverter.formatAmount(0.006, maxDecimals: 2), '0.006');
-      expect(ChartAmountConverter.formatAmount(0.01, maxDecimals: 2), '0.01');
+      expect(ChartAmountFormat.formatAmount(0.006, maxDecimals: 2), '0.006');
+      expect(ChartAmountFormat.formatAmount(0.01, maxDecimals: 2), '0.01');
       // 0자리에서는 1보다 작은 값이 모두 대체 표시라 0.4와 0.6이 같은 규칙을 따른다.
-      expect(ChartAmountConverter.formatAmount(0.4, maxDecimals: 0), '0.4');
-      expect(ChartAmountConverter.formatAmount(0.6, maxDecimals: 0), '0.6');
-      expect(ChartAmountConverter.formatAmount(1.4, maxDecimals: 0), '1');
-      expect(
-        ChartAmountConverter.formatAmount(-0.006, maxDecimals: 2),
-        '-0.006',
-      );
+      expect(ChartAmountFormat.formatAmount(0.4, maxDecimals: 0), '0.4');
+      expect(ChartAmountFormat.formatAmount(0.6, maxDecimals: 0), '0.6');
+      expect(ChartAmountFormat.formatAmount(1.4, maxDecimals: 0), '1');
+      expect(ChartAmountFormat.formatAmount(-0.006, maxDecimals: 2), '-0.006');
     });
 
     test('음수는 제한대로, -0.0은 "0"으로 표시한다', () {
       expect(
-        ChartAmountConverter.formatAmount(-1234.567, maxDecimals: 2),
+        ChartAmountFormat.formatAmount(-1234.567, maxDecimals: 2),
         '-1,234.57',
       );
-      expect(ChartAmountConverter.formatAmount(-0.0, maxDecimals: 2), '0');
-      expect(ChartAmountConverter.formatAmount(-0.0, maxDecimals: 0), '0');
-      expect(ChartAmountConverter.formatAmount(-0.0), '0');
+      expect(ChartAmountFormat.formatAmount(-0.0, maxDecimals: 2), '0');
+      expect(ChartAmountFormat.formatAmount(-0.0, maxDecimals: 0), '0');
+      expect(ChartAmountFormat.formatAmount(-0.0), '0');
     });
 
     test('maxDecimals가 없으면 기존 표시 그대로', () {
-      expect(ChartAmountConverter.formatAmount(1234.5678), '1,234.5678');
+      expect(ChartAmountFormat.formatAmount(1234.5678), '1,234.5678');
     });
   });
 
   group('formatChange', () {
     test('제한이 있으면 대체 표시 없이 반올림하고, 0이 되면 "0"이다', () {
-      expect(ChartAmountConverter.formatChange(0.0049, maxDecimals: 2), '0');
-      expect(ChartAmountConverter.formatChange(0.3, maxDecimals: 0), '0');
-      expect(ChartAmountConverter.formatChange(0.006, maxDecimals: 2), '0.01');
-      expect(ChartAmountConverter.formatChange(-0.004, maxDecimals: 2), '0');
-      expect(ChartAmountConverter.formatChange(-0.0, maxDecimals: 2), '0');
-      expect(
-        ChartAmountConverter.formatChange(10.0249, maxDecimals: 2),
-        '10.02',
-      );
+      expect(ChartAmountFormat.formatChange(0.0049, maxDecimals: 2), '0');
+      expect(ChartAmountFormat.formatChange(0.3, maxDecimals: 0), '0');
+      expect(ChartAmountFormat.formatChange(0.006, maxDecimals: 2), '0.01');
+      expect(ChartAmountFormat.formatChange(-0.004, maxDecimals: 2), '0');
+      expect(ChartAmountFormat.formatChange(-0.0, maxDecimals: 2), '0');
+      expect(ChartAmountFormat.formatChange(10.0249, maxDecimals: 2), '10.02');
     });
 
     test('제한이 없으면 formatAmount와 같다', () {
       expect(
-        ChartAmountConverter.formatChange(0.0049),
-        ChartAmountConverter.formatAmount(0.0049),
+        ChartAmountFormat.formatChange(0.0049),
+        ChartAmountFormat.formatAmount(0.0049),
       );
       expect(
-        ChartAmountConverter.formatChange(0.0049, compared: [0.0001, 0.0050]),
-        ChartAmountConverter.formatAmount(0.0049),
+        ChartAmountFormat.formatChange(0.0049, compared: [0.0001, 0.0050]),
+        ChartAmountFormat.formatAmount(0.0049),
       );
     });
 
     test('비교한 값 중 하나라도 제한 없이 보이면 차이도 제한 없이 보여 준다', () {
       // 둘 다 작은 값.
       expect(
-        ChartAmountConverter.formatChange(
+        ChartAmountFormat.formatChange(
           0.00072 - 0.0007,
           maxDecimals: 2,
           compared: [0.0007, 0.00072],
@@ -184,7 +180,7 @@ void main() {
       );
       // 한쪽(0.0072)만 작은 값.
       expect(
-        ChartAmountConverter.formatChange(
+        ChartAmountFormat.formatChange(
           0.01 - 0.0072,
           maxDecimals: 2,
           compared: [0.0072, 0.01],
@@ -193,7 +189,7 @@ void main() {
       );
       // 0자리에서는 1 미만 값이 제한 없이 보인다.
       expect(
-        ChartAmountConverter.formatChange(
+        ChartAmountFormat.formatChange(
           0.2,
           maxDecimals: 0,
           compared: [0.4, 0.6],
@@ -202,7 +198,7 @@ void main() {
       );
       // 제한 없이 보여도 차이가 정확히 0이면 "0"이다.
       expect(
-        ChartAmountConverter.formatChange(
+        ChartAmountFormat.formatChange(
           0,
           maxDecimals: 2,
           compared: [0.0007, 0.0007],
@@ -213,7 +209,7 @@ void main() {
 
     test('두 값이 모두 제한 자릿수로 보이면 차이도 제한대로 반올림한다', () {
       expect(
-        ChartAmountConverter.formatChange(
+        ChartAmountFormat.formatChange(
           1300.1249 - 1300.12,
           maxDecimals: 2,
           compared: [1300.12, 1300.1249],
@@ -222,7 +218,7 @@ void main() {
       );
       // 0은 제한 없이 보이는 값이 아니다.
       expect(
-        ChartAmountConverter.formatChange(
+        ChartAmountFormat.formatChange(
           0.004,
           maxDecimals: 2,
           compared: [0, 0.004 + 1],
@@ -234,14 +230,14 @@ void main() {
 
   group('usesFullPrecision', () {
     test('0이 아니고 표시 단위보다 작은 유한한 값만 해당한다', () {
-      expect(ChartAmountConverter.usesFullPrecision(0.006, 2), isTrue);
-      expect(ChartAmountConverter.usesFullPrecision(-0.006, 2), isTrue);
-      expect(ChartAmountConverter.usesFullPrecision(0.4, 0), isTrue);
-      expect(ChartAmountConverter.usesFullPrecision(0.01, 2), isFalse);
-      expect(ChartAmountConverter.usesFullPrecision(1.4, 0), isFalse);
-      expect(ChartAmountConverter.usesFullPrecision(0, 2), isFalse);
-      expect(ChartAmountConverter.usesFullPrecision(-0.0, 2), isFalse);
-      expect(ChartAmountConverter.usesFullPrecision(double.nan, 2), isFalse);
+      expect(ChartAmountFormat.usesFullPrecision(0.006, 2), isTrue);
+      expect(ChartAmountFormat.usesFullPrecision(-0.006, 2), isTrue);
+      expect(ChartAmountFormat.usesFullPrecision(0.4, 0), isTrue);
+      expect(ChartAmountFormat.usesFullPrecision(0.01, 2), isFalse);
+      expect(ChartAmountFormat.usesFullPrecision(1.4, 0), isFalse);
+      expect(ChartAmountFormat.usesFullPrecision(0, 2), isFalse);
+      expect(ChartAmountFormat.usesFullPrecision(-0.0, 2), isFalse);
+      expect(ChartAmountFormat.usesFullPrecision(double.nan, 2), isFalse);
     });
   });
 
@@ -312,17 +308,17 @@ void main() {
 
   group('trimDecimals', () {
     test('소수 부분을 자릿수까지 자르고 반올림하지 않는다', () {
-      expect(ChartAmountConverter.trimDecimals('1.23456', 2), '1.23');
-      expect(ChartAmountConverter.trimDecimals('1.999', 2), '1.99');
-      expect(ChartAmountConverter.trimDecimals('1,234.5', 0), '1,234');
-      expect(ChartAmountConverter.trimDecimals('1.2', 2), '1.2');
-      expect(ChartAmountConverter.trimDecimals('12', 0), '12');
-      expect(ChartAmountConverter.trimDecimals('1.23456', null), '1.23456');
+      expect(ChartAmountFormat.trimDecimals('1.23456', 2), '1.23');
+      expect(ChartAmountFormat.trimDecimals('1.999', 2), '1.99');
+      expect(ChartAmountFormat.trimDecimals('1,234.5', 0), '1,234');
+      expect(ChartAmountFormat.trimDecimals('1.2', 2), '1.2');
+      expect(ChartAmountFormat.trimDecimals('12', 0), '12');
+      expect(ChartAmountFormat.trimDecimals('1.23456', null), '1.23456');
     });
 
     test('0자리면 끝에 남은 소수점도 지운다', () {
-      expect(ChartAmountConverter.trimDecimals('1,234.', 0), '1,234');
-      expect(ChartAmountConverter.trimDecimals('1.', 2), '1.');
+      expect(ChartAmountFormat.trimDecimals('1,234.', 0), '1,234');
+      expect(ChartAmountFormat.trimDecimals('1.', 2), '1.');
     });
   });
 
@@ -422,7 +418,7 @@ void main() {
       expect(_input(tester), '0.12');
       // 1 KRW의 BTC 환율은 5자리로 반올림하면 0이라 제한 없이 보여 준다.
       expect(_text(tester, _rate), isNot('0'));
-      expect(_text(tester, _rate), ChartAmountConverter.formatAmount(1e-8));
+      expect(_text(tester, _rate), ChartAmountFormat.formatAmount(1e-8));
 
       // 지운 뒤 다시 넣을 수 있다.
       await tester.enterText(_amount, '0.1');

@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'chart_period_scope.dart';
 import '../../models/exchange_rate_history_model.dart';
 import '../../presentation/charts/chart_swap_store.dart';
-import 'chart_amount_converter.dart';
+import 'chart_amount_scope.dart';
 import 'currency_swap_pair.dart';
 
 /// 환율 차트 캐러셀 위젯

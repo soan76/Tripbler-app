@@ -4,7 +4,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/chart_point.dart';
 import '../../models/exchange_rate_history_model.dart';
 import '../exchange/amount_input_field.dart';
-import 'chart_amount_converter.dart';
+import '../../presentation/charts/chart_amount_format.dart';
 
 /// 차트 카드 위쪽의 현재 환율과 기간 동안의 변화.
 ///
@@ -40,7 +40,7 @@ class ChartRateSummary extends StatelessWidget {
 
   /// 기간 시작 값과의 차이와 그 표시 글자(부호 없는 크기). 계산할 수 없으면 null.
   ///
-  /// 표시 규칙은 [ChartAmountConverter.formatChange]를 따른다. 기간 시작 값이나 현재
+  /// 표시 규칙은 [ChartAmountFormat.formatChange]를 따른다. 기간 시작 값이나 현재
   /// 환율이 제한 없이 보이면 차이도 제한 없이, 아니면 [maxDecimals]로 반올림해 보여
   /// 준다. 표시가 0이면 [value]도 0(변동 없음)이다.
   static ({double value, String text})? changeOf(
@@ -54,12 +54,12 @@ class ChartRateSummary extends StatelessWidget {
     final change = rate - start;
     if (!change.isFinite) return null;
     // 표시하면 0이 되는 차이는 오르내림으로 보지 않는다.
-    final text = ChartAmountConverter.formatChange(
+    final text = ChartAmountFormat.formatChange(
       change.abs(),
       maxDecimals: maxDecimals,
       compared: [start, rate],
     );
-    return ChartAmountConverter.isZeroText(text)
+    return ChartAmountFormat.isZeroText(text)
         ? (value: 0.0, text: '0')
         : (value: change, text: text);
   }
@@ -154,7 +154,7 @@ class ChartRateSummary extends StatelessWidget {
                 alignment: AlignmentDirectional.centerStart,
                 child: Text(
                   hasRate
-                      ? ChartAmountConverter.formatAmount(
+                      ? ChartAmountFormat.formatAmount(
                           rate,
                           maxDecimals: decimalPlaces,
                         )

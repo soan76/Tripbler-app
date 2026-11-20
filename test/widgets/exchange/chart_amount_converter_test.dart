@@ -3,9 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tripbler/models/chart_point.dart';
 import 'package:tripbler/models/exchange_rate_history_model.dart';
+import 'package:tripbler/presentation/charts/chart_amount_format.dart';
 import 'package:tripbler/presentation/charts/chart_data_source.dart';
 import 'package:tripbler/presentation/charts/chart_pair.dart';
-import 'package:tripbler/widgets/charts/chart_amount_converter.dart';
 import 'package:tripbler/widgets/charts/chart_pair_carousel.dart';
 
 import '../../helpers/chart_amount_finder.dart';
@@ -76,14 +76,14 @@ void main() {
 
   group('parseAmount', () {
     test('reads digits, decimals and display commas', () {
-      expect(ChartAmountConverter.parseAmount('1,234.5'), 1234.5);
-      expect(ChartAmountConverter.parseAmount('5.'), 5);
+      expect(ChartAmountFormat.parseAmount('1,234.5'), 1234.5);
+      expect(ChartAmountFormat.parseAmount('5.'), 5);
     });
 
     test('is null when empty or not a number', () {
-      expect(ChartAmountConverter.parseAmount(''), isNull);
-      expect(ChartAmountConverter.parseAmount('.'), isNull);
-      expect(ChartAmountConverter.parseAmount('abc'), isNull);
+      expect(ChartAmountFormat.parseAmount(''), isNull);
+      expect(ChartAmountFormat.parseAmount('.'), isNull);
+      expect(ChartAmountFormat.parseAmount('abc'), isNull);
     });
   });
 
