@@ -1,3 +1,5 @@
+import 'dart:ui' show Offset;
+
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../models/place_model.dart';
@@ -57,4 +59,36 @@ Set<Marker> placeMarkers({
   }
 
   return markers;
+}
+
+/// 기기의 현재 위치와 방향을 나타내는 마커. 위치를 아직 모르면 null.
+///
+/// [heading]만큼 회전하고, [icon]이 아직 없으면(아이콘 로딩 전) 기본 파란 마커로
+/// 임시 표시한다. 장소 마커보다 위에 그린다.
+Marker? currentLocationMarker({
+  required LatLng? position,
+  required double heading,
+  required BitmapDescriptor? icon,
+}) {
+  if (position == null) {
+    return null;
+  }
+
+  return Marker(
+    markerId: const MarkerId('current_user_location'),
+    position: position,
+
+    // Compass 방향에 따라 마커 회전
+    rotation: heading,
+
+    // 아이콘 중심을 실제 위치와 맞춤
+    anchor: const Offset(0.5, 0.5),
+
+    // 지도 위에 평평하게 배치하여 방향 회전을 자연스럽게 표시함.
+    flat: true,
+    icon:
+        icon ??
+        BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
+    zIndexInt: 9999,
+  );
 }

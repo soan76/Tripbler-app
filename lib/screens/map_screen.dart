@@ -11,13 +11,13 @@ import '../services/map/map_location_controller.dart';
 import '../services/map/map_marker_icon_service.dart';
 import '../services/map/route_launcher.dart';
 import '../utils/map/place_distance.dart';
+import '../utils/map/place_markers.dart';
 import '../utils/map/point_of_interest_place.dart';
-import '../utils/map/scale_bar_calculator.dart';
 import '../utils/map/search_query_normalizer.dart';
 import 'auth/login_screen.dart';
-import '../widgets/map/current_location_button.dart';
+import '../widgets/map/map_camera.dart';
+import '../widgets/map/map_controls.dart';
 import '../widgets/map/map_overlay_layout.dart';
-import '../widgets/map/map_scale_bar.dart';
 import '../widgets/map/map_search_view_rules.dart';
 import '../widgets/map/place_detail_card.dart';
 import '../widgets/map/place_search_bar.dart';
@@ -36,15 +36,6 @@ class MapScreen extends ConsumerStatefulWidget {
 
 /// 구글 맵 화면을 구성하는 State 클래스
 class _MapScreenState extends ConsumerState<MapScreen> {
-  // 위치를 가져오지 못했을 때 사용할 기본 위치
-  static const LatLng _seoulCityHall = LatLng(37.5665, 126.9780);
-
-  // 지도 최초 카메라 위치
-  static const CameraPosition _initialCameraPosition = CameraPosition(
-    target: _seoulCityHall,
-    zoom: 13,
-  );
-
   // 현재 위치 방향 아이콘 경로
   static const String _currentLocationIconPath =
       'assets/images/current_location_arrow.png';
@@ -55,18 +46,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // 하단 탭에서 지도 탭의 인덱스(tabProvider)
   static const int _mapTabIndex = 1;
 
-  // 검색 결과가 1개일 때 줌, 결과를 고를 때 최소 줌
-  static const double _singleResultZoom = 16;
-  static const double _selectedPlaceMinZoom = 15;
-
-  // 결과 전체를 맞출 때 가장자리 여백(px)
-  static const double _resultsBoundsPadding = 64;
-
   // 펼친 결과 목록 높이(화면 비율)
   static const double _expandedPanelFraction = 0.45;
-
-  // 하단 패널 위에 놓이는 축척 표시·현재 위치 버튼 영역 높이(버튼 56 + 아래 여백 24)
-  static const double _mapControlsHeight = 80;
 
   // 장소 검색 입력
   final TextEditingController _searchController = TextEditingController();
@@ -110,14 +91,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   // Google 지도 길찾기를 외부 앱으로 여는 Service
   final RouteLauncher _routeLauncher = RouteLauncher();
 
-  // Google Map Controller
-  GoogleMapController? _mapController;
-
-  // 현재 지도 카메라 중심 좌표
-  LatLng _currentCameraTarget = _seoulCityHall;
-
-  // 현재 지도 줌 레벨
-  double _currentZoom = 13;
+  // 지도 카메라(컨트롤러, 현재 중심·줌, 이동)
+  final MapCamera _camera = MapCamera();
 
   // 현재 위치 방향 아이콘
   BitmapDescriptor? _currentLocationIcon;
@@ -186,9 +161,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       final mapState = ref.read(mapProvider);
 
       // 그사이 장소를 골라 카드가 열려 있으면 그 장소를 보고 있으므로 옮기지 않는다.
-      if (fitResults &&
-          mapState.searchStatus == MapSearchStatus.success &&
-          mapState.selectedPlace == null) {
+      if (MapSearchViewRules.shouldFitResultsOnTabEnter(
+        fitResults: fitResults,
+        searchStatus: mapState.searchStatus,
+        hasSelectedPlace: mapState.selectedPlace != null,
+      )) {
         _fitCameraToResults(mapState);
       }
     });
@@ -204,7 +181,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _locationController.dispose();
 
     // Google Map Controller 종료
-    _mapController?.dispose();
+    _camera.dispose();
 
     _searchController.removeListener(_onSearchTextChanged);
     _searchController.dispose();
@@ -242,7 +219,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   /// Google Map 생성 완료 처리
   void _onMapCreated(GoogleMapController controller) {
-    _mapController = controller;
+    _camera.attach(controller);
 
     // 지도 생성 후 최초 현재 위치 요청
     _initializeCurrentLocation();
@@ -282,7 +259,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       // 최근 위치 또는 최신 위치를 얻었다면
       // 해당 위치로 지도 이동
       if (position != null) {
-        await _moveCameraToCurrentLocation(position);
+        await _camera.moveToCurrentLocation(position);
 
         return;
       }
@@ -338,7 +315,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
       // 위치를 확보했다면 해당 위치로 이동
       if (position != null) {
-        await _moveCameraToCurrentLocation(position);
+        await _camera.moveToCurrentLocation(position);
 
         return;
       }
@@ -374,62 +351,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     }
   }
 
-  /// 현재 위치로 지도 카메라 이동
-  Future<void> _moveCameraToCurrentLocation(LatLng position) async {
-    final controller = _mapController;
-
-    if (controller == null) {
-      return;
-    }
-
-    try {
-      await controller.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(target: position, zoom: 17),
-        ),
-      );
-    } catch (error) {
-      debugPrint('현재 위치 카메라 이동 실패: $error');
-    }
-  }
-
-  /// 현재 위치 방향 마커를 생성함.
-  Marker? _buildCurrentLocationMarker() {
-    final currentUserPosition = _locationController.currentPosition;
-
-    // 아직 현재 위치를 알 수 없다면
-    // 현재 위치 마커를 표시하지 않음.
-    if (currentUserPosition == null) {
-      return null;
-    }
-
-    return Marker(
-      markerId: const MarkerId('current_user_location'),
-
-      // 사용자의 현재 위치
-      position: currentUserPosition,
-
-      // Compass 방향에 따라 마커 회전
-      rotation: _locationController.currentHeading,
-
-      // 아이콘 중심을 실제 위치와 맞춤
-      anchor: const Offset(0.5, 0.5),
-
-      // 지도 위에 평평하게 배치하여
-      // 방향 회전을 자연스럽게 표시함.
-      flat: true,
-
-      // 커스텀 아이콘 로딩 전에는
-      // 기본 파란 마커를 임시 표시함.
-      icon:
-          _currentLocationIcon ??
-          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure),
-
-      // 장소 마커보다 위에 표시
-      zIndexInt: 9999,
-    );
-  }
-
   /// 지도 관련 안내 메시지 표시
   ///
   /// 기존 SnackBar는 내리고 새 메시지만 표시해 같은 안내가 쌓이지 않게 한다.
@@ -452,12 +373,6 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       content: Text(message),
       duration: const Duration(seconds: 3),
     );
-  }
-
-  /// [origin](검색하거나 장소를 고른 순간의 기기 위치)에서 [place]까지의 거리 문구. 계산할 수 없으면 null.
-  static String? _distanceLabel(LatLng? origin, PlaceModel place) {
-    final meters = PlaceDistance.metersTo(origin, place);
-    return meters == null ? null : PlaceDistance.format(meters);
   }
 
   /// 선택한 장소로 Google 지도 길찾기를 연다. 실패하면 카드는 그대로 두고 안내한다.
@@ -498,14 +413,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _lastAvailability = availability;
     _lastSessionId = auth.sessionId;
 
-    final shouldReset =
-        MapSearchViewRules.shouldResetSearchInput(
-          previous: previous,
-          current: availability,
-        ) ||
-        (sessionChanged &&
-            previous == PlaceSearchAvailability.ready &&
-            availability == PlaceSearchAvailability.ready);
+    final shouldReset = MapSearchViewRules.shouldResetOnAuthChange(
+      previous: previous,
+      current: availability,
+      sessionChanged: sessionChanged,
+    );
 
     if (!mounted || !shouldReset) {
       return;
@@ -593,7 +505,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     _pendingResultsFit = false;
 
     // 지도가 준비되지 않았으면 중심 좌표 없이 검색한다.
-    final center = _mapController != null ? _currentCameraTarget : null;
+    final center = _camera.isReady ? _camera.target : null;
 
     setState(() {
       _resultsExpanded = true;
@@ -675,28 +587,8 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 
   /// 결과 전체가 보이게 카메라를 맞춘다. 결과가 1개면 그 장소로 이동한다.
-  Future<void> _fitCameraToResults(MapState mapState) async {
-    final controller = _mapController;
-    final bounds = mapState.searchResultBounds;
-
-    if (controller == null || bounds == null) {
-      return;
-    }
-
-    try {
-      if (bounds.southwest == bounds.northeast) {
-        await controller.animateCamera(
-          CameraUpdate.newLatLngZoom(bounds.southwest, _singleResultZoom),
-        );
-      } else {
-        await controller.animateCamera(
-          CameraUpdate.newLatLngBounds(bounds, _resultsBoundsPadding),
-        );
-      }
-    } catch (error) {
-      // 지도가 아직 배치되지 않았을 때 생기는 예외는 무시한다.
-      debugPrint('검색 결과로 카메라 이동 실패: $error');
-    }
+  Future<void> _fitCameraToResults(MapState mapState) {
+    return _camera.fitToResults(mapState.searchResultBounds);
   }
 
   /// 목록에서 결과를 고르면 선택하고, 목록을 접고, 그 장소로 카메라를 옮긴다.
@@ -710,24 +602,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       _resultsExpanded = false;
     });
 
-    final controller = _mapController;
-
-    if (controller == null || !place.hasCoordinates) {
-      return;
-    }
-
-    try {
-      await controller.animateCamera(
-        CameraUpdate.newLatLngZoom(
-          LatLng(place.latitude!, place.longitude!),
-          _currentZoom < _selectedPlaceMinZoom
-              ? _selectedPlaceMinZoom
-              : _currentZoom,
-        ),
-      );
-    } catch (error) {
-      debugPrint('선택한 장소로 카메라 이동 실패: $error');
-    }
+    await _camera.moveToPlace(place);
   }
 
   /// 지도 빈 곳 탭: 키보드를 내리고 열린 카드만 닫는다. 검색 결과는 유지한다.
@@ -754,10 +629,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   /// Android 뒤로가기: 카드 닫기 → 목록 접기 → 검색 해제 → 기본 동작.
   /// 지도 탭이 선택돼 있을 때만 가로챈다(다른 탭에서는 MapScreen이 숨어 있어도 살아 있음).
   bool _hasBackStep(MapState mapState) {
-    return mapState.selectedPlace != null ||
-        _resultsExpanded ||
-        mapState.searchStatus != MapSearchStatus.idle ||
-        _hasSearchText;
+    return MapSearchViewRules.hasBackStep(
+      hasSelectedPlace: mapState.selectedPlace != null,
+      resultsExpanded: _resultsExpanded,
+      searchStatus: mapState.searchStatus,
+      hasSearchText: _hasSearchText,
+    );
   }
 
   void _handleBack() {
@@ -787,13 +664,11 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final selectedPlace = mapState.selectedPlace;
     final hasSearch = mapState.searchStatus != MapSearchStatus.idle;
 
-    // 현재 위치 마커
-    final currentLocationMarker = _buildCurrentLocationMarker();
-
-    // 현재 지도 줌 상태에 따른 Scale Bar 계산
-    final scaleBarData = ScaleBarCalculator.calculate(
-      currentLatitude: _currentCameraTarget.latitude,
-      currentZoom: _currentZoom,
+    // 현재 위치 마커(아직 위치를 모르면 표시하지 않음)
+    final locationMarker = currentLocationMarker(
+      position: _locationController.currentPosition,
+      heading: _locationController.currentHeading,
+      icon: _currentLocationIcon,
     );
 
     return LayoutBuilder(
@@ -820,14 +695,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
               children: [
                 // Google Map
                 TripblerGoogleMap(
-                  initialCameraPosition: _initialCameraPosition,
+                  initialCameraPosition: MapCamera.initialPosition,
 
                   onMapCreated: _onMapCreated,
 
                   markers: {
                     ...mapState.markers,
 
-                    if (currentLocationMarker != null) currentLocationMarker,
+                    if (locationMarker != null) locationMarker,
                   },
 
                   // 빈 곳 탭: 열린 카드만 닫고 검색 결과는 유지한다.
@@ -840,9 +715,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                   // Scale Bar 계산 기준과 검색 기준 좌표 갱신
                   onCameraMove: (CameraPosition position) {
                     setState(() {
-                      _currentCameraTarget = position.target;
-
-                      _currentZoom = position.zoom;
+                      _camera.updatePosition(position);
                     });
                   },
                 ),
@@ -862,32 +735,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
                       onCleared: _clearSearch,
                       onUnavailable: _onSearchUnavailable,
                     ),
-                    mapControlsHeight: _mapControlsHeight,
-                    mapControls: SizedBox(
-                      height: _mapControlsHeight,
-                      child: Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          // 지도 축척 표시
-                          Positioned(
-                            right: 88,
-                            bottom: 38,
-                            child: MapScaleBar(
-                              data: scaleBarData,
-                              label: ScaleBarCalculator.formatDistance(
-                                scaleBarData.distanceMeters,
-                              ),
-                            ),
-                          ),
-
-                          // 현재 위치 버튼
-                          CurrentLocationButton(
-                            isLoading: _locationController.isLoading,
-                            bottom: 24,
-                            onPressed: _onCurrentLocationPressed,
-                          ),
-                        ],
-                      ),
+                    mapControlsHeight: MapControls.height,
+                    mapControls: MapControls(
+                      latitude: _camera.target.latitude,
+                      zoom: _camera.zoom,
+                      isLoading: _locationController.isLoading,
+                      onCurrentLocationPressed: _onCurrentLocationPressed,
                     ),
                     resultsPanel: hasSearch
                         ? PlaceSearchResultsPanel(
@@ -937,7 +790,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
                             // 검색 결과는 검색할 때, 지도에서 고른 장소는 고른
                             // 순간의 기기 위치에서의 거리
-                            distanceLabel: _distanceLabel(
+                            distanceLabel: PlaceDistance.labelTo(
                               mapState.selectedPlaceDistanceOrigin,
                               selectedPlace,
                             ),

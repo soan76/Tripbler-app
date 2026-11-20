@@ -86,5 +86,12 @@ class PlaceDistance {
     return '${km.round()}km';
   }
 
+  /// [origin](검색하거나 장소를 고른 순간의 기기 위치)에서 [place]까지의 거리 문구.
+  /// 계산할 수 없으면 null.
+  static String? labelTo(LatLng? origin, PlaceModel place) {
+    final meters = metersTo(origin, place);
+    return meters == null ? null : format(meters);
+  }
+
   static double _toRadians(double degrees) => degrees * math.pi / 180;
 }

@@ -1,3 +1,4 @@
+import '../../providers/map/map_state.dart';
 import 'place_search_bar.dart';
 
 /// 지도 화면 검색 UI의 상태 전환 규칙.
@@ -44,5 +45,46 @@ class MapSearchViewRules {
     required PlaceSearchAvailability current,
   }) {
     return previous != current && current != PlaceSearchAvailability.ready;
+  }
+
+  /// 인증 상태가 바뀌었을 때 검색 입력과 목록 펼침을 비워야 하는지.
+  ///
+  /// [shouldResetSearchInput]에 더해, 다른 탭에 있는 동안 로그아웃→재로그인이 하나로
+  /// 합쳐져 도착한 경우(검색 가능 상태는 그대로 ready지만 세션 번호가 바뀜)에도 비운다.
+  static bool shouldResetOnAuthChange({
+    required PlaceSearchAvailability previous,
+    required PlaceSearchAvailability current,
+    required bool sessionChanged,
+  }) {
+    return shouldResetSearchInput(previous: previous, current: current) ||
+        (sessionChanged &&
+            previous == PlaceSearchAvailability.ready &&
+            current == PlaceSearchAvailability.ready);
+  }
+
+  /// Android 뒤로가기로 되돌릴 단계(카드 닫기·목록 접기·검색 해제)가 남았는지.
+  static bool hasBackStep({
+    required bool hasSelectedPlace,
+    required bool resultsExpanded,
+    required MapSearchStatus searchStatus,
+    required bool hasSearchText,
+  }) {
+    return hasSelectedPlace ||
+        resultsExpanded ||
+        searchStatus != MapSearchStatus.idle ||
+        hasSearchText;
+  }
+
+  /// 지도 탭에 돌아왔을 때 미뤄 둔 결과 카메라 맞춤을 할지.
+  ///
+  /// 그사이 장소를 골라 카드가 열려 있으면 그 장소를 보고 있으므로 옮기지 않는다.
+  static bool shouldFitResultsOnTabEnter({
+    required bool fitResults,
+    required MapSearchStatus searchStatus,
+    required bool hasSelectedPlace,
+  }) {
+    return fitResults &&
+        searchStatus == MapSearchStatus.success &&
+        !hasSelectedPlace;
   }
 }
