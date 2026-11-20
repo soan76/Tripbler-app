@@ -2,6 +2,7 @@ package com.tripbler.backend.common.cache;
 
 import java.time.*;
 import java.util.*;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 
@@ -38,6 +39,15 @@ public final class TimeoutFallbackCache<K, V> {
     }
 
     public V get(K key, Supplier<V> loader, UnaryOperator<V> stale) {
+        return get(key, loader, stale, value -> ttl);
+    }
+
+    /**
+     * 값마다 TTL을 정한다. stale 허용 기간은 그 값의 만료 시각부터 센다.
+     * loader는 이 키의 슬롯 lock을 잡은 채 실행되므로, loader 안에서 같은 키를 {@link #peek}하면
+     * 같은 스레드의 재진입이라 막히지 않는다.
+     */
+    public V get(K key, Supplier<V> loader, UnaryOperator<V> stale, Function<? super V, Duration> ttlOf) {
         Slot<V> slot = slot(key);
         synchronized (slot) {
             Instant now = clock.instant();
@@ -45,8 +55,10 @@ public final class TimeoutFallbackCache<K, V> {
             if (canFallback(slot, now) && now.isBefore(slot.retryAt)) return stale.apply(slot.value);
             try {
                 V loaded = Objects.requireNonNull(loader.get());
+                Duration loadedTtl = Objects.requireNonNull(ttlOf.apply(loaded));
+                if (loadedTtl.isNegative() || loadedTtl.isZero()) throw new IllegalArgumentException("Invalid cache ttl");
                 slot.value = loaded;
-                slot.expiresAt = clock.instant().plus(ttl);
+                slot.expiresAt = clock.instant().plus(loadedTtl);
                 slot.retryAt = Instant.MIN;
                 return loaded;
             } catch (RuntimeException failure) {
@@ -56,6 +68,18 @@ public final class TimeoutFallbackCache<K, V> {
                 return stale.apply(slot.value);
             }
         }
+    }
+
+    /**
+     * 마지막 성공값을 만료 여부와 관계없이 읽기만 한다. 슬롯을 만들지 않는다. 값이 없으면 null.
+     * 캐시 lock을 놓은 뒤 슬롯 lock을 잡으므로(get과 같은 순서) 다른 키와 교착되지 않는다.
+     * 다른 스레드가 같은 키를 불러오는 중이면 끝날 때까지 기다린다.
+     */
+    public V peek(K key) {
+        Slot<V> slot;
+        synchronized (this) { slot = slots.get(key); }
+        if (slot == null) return null;
+        synchronized (slot) { return slot.value; }
     }
 
     private boolean canFallback(Slot<V> slot, Instant now) {

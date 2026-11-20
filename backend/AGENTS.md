@@ -41,7 +41,7 @@
 
 | 기능 | 패키지 (`com.tripbler.backend.*`) | 외부 서비스 |
 | --- | --- | --- |
-| 국가 통화 환율 + 기간별 시세 | `exchange` | Frankfurter |
+| 국가 통화 환율 + 기간별 시세 | `exchange` | Frankfurter (최신 환율만 대체 출처 fawazahmed0 currency-api) |
 | 암호화폐 시세 + 기간별 시세 | `crypto` | CoinGecko |
 | 장소 검색·상세(로그인 필요, 사용자별 호출 제한) / 주변 장소(외부 접근 차단) | `place` | Google Places |
 | 텍스트 번역 | `translation` | Google Translation |

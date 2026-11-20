@@ -73,6 +73,8 @@ class ExchangeControllerTest {
             .andExpect(jsonPath("$.rates.JPY").value(0.1103))
             .andExpect(jsonPath("$.rates.EUR").value(0.00061))
             .andExpect(jsonPath("$.rateDate").value("2026-08-04"))
+            .andExpect(jsonPath("$.stale").value(false))
+            .andExpect(jsonPath("$.source").value("FRANKFURTER"))
             .andExpect(
                 jsonPath("$.fetchedAt")
                     .value("2026-08-05T17:55:14")
