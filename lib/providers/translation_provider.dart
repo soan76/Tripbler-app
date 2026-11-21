@@ -105,8 +105,17 @@ class TranslationState {
 }
 
 class TranslationNotifier extends Notifier<TranslationState> {
+  /// 가장 최근에 시작한 인식·번역 작업 번호.
+  ///
+  /// 새 사진 처리, 새 번역(언어 변경 포함), 다시 찍기 때마다 올린다. 늦게 끝난 이전 작업은
+  /// 번호가 달라 결과·오류를 반영하지 않는다(언어를 바꾼 뒤 이전 언어 번역이 덮어쓰는 문제 등).
+  int _requestId = 0;
+
   @override
   TranslationState build() => const TranslationState();
+
+  /// [requestId]가 아직 가장 최근 작업이고 상태 객체가 살아 있는지.
+  bool _isCurrent(int requestId) => ref.mounted && requestId == _requestId;
 
   void setStatus(TranslationStatus status) {
     if (state.status == status) {
@@ -175,6 +184,8 @@ class TranslationNotifier extends Notifier<TranslationState> {
       return;
     }
 
+    final requestId = ++_requestId;
+
     state = state.copyWith(
       selectedImagePath: imagePath,
       recognizedText: '',
@@ -193,7 +204,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
             sourceLanguageCode: state.sourceLanguageCode,
           );
 
-      if (!ref.mounted) {
+      if (!_isCurrent(requestId)) {
         return;
       }
 
@@ -223,7 +234,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
       debugPrint('OCR 처리 실패: $error');
       debugPrint('$stackTrace');
 
-      if (!ref.mounted) {
+      if (!_isCurrent(requestId)) {
         return;
       }
 
@@ -240,6 +251,9 @@ class TranslationNotifier extends Notifier<TranslationState> {
     if (text.isEmpty) {
       return;
     }
+
+    // 원문을 그대로 쓰는 경우에도 진행 중이던 이전 번역 응답이 덮어쓰지 않게 번호를 올린다.
+    final requestId = ++_requestId;
 
     if (state.sourceLanguageCode == state.targetLanguageCode) {
       state = state.copyWith(
@@ -263,7 +277,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
             targetLanguageCode: state.targetLanguageCode,
           );
 
-      if (!ref.mounted) {
+      if (!_isCurrent(requestId)) {
         return;
       }
 
@@ -275,7 +289,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
       debugPrint('번역 처리 실패: $error');
       debugPrint('$stackTrace');
 
-      if (!ref.mounted) {
+      if (!_isCurrent(requestId)) {
         return;
       }
 
@@ -287,6 +301,9 @@ class TranslationNotifier extends Notifier<TranslationState> {
   }
 
   void resetForRetake() {
+    // 진행 중이던 인식·번역 결과가 다시 찍는 화면에 들어오지 않게 한다.
+    _requestId++;
+
     state = state.copyWith(
       clearSelectedImagePath: true,
       recognizedText: '',
