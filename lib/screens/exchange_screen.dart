@@ -16,6 +16,10 @@ import '../widgets/exchange/currency_row.dart';
 import '../widgets/exchange/currency_selection_sheet.dart';
 import '../widgets/focus_history.dart';
 
+/// 환율이 서버의 대체 출처에서 온 경우 화면에 띄우는 안내.
+const String fallbackSourceNotice =
+    '평소 환율 출처에 연결하지 못해 대체 출처 환율을 표시합니다. 값이 조금 다를 수 있습니다.';
+
 // 환율 화면을 구성하는 StatefulWidget
 class ExchangeScreen extends ConsumerStatefulWidget {
   const ExchangeScreen({super.key});
@@ -56,17 +60,23 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
   @override
   Widget build(BuildContext context) {
     // 금액·환율은 exchangeDisplayViewProvider로 받으므로 여기서는 화면에 쓰는 필드만 읽는다.
-    final (:visibleCurrencies, :isLoading, :errorMessage, :lastUpdated) = ref
-        .watch(
-          exchangeProvider.select(
-            (state) => (
-              visibleCurrencies: state.visibleCurrencies,
-              isLoading: state.isLoading,
-              errorMessage: state.errorMessage,
-              lastUpdated: state.lastUpdated,
-            ),
-          ),
-        );
+    final (
+      :visibleCurrencies,
+      :isLoading,
+      :errorMessage,
+      :lastUpdated,
+      :usesFallbackSource,
+    ) = ref.watch(
+      exchangeProvider.select(
+        (state) => (
+          visibleCurrencies: state.visibleCurrencies,
+          isLoading: state.isLoading,
+          errorMessage: state.errorMessage,
+          lastUpdated: state.lastUpdated,
+          usesFallbackSource: state.usesFallbackSource,
+        ),
+      ),
+    );
     final exchange = ref.read(exchangeProvider.notifier);
     final view = ref.watch(exchangeDisplayViewProvider);
     final crypto = ref.watch(cryptoProvider);
@@ -154,6 +164,8 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
                           ? '환산할 통화를 추가해 주세요'
                           : '암호화폐 현재가 기준 환산 수량')
                     : null,
+                // 서버가 평소 출처 대신 대체 출처 값을 준 경우에만 알린다(사용자 결정).
+                showFallbackNotice: usesFallbackSource,
               ),
 
               if (isLoading) const LinearProgressIndicator(),
@@ -303,25 +315,68 @@ class _ExchangeScreenState extends ConsumerState<ExchangeScreen> {
   }
 
   // 환율 화면의 헤더 영역을 구성하는 위젯을 반환하는 메서드
-  Widget _buildHeader(DateTime? lastUpdated, {String? emptyMessage}) {
+  Widget _buildHeader(
+    DateTime? lastUpdated, {
+    String? emptyMessage,
+    bool showFallbackNotice = false,
+  }) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final style = theme.textTheme.bodySmall?.copyWith(
+      color: colorScheme.onSurfaceVariant,
+    );
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       color: colorScheme.surface,
-      child: Center(
-        child: Text(
-          lastUpdated == null && emptyMessage != null
-              ? emptyMessage
-              : _formatLastUpdatedText(lastUpdated?.toLocal()),
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-          ),
+      // 조회 시각과 출처 안내는 같은 값에 대한 설명이라 화면 낭독기가 한 번에 읽게 묶는다.
+      child: MergeSemantics(
+        child: Column(
+          children: [
+            Text(
+              lastUpdated == null && emptyMessage != null
+                  ? emptyMessage
+                  : _formatLastUpdatedText(lastUpdated?.toLocal()),
+              textAlign: TextAlign.center,
+              style: style,
+            ),
+            if (showFallbackNotice) ...[
+              const SizedBox(height: 4),
+              _buildFallbackSourceNotice(style),
+            ],
+          ],
         ),
       ),
+    );
+  }
+
+  /// 환율이 대체 출처에서 온 경우의 안내. 평소 출처와 기준이 달라 값이 조금 다를 수 있다.
+  ///
+  /// 오류가 아니라 참고 정보라서 "마지막 업데이트"와 같은 보조 색을 쓰고, 정보 아이콘으로
+  /// 조회 시각과 구분한다. 글자가 여러 줄로 늘어나도 아이콘은 첫 줄 옆에 둔다.
+  Widget _buildFallbackSourceNotice(TextStyle? style) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.info_outline,
+          // bodySmall 한 줄 높이(16)에 맞추고, 시스템 글자 크기를 따라 함께 커진다.
+          size: 16,
+          applyTextScaling: true,
+          color: style?.color,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            fallbackSourceNotice,
+            // 여러 줄이면 아이콘 옆에서 왼쪽부터 읽히게 한다. 한 줄이면 묶음째 가운데 놓인다.
+            textAlign: TextAlign.start,
+            style: style,
+          ),
+        ),
+      ],
     );
   }
 

@@ -101,6 +101,7 @@ class ExchangeSavedStateLoader {
         visibleCurrencies: visibleCurrencies,
         rates: rates,
         lastUpdated: lastUpdated,
+        usesFallbackSource: false,
         clearLastUpdated: lastUpdated == null,
         inputAmount: savedAmount,
       ),

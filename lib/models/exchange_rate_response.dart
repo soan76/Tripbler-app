@@ -5,12 +5,17 @@ class ExchangeRateResponse {
   final DateTime fetchedAt;
   final bool stale;
 
+  /// 서버가 평소 출처(Frankfurter) 대신 대체 출처(fawazahmed0 currency-api)에서 받은 값인지.
+  /// 서버 응답의 `source`가 `CURRENCY_API`일 때만 true다.
+  final bool fromFallbackSource;
+
   const ExchangeRateResponse({
     required this.baseCurrency,
     required this.rates,
     required this.rateDate,
     required this.fetchedAt,
     this.stale = false,
+    this.fromFallbackSource = false,
   });
 
   factory ExchangeRateResponse.fromJson(Map<String, dynamic> json) {
@@ -57,6 +62,7 @@ class ExchangeRateResponse {
       ),
       fetchedAt: fetchedAt,
       stale: json['stale'] == true,
+      fromFallbackSource: json['source'] == 'CURRENCY_API',
     );
   }
 

@@ -65,6 +65,7 @@ class ExchangeRateFetcher {
               readState().copyWith(
                 rates: Map<String, double>.from(rates),
                 lastUpdated: updated,
+                usesFallbackSource: false,
               ),
             );
           }
@@ -86,8 +87,15 @@ class ExchangeRateFetcher {
         // 표시할 통화가 없어서 API를 호출하지 않은 경우이므로
         // "마지막으로 서버에서 실제로 데이터를 받은 시각"이라는 의미를 지키기 위해
         // lastUpdated는 변경하지 않고 이전 값을 그대로 유지함.
-        if (readState().rates.isNotEmpty) {
-          writeState(readState().copyWith(rates: <String, double>{}));
+        // 환율을 비우면 대체 출처 안내도 함께 지운다.
+        final current = readState();
+        if (current.rates.isNotEmpty || current.usesFallbackSource) {
+          writeState(
+            current.copyWith(
+              rates: <String, double>{},
+              usesFallbackSource: false,
+            ),
+          );
         }
         return;
       }
@@ -111,6 +119,7 @@ class ExchangeRateFetcher {
         readState().copyWith(
           rates: savedRates,
           lastUpdated: latestRatesResponse.fetchedAt,
+          usesFallbackSource: latestRatesResponse.fromFallbackSource,
           errorMessage: latestRatesResponse.stale
               ? '응답 지연으로 마지막 성공 환율을 표시합니다.'
               : null,
@@ -220,6 +229,7 @@ class ExchangeRateFetcher {
           readState().copyWith(
             rates: Map<String, double>.from(cachedRates),
             lastUpdated: cachedLastUpdated,
+            usesFallbackSource: false,
             errorMessage:
                 '$fallbackMessage '
                 '마지막 저장 데이터를 표시합니다.',
@@ -232,6 +242,7 @@ class ExchangeRateFetcher {
           readState().copyWith(
             rates: <String, double>{},
             clearLastUpdated: true,
+            usesFallbackSource: false,
             errorMessage: fallbackMessage,
           ),
         );
@@ -247,6 +258,7 @@ class ExchangeRateFetcher {
         readState().copyWith(
           rates: <String, double>{},
           clearLastUpdated: true,
+          usesFallbackSource: false,
           errorMessage: fallbackMessage,
         ),
       );

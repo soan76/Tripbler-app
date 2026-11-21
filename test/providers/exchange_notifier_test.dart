@@ -31,6 +31,7 @@ class _Api extends ExchangeRateApiService {
     Map<String, double> rates, {
     required DateTime fetchedAt,
     bool stale = false,
+    bool fromFallbackSource = false,
   }) {
     pending[index].complete(
       ExchangeRateResponse(
@@ -39,6 +40,7 @@ class _Api extends ExchangeRateApiService {
         rateDate: null,
         fetchedAt: fetchedAt,
         stale: stale,
+        fromFallbackSource: fromFallbackSource,
       ),
     );
   }
@@ -551,6 +553,83 @@ void main() {
 
       expect(visibleCodes(), ['USD', 'EUR']);
       expect(api.requests.last.targets, ['USD', 'EUR']);
+    });
+  });
+
+  group('대체 출처 표시', () {
+    test('서버가 대체 출처 값을 주면 표시하고, 평소 출처 값이 오면 지운다', () async {
+      await initializeWith(['USD']);
+
+      api.respond(
+        0,
+        {'USD': 0.0007},
+        fetchedAt: DateTime.now(),
+        fromFallbackSource: true,
+      );
+      await settle();
+      expect(read().usesFallbackSource, isTrue);
+
+      final refresh = notifier().fetchRates();
+      await settle();
+      api.respond(1, {'USD': 0.00071}, fetchedAt: DateTime.now());
+      await refresh;
+
+      expect(read().usesFallbackSource, isFalse);
+    });
+
+    test('기준 통화를 바꿔 환율을 비우면 표시도 지운다', () async {
+      await initializeWith(['USD']);
+      api.respond(
+        0,
+        {'USD': 0.0007},
+        fetchedAt: DateTime.now(),
+        fromFallbackSource: true,
+      );
+      await settle();
+      expect(read().usesFallbackSource, isTrue);
+
+      unawaited(notifier().changeBaseCurrency(findCurrencyByCode('JPY')!));
+      await settle();
+      expect(read().usesFallbackSource, isFalse);
+    });
+
+    test('표시 통화를 모두 지워 환율을 비우면 표시도 지운다', () async {
+      await initializeWith(['USD']);
+      api.respond(
+        0,
+        {'USD': 0.0007},
+        fetchedAt: DateTime.now(),
+        fromFallbackSource: true,
+      );
+      await settle();
+      expect(read().usesFallbackSource, isTrue);
+
+      await notifier().removeCurrency(findCurrencyByCode('USD')!);
+      await settle();
+
+      expect(read().visibleCurrencies, isEmpty);
+      expect(read().rates, isEmpty);
+      expect(read().usesFallbackSource, isFalse);
+      expect(api.requests, hasLength(1));
+    });
+
+    test('조회 실패로 화면 값을 유지하면 표시도 그대로 둔다', () async {
+      await initializeWith(['USD']);
+      api.respond(
+        0,
+        {'USD': 0.0007},
+        fetchedAt: DateTime.now(),
+        fromFallbackSource: true,
+      );
+      await settle();
+
+      final refresh = notifier().fetchRates();
+      await settle();
+      api.fail(1, Exception('연결 실패'));
+      await refresh;
+
+      expect(read().rates, {'USD': 0.0007});
+      expect(read().usesFallbackSource, isTrue);
     });
   });
 }

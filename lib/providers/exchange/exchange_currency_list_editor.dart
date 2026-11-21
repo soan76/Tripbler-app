@@ -67,6 +67,7 @@ class ExchangeCurrencyListEditor {
         ),
         rates: <String, double>{},
         clearLastUpdated: true,
+        usesFallbackSource: false,
         clearErrorMessage: true,
       ),
     );

@@ -12,6 +12,7 @@ class ExchangeState {
     this.isLoading = false,
     this.errorMessage,
     this.lastUpdated,
+    this.usesFallbackSource = false,
   });
 
   static const ExchangeCalculator _calculator = ExchangeCalculator();
@@ -70,6 +71,10 @@ class ExchangeState {
     return rates[targetCode];
   }
 
+  /// 지금 보여 주는 환율이 서버의 대체 출처에서 온 값인지. 화면은 이때만 안내를 띄운다.
+  /// 기기에 저장해 둔 값을 불러오면 출처를 알 수 없어 false로 둔다.
+  final bool usesFallbackSource;
+
   ExchangeState copyWith({
     CurrencyModel? baseCurrency,
     List<CurrencyModel>? visibleCurrencies,
@@ -81,6 +86,7 @@ class ExchangeState {
     bool clearErrorMessage = false,
     DateTime? lastUpdated,
     bool clearLastUpdated = false,
+    bool? usesFallbackSource,
   }) {
     return ExchangeState(
       baseCurrency: baseCurrency ?? this.baseCurrency,
@@ -97,6 +103,7 @@ class ExchangeState {
           ? null
           : (errorMessage ?? this.errorMessage),
       lastUpdated: clearLastUpdated ? null : (lastUpdated ?? this.lastUpdated),
+      usesFallbackSource: usesFallbackSource ?? this.usesFallbackSource,
     );
   }
 }
