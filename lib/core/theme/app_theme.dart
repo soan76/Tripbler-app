@@ -16,15 +16,33 @@ class AppTheme {
 
   static const Color _seedColor = Colors.blue;
 
-  static ThemeData get lightTheme {
+  /// 버튼·입력창 모서리 둥글기. 앱 전체를 4로 맞춘다(사용자 결정, 2026-11-21).
+  /// 위젯에서 모양을 따로 지정하지 않으면 이 값을 쓴다.
+  static const double cornerRadius = 4;
+
+  static const BorderRadius _cornerRadius = BorderRadius.all(
+    Radius.circular(cornerRadius),
+  );
+
+  static const ButtonStyle _buttonStyle = ButtonStyle(
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: _cornerRadius),
+    ),
+  );
+
+  static ThemeData get lightTheme => _build(Brightness.light);
+
+  static ThemeData get darkTheme => _build(Brightness.dark);
+
+  static ThemeData _build(Brightness brightness) {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: _seedColor,
-      brightness: Brightness.light,
+      brightness: brightness,
     );
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.light,
+      brightness: brightness,
       colorScheme: colorScheme,
 
       scaffoldBackgroundColor: colorScheme.surface,
@@ -43,43 +61,17 @@ class AppTheme {
         backgroundColor: colorScheme.surface,
       ),
 
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: colorScheme.surfaceContainerHighest,
-      ),
-    );
-  }
+      filledButtonTheme: const FilledButtonThemeData(style: _buttonStyle),
+      elevatedButtonTheme: const ElevatedButtonThemeData(style: _buttonStyle),
+      outlinedButtonTheme: const OutlinedButtonThemeData(style: _buttonStyle),
+      textButtonTheme: const TextButtonThemeData(style: _buttonStyle),
 
-  static ThemeData get darkTheme {
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: _seedColor,
-      brightness: Brightness.dark,
-    );
-
-    return ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      colorScheme: colorScheme,
-
-      scaffoldBackgroundColor: colorScheme.surface,
-
-      appBarTheme: AppBarTheme(
-        backgroundColor: colorScheme.surface,
-        foregroundColor: colorScheme.onSurface,
-        elevation: 0,
-      ),
-
-      drawerTheme: DrawerThemeData(backgroundColor: colorScheme.surface),
-
-      dividerTheme: DividerThemeData(color: colorScheme.outlineVariant),
-
-      bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: colorScheme.surface,
-      ),
-
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: colorScheme.surfaceContainerHighest,
+      // 외곽선 입력창으로 통일한다. 채움색까지 두면 떠오른 라벨이 채움 경계에 걸쳐
+      // 어색하므로 채우지 않는다. 테두리 색은 Material 3 기본값(평소 outline, 포커스
+      // primary 2dp, 오류 error)을 써서 밝은 야외에서도 입력칸 경계가 보이게 한다.
+      // 채움이 필요한 입력창은 위젯에서 filled·fillColor를 직접 지정한다.
+      inputDecorationTheme: const InputDecorationTheme(
+        border: OutlineInputBorder(borderRadius: _cornerRadius),
       ),
     );
   }
