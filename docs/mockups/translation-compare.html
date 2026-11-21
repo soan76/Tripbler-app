@@ -513,7 +513,7 @@
       <!-- B -->
       <div class="variant">
         <div class="vhead">
-          <div class="tag">시안 B<span class="rec">추천</span></div>
+          <div class="tag">시안 B<span class="rec">찍기 모드의 바탕</span></div>
           <h3>번역을 맨 위에, 원문은 접어서</h3>
           <p>언어는 한 줄 막대로 줄이고, 그 아래 번역 결과를 가장 크게 보여 줍니다. 원문과 찍은 사진은 작은 줄로 접어 두고 누르면 펼칩니다. 다시 찍기는 엄지가 닿는 아래에 둡니다.</p>
         </div>
@@ -547,7 +547,7 @@
       <!-- C -->
       <div class="variant">
         <div class="vhead">
-          <div class="tag">시안 C</div>
+          <div class="tag">시안 C<span class="rec">실시간 모드의 바탕</span></div>
           <h3>사진 위에 번역을 겹쳐서</h3>
           <p>찍은 사진의 글자 자리에 번역을 바로 덧씌웁니다. 오른쪽 위 버튼으로 원문과 번역을 바꿔 보고, 아래 시트를 올리면 전체 번역을 글로 읽습니다.</p>
         </div>
@@ -871,19 +871,26 @@
   <div class="wrap">
     <div class="copy">
       <div class="kicker">비교</div>
-      <h2>지금 고친다면 시안 B</h2>
-      <p>B는 지금 화면의 글자 인식·번역 흐름과 상태 표시를 그대로 쓰고 배치만 바꿔, 찍자마자 번역을 읽게 합니다. C는 메뉴판에 가장 잘 맞지만 글자 위치별 번역과 겹쳐 그리기가 새로 필요해, B를 먼저 하고 나중에 "사진 위에 보기"를 덧붙이는 순서가 낫습니다.</p>
+      <h2>B와 C를 섞은 두 모드로 갑니다</h2>
+      <p>B 하나로는 줄이 많은 메뉴판에서 어느 번역이 어느 줄인지 맞추기 어렵고, C 하나로는 긴 안내문을 읽기 어렵고 주문에 필요한 발음을 줄 수 없습니다. 그래서 카메라를 대기만 하면 사진 위에 번역과 원화를 겹쳐 보여 주는 실시간 모드(C)와, 찍으면 줄마다 번역·한글 발음·원화를 글로 정리하는 찍기 모드(B의 변형)를 함께 둡니다. 원화 가격을 같은 자리에 붙이고 발음과 질문으로 주문까지 이어 주는 점이 다른 번역 앱과의 차별점입니다.</p>
     </div>
     <table class="cmp">
-      <thead><tr><th>기준</th><th>A 지금 화면</th><th>B 번역을 맨 위에</th><th>C 사진 위에 겹쳐서</th></tr></thead>
+      <thead><tr><th>기준</th><th>A 지금 화면</th><th>B 번역을 맨 위에</th><th>C 사진 위에 겹쳐서</th><th>두 모드 (실시간 C + 찍기 B)</th></tr></thead>
       <tbody>
-        <tr><td>찍은 뒤 번역까지</td><td><span class="lv l"></span>내리고 옆으로 넘김</td><td><span class="lv h"></span>첫 화면 맨 위</td><td><span class="lv h"></span>사진 위에 바로</td></tr>
-        <tr><td>줄이 많은 메뉴판</td><td><span class="lv m"></span>원문·번역 카드를 오가며 비교</td><td><span class="lv m"></span>줄 순서로 읽음</td><td><span class="lv h"></span>자리에서 바로 짝 맞춤</td></tr>
-        <tr><td>긴 안내문</td><td><span class="lv m"></span>카드 안 스크롤</td><td><span class="lv h"></span>큰 글자로 읽음</td><td><span class="lv l"></span>사진 위에서 읽기 어려움</td></tr>
-        <tr><td>다음 행동</td><td><span class="lv m"></span>다시 촬영·다시 선택</td><td><span class="lv h"></span>복사·읽어 주기·다시 찍기</td><td><span class="lv m"></span>원문/번역 바꾸기·시트</td></tr>
-        <tr><td>바꿀 범위</td><td>없음</td><td><span class="lv h"></span>배치, 언어 막대, 복사(읽어 주기는 선택)</td><td><span class="lv l"></span>글자 위치별 번역, 겹쳐 그리기</td></tr>
+        <tr><td>찍은 뒤 번역까지</td><td><span class="lv l"></span>내리고 옆으로 넘김</td><td><span class="lv h"></span>첫 화면 맨 위</td><td><span class="lv h"></span>사진 위에 바로</td><td><span class="lv h"></span>찍기 전부터 겹쳐 보이고, 찍으면 줄마다 정리</td></tr>
+        <tr><td>줄이 많은 메뉴판</td><td><span class="lv m"></span>원문·번역 카드를 오가며 비교</td><td><span class="lv m"></span>줄 순서로 읽음</td><td><span class="lv h"></span>자리에서 바로 짝 맞춤</td><td><span class="lv h"></span>실시간으로 자리 확인, 찍기 목록으로 줄마다 확인</td></tr>
+        <tr><td>긴 안내문</td><td><span class="lv m"></span>카드 안 스크롤</td><td><span class="lv h"></span>큰 글자로 읽음</td><td><span class="lv l"></span>사진 위에서 읽기 어려움</td><td><span class="lv h"></span>찍기 목록에서 글로 읽음</td></tr>
+        <tr><td>주문에 쓰기</td><td><span class="lv l"></span>번역만</td><td><span class="lv m"></span>번역·복사·읽어 주기</td><td><span class="lv m"></span>번역과 가격 자리</td><td><span class="lv h"></span>원화 가격, 한글 발음, 원문 읽어 주기, 줄 눌러 묻기</td></tr>
+        <tr><td>사진을 서버로 보내나</td><td>보내지 않음</td><td>보내지 않음</td><td>보내지 않음</td><td>보내지 않음 (실시간은 기기 안에서만, 찍기는 글자 조각만)</td></tr>
+        <tr><td>바꿀 범위</td><td>없음</td><td><span class="lv h"></span>배치, 언어 막대, 복사(읽어 주기는 선택)</td><td><span class="lv l"></span>글자 위치별 번역, 겹쳐 그리기</td><td><span class="lv l"></span>가장 큼: 줄별 번역·발음 API, 기기 번역 모델, 연속 인식, 겹쳐 그리기</td></tr>
       </tbody>
     </table>
+
+    <div class="tm-cond" style="margin-top:32px">
+      <div><h5>1단계: 찍기 모드</h5><p>서버에 줄별 번역·한글 발음·가격 조각 API를 만들고, 찍은 뒤 결과를 줄 목록으로 보여 줍니다. 지금 화면을 바꾸는 범위라 가장 먼저 쓸모가 보입니다.</p></div>
+      <div><h5>2단계: 실시간 모드</h5><p>카메라 화면을 계속 읽어 글자 위치를 받고, 기기 안 번역 모델로 겹쳐 그립니다. 원문 언어 고정과 흔들림 보정이 필요합니다.</p></div>
+      <div><h5>3단계: 줄 눌러 묻기</h5><p>찍기 결과와 실시간 화면의 줄을 눌러, 그 줄을 근거로 AI에게 묻고 답을 받습니다.</p></div>
+    </div>
   </div>
 </section>
 
