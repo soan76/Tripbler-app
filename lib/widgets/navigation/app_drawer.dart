@@ -5,6 +5,7 @@ import '../../screens/settings_screen.dart';
 import '../../screens/auth/login_screen.dart';
 import '../../screens/user/user_page.dart';
 import '../../providers/auth/auth_provider.dart';
+import '../auth/logout_feedback.dart';
 
 /// 햄버거 메뉴로 여는 앱 서랍.
 ///
@@ -80,8 +81,14 @@ class AppDrawer extends ConsumerWidget {
     String? subtitle,
     required VoidCallback onTap,
     String? semanticsHint,
+    bool emphasizeTitle = false,
+    bool wrapText = false,
   }) {
     final theme = Theme.of(context);
+    // 사용자 이름·아이디는 길이를 알 수 없어 한 줄로 줄인다. 미로그인 안내처럼 정해진
+    // 문구는 작은 화면이나 큰 글자에서 잘리지 않게 줄을 바꿔 다 보여 준다.
+    final maxLines = wrapText ? null : 1;
+    final overflow = wrapText ? null : TextOverflow.ellipsis;
     final colorScheme = theme.colorScheme;
 
     // 이름과 아이디를 버튼 하나로 묶어 화면 낭독기가 한 번에 읽게 한다.
@@ -100,18 +107,20 @@ class AppDrawer extends ConsumerWidget {
                 const SizedBox(height: 12),
                 Text(
                   title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  maxLines: maxLines,
+                  overflow: overflow,
+                  // 사용자 이름만 굵게 해 계정 영역에서 먼저 읽히게 한다(사용자 결정).
                   style: theme.textTheme.titleLarge?.copyWith(
                     color: colorScheme.onSurface,
+                    fontWeight: emphasizeTitle ? FontWeight.w600 : null,
                   ),
                 ),
                 if (subtitle != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    maxLines: maxLines,
+                    overflow: overflow,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colorScheme.onSurfaceVariant,
                     ),
@@ -130,9 +139,10 @@ class AppDrawer extends ConsumerWidget {
     return _buildAccountHeader(
       context,
       avatar: _defaultAvatar(context),
-      title: '로그인',
-      subtitle: '눌러서 계정에 로그인',
+      title: '로그인이 필요합니다',
+      subtitle: '로그인하고 계정 기능을 이용하세요.',
       semanticsHint: '로그인 화면 열기',
+      wrapText: true,
       onTap: () {
         // Drawer 닫기
         Navigator.pop(context);
@@ -158,6 +168,7 @@ class AppDrawer extends ConsumerWidget {
       title: hasNickname ? nickname : (hasLoginId ? loginId : '사용자'),
       subtitle: hasNickname && hasLoginId ? loginId : null,
       semanticsHint: '내 정보 열기',
+      emphasizeTitle: true,
       onTap: () {
         Navigator.pop(context);
 
@@ -215,14 +226,17 @@ class AppDrawer extends ConsumerWidget {
 
                 Navigator.pop(context);
 
-                await notifier.logout();
+                final localTokensCleared = await notifier.logout();
 
-                if (!messenger.mounted) {
+                // 이미 진행 중인 로그아웃이 있어 아무것도 하지 않았으면 그쪽 안내를 덮지 않는다.
+                if (localTokensCleared == null) {
                   return;
                 }
 
-                messenger.showSnackBar(
-                  const SnackBar(content: Text('로그아웃되었습니다.')),
+                showLogoutResult(
+                  messenger: messenger,
+                  notifier: notifier,
+                  localTokensCleared: localTokensCleared,
                 );
               },
         style: TextButton.styleFrom(

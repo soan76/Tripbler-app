@@ -118,10 +118,19 @@ class FakeAuthRepository implements AuthRepository {
     }
   }
 
+  /// 지정하면 이 Completer가 끝날 때까지 clearTokens를 미룬다(세션 번호는 먼저 바꾼다).
+  Completer<void>? clearTokensGate;
+
   @override
   Future<void> clearTokens() async {
     sessionId++;
     clearTokensCallCount++;
+
+    final gate = clearTokensGate;
+
+    if (gate != null) {
+      await gate.future;
+    }
 
     final error = clearTokensError;
     if (error != null) {
@@ -131,13 +140,21 @@ class FakeAuthRepository implements AuthRepository {
     hasStoredTokens = false;
   }
 
+  /// 실제 AuthTokenSession처럼 삭제가 실패하면 올린 번호를 담은 [TokenClearException]을 던진다.
+  /// 번호는 삭제를 기다리기 전에 읽으므로, 기다리는 사이 로그인해도 끝낸 세션 번호를 담는다.
   @override
   Future<bool> clearTokensIfSession(int expectedSessionId) async {
     if (sessionId != expectedSessionId) {
       return false;
     }
 
-    await clearTokens();
+    final endedSessionId = sessionId + 1;
+
+    try {
+      await clearTokens();
+    } catch (error) {
+      throw TokenClearException(sessionId: endedSessionId, cause: error);
+    }
 
     return true;
   }
@@ -252,10 +269,29 @@ class FakeAuthRepository implements AuthRepository {
 
   int logoutCallCount = 0;
 
+  /// 지정하면 logout이 세션을 끝낸 뒤 이 오류를 던진다(기기 토큰 삭제 재시도까지 실패).
+  Object? logoutLocalClearError;
+
+  /// 지정하면 이 Completer가 끝날 때까지 logout을 미룬다(세션 번호는 먼저 바꾼다).
+  Completer<void>? logoutGate;
+
   @override
   Future<void> logout() async {
     logoutCallCount++;
     sessionId++;
+
+    final gate = logoutGate;
+
+    if (gate != null) {
+      await gate.future;
+    }
+
+    final error = logoutLocalClearError;
+
+    if (error != null) {
+      throw error;
+    }
+
     hasStoredTokens = false;
   }
 
@@ -849,6 +885,165 @@ void main() {
       expect(provider.sessionRestoreFailed, isFalse);
       expect(provider.errorMessage, isNull);
       expect(repository.clearTokensCallCount, 0);
+    });
+  });
+
+  group('AuthProvider 로그아웃 기기 토큰 삭제', () {
+    test('기기 토큰을 지웠으면 true를 돌려준다', () async {
+      await provider.restoreSession();
+
+      expect(await provider.logout(), isTrue);
+      expect(provider.isAuthenticated, isFalse);
+    });
+
+    test('기기 토큰 삭제가 실패해도 로그아웃 상태가 되고 false를 돌려준다', () async {
+      await provider.restoreSession();
+      repository.logoutLocalClearError = Exception('keystore');
+
+      expect(await provider.logout(), isFalse);
+      expect(provider.isAuthenticated, isFalse);
+      expect(provider.isLoading, isFalse);
+    });
+
+    test('다시 시도가 성공하면 토큰을 지우고 오류 문구를 비운다', () async {
+      await provider.restoreSession();
+      repository.logoutLocalClearError = Exception('keystore');
+      await provider.logout();
+
+      expect(await provider.retryClearLocalTokens(), isTrue);
+      expect(repository.clearTokensCallCount, 1);
+      expect(repository.hasStoredTokens, isFalse);
+      expect(provider.errorMessage, isNull);
+      expect(provider.isAuthenticated, isFalse);
+    });
+
+    test('다시 시도도 실패하면 false를 돌려준다', () async {
+      await provider.restoreSession();
+      repository.logoutLocalClearError = Exception('keystore');
+      await provider.logout();
+      repository.clearTokensError = Exception('keystore');
+
+      expect(await provider.retryClearLocalTokens(), isFalse);
+      expect(provider.isAuthenticated, isFalse);
+    });
+
+    test('기기 토큰 삭제가 실패해도 오류 문구를 상태에 남기지 않는다', () async {
+      await provider.restoreSession();
+      repository.logoutLocalClearError = Exception('keystore');
+
+      expect(await provider.logout(), isFalse);
+      expect(provider.errorMessage, isNull);
+    });
+
+    test('재시도 전에 새로 로그인하면 새 세션 토큰을 지우지 않는다', () async {
+      await provider.restoreSession();
+      repository.logoutLocalClearError = Exception('keystore');
+      expect(await provider.logout(), isFalse);
+
+      repository.logoutLocalClearError = null;
+      expect(await provider.login(loginId: 'other', password: 'pw'), isTrue);
+      final loggedInSession = repository.sessionId;
+
+      expect(await provider.retryClearLocalTokens(), isTrue);
+      expect(repository.clearTokensCallCount, 0);
+      expect(repository.hasStoredTokens, isTrue);
+      expect(repository.sessionId, loggedInSession);
+      expect(provider.isAuthenticated, isTrue);
+    });
+
+    test('다시 시도가 실패한 뒤 또 시도하면 그 로그아웃 세션의 토큰을 지운다', () async {
+      await provider.restoreSession();
+      repository.logoutLocalClearError = Exception('keystore');
+      await provider.logout();
+
+      repository.clearTokensError = Exception('keystore');
+      expect(await provider.retryClearLocalTokens(), isFalse);
+
+      repository.clearTokensError = null;
+      expect(await provider.retryClearLocalTokens(), isTrue);
+      expect(repository.clearTokensCallCount, 2);
+      expect(repository.hasStoredTokens, isFalse);
+    });
+
+    test(
+      '다시 시도의 삭제를 기다리는 사이 로그인하고 삭제가 실패해도 다음 다시 시도는 새 세션 토큰을 지우지 않는다',
+      () async {
+        await provider.restoreSession();
+        repository.logoutLocalClearError = Exception('keystore');
+        expect(await provider.logout(), isFalse);
+        repository.logoutLocalClearError = null;
+
+        final gate = repository.clearTokensGate = Completer<void>();
+        repository.clearTokensError = Exception('keystore');
+        final retry = provider.retryClearLocalTokens();
+        await pumpEventQueue();
+
+        // 삭제가 끝나기 전에 로그인해 세션 번호가 한 번 더 바뀐다.
+        expect(await provider.login(loginId: 'other', password: 'pw'), isTrue);
+        final loggedInSession = repository.sessionId;
+
+        repository.clearTokensGate = null;
+        gate.complete();
+        expect(await retry, isFalse);
+
+        repository.clearTokensError = null;
+        expect(await provider.retryClearLocalTokens(), isTrue);
+        expect(repository.clearTokensCallCount, 1);
+        expect(repository.hasStoredTokens, isTrue);
+        expect(repository.sessionId, loggedInSession);
+        expect(provider.isAuthenticated, isTrue);
+      },
+    );
+
+    test('기기 토큰을 지웠으면 다시 시도는 아무것도 지우지 않는다', () async {
+      await provider.restoreSession();
+      await provider.logout();
+
+      expect(await provider.retryClearLocalTokens(), isTrue);
+      expect(repository.clearTokensCallCount, 0);
+    });
+
+    test('다시 시도가 진행 중이면 같은 결과를 함께 기다리고 한 번만 지운다', () async {
+      await provider.restoreSession();
+      repository.logoutLocalClearError = Exception('keystore');
+      await provider.logout();
+      final gate = repository.clearTokensGate = Completer<void>();
+
+      final first = provider.retryClearLocalTokens();
+      final second = provider.retryClearLocalTokens();
+      gate.complete();
+
+      expect(await first, isTrue);
+      expect(await second, isTrue);
+      expect(repository.clearTokensCallCount, 1);
+    });
+  });
+
+  group('AuthProvider 로그아웃 중복 호출', () {
+    test('로그아웃이 진행 중이면 두 번째 호출은 아무것도 하지 않았다고 알린다', () async {
+      await provider.restoreSession();
+      repository.logoutLocalClearError = Exception('keystore');
+      final gate = repository.logoutGate = Completer<void>();
+
+      final first = provider.logout();
+      final second = provider.logout();
+      gate.complete();
+
+      expect(await first, isFalse);
+      expect(await second, isNull);
+      expect(repository.logoutCallCount, 1);
+    });
+
+    test('다른 인증 작업이 진행 중이면 로그아웃하지 않고 아무것도 하지 않았다고 알린다', () async {
+      final gate = repository.getCurrentUserGate = Completer<void>();
+      final login = provider.login(loginId: 'testuser01', password: 'pw');
+
+      expect(await provider.logout(), isNull);
+      expect(repository.logoutCallCount, 0);
+
+      gate.complete();
+      expect(await login, isTrue);
+      expect(provider.isAuthenticated, isTrue);
     });
   });
 

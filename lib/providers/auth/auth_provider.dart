@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'
     show Notifier, NotifierProvider, Provider;
 
 import '../../repositories/auth/auth_repository.dart';
-import '../../core/network/api_exception.dart';
 import 'auth_action_runner.dart';
 import 'auth_request_guard.dart';
 import 'auth_session_restorer.dart';
@@ -249,36 +248,102 @@ class AuthNotifier extends Notifier<AuthState> {
     );
   }
 
-  /// 로그아웃
-  Future<void> logout() async {
+  /// 기기 토큰 삭제에 실패한 로그아웃이 끝낸 세션 번호. 다시 시도는 이 번호가
+  /// 현재 세션일 때만 토큰을 지운다. 지울 것이 없으면 null.
+  int? _pendingLocalClearSessionId;
+
+  /// 진행 중인 기기 토큰 삭제 재시도. 겹친 호출은 이 결과를 함께 기다린다.
+  Future<bool>? _ongoingLocalClearRetry;
+
+  /// 로그아웃. 기기에 저장된 로그인 정보(토큰)를 지웠으면 true, 재시도까지 실패해 남았으면 false.
+  /// 어느 경우든 화면의 인증 상태는 로그아웃으로 바뀐다.
+  ///
+  /// 이미 로그아웃이나 다른 인증 작업이 진행 중이면 아무것도 하지 않고 null을 돌려준다.
+  /// 호출부는 이때 결과 안내를 띄우지 않는다(진행 중인 작업의 안내를 덮지 않도록).
+  Future<bool?> logout() async {
     if (state.isLoading) {
-      return;
+      return null;
     }
 
     _startLoading();
 
-    String? errorMessage;
+    var localTokensCleared = true;
 
     try {
+      // 서버 로그아웃은 기다리지 않으므로, 여기서 던지는 오류는 기기의 토큰 삭제가
+      // 재시도까지 실패한 경우뿐이다.
       await _authRepository.logout();
-    } on ApiException catch (error) {
-      debugPrint('로그아웃 API 호출 실패: $error');
-
-      errorMessage = error.message;
     } catch (error) {
-      debugPrint('로그아웃 API 호출 실패: $error');
+      debugPrint('로그아웃 중 기기 토큰 삭제 실패: $error');
 
-      errorMessage = '로그아웃 중 오류가 발생했습니다.';
+      localTokensCleared = false;
     } finally {
+      // 로그아웃이 끝낸 세션 번호. 이 세션 동안만 다시 시도로 토큰을 지운다.
+      _pendingLocalClearSessionId = localTokensCleared
+          ? null
+          : _authRepository.sessionId;
+
       // AuthRepository가 로컬 토큰을 먼저 지우고 서버 로그아웃은 따로 보내므로(로컬 우선)
       // 연결 상태와 관계없이 Flutter 인증 상태도 바로 로그아웃으로 바꾼다.
-      _update(
-        (s) => s.withoutUser().copyWith(
-          errorMessage: errorMessage,
-          isLoading: false,
-        ),
-      );
+      // 삭제 실패 안내는 호출부의 SnackBar가 맡으므로 오류 문구는 남기지 않는다
+      // (로그인 화면 등이 읽는 errorMessage에 이전 로그아웃 오류가 보이지 않도록).
+      _update((s) => s.withoutUser().copyWith(isLoading: false));
     }
+
+    return localTokensCleared;
+  }
+
+  /// 로그아웃 때 기기에 남은 로그인 정보(토큰)를 다시 지운다.
+  /// 더 지울 것이 없으면 true, 다시 실패했으면 false.
+  ///
+  /// 화면은 이미 로그아웃 상태다. 토큰이 남아 있으면 다음 실행 때 세션이 복구될 수
+  /// 있으므로 사용자가 다시 시도할 수 있게 한다. 그 사이 새로 로그인했으면 새 세션의
+  /// 토큰이므로 지우지 않는다. 진행 중인 재시도가 있으면 그 결과를 함께 기다린다.
+  Future<bool> retryClearLocalTokens() {
+    return _ongoingLocalClearRetry ??= _retryClearLocalTokens().whenComplete(
+      () => _ongoingLocalClearRetry = null,
+    );
+  }
+
+  Future<bool> _retryClearLocalTokens() async {
+    final sessionId = _pendingLocalClearSessionId;
+
+    if (sessionId == null) {
+      return true;
+    }
+
+    try {
+      // 그 사이 로그인으로 세션이 바뀌었으면 새 세션의 토큰이므로 지우지 않는다.
+      await _authRepository.clearTokensIfSession(sessionId);
+    } on TokenClearException catch (error) {
+      debugPrint('기기 토큰 삭제 재시도 실패: $error');
+
+      // 실패한 삭제도 세션 번호를 바꾸므로, 다음 재시도의 기준을 그 삭제가 바꾼 번호로
+      // 옮긴다. 지금의 저장소 번호는 그 사이 대기 중이던 로그인 번호일 수 있어 쓰지 않는다.
+      // 그 사이 다른 로그아웃이 기준을 바꿨으면 그대로 둔다.
+      if (_pendingLocalClearSessionId == sessionId) {
+        _pendingLocalClearSessionId = error.sessionId;
+      }
+
+      return false;
+    } catch (error) {
+      debugPrint('기기 토큰 삭제 재시도 실패: $error');
+
+      // 삭제 실패 번호를 알 수 없는 오류. 다음 재시도의 기준을 지금 번호로 옮긴다.
+      // 그 사이 다른 로그아웃이 기준을 바꿨으면 그대로 둔다.
+      if (_pendingLocalClearSessionId == sessionId) {
+        _pendingLocalClearSessionId = _authRepository.sessionId;
+      }
+
+      return false;
+    }
+
+    // 지웠거나 세션이 바뀌어 지울 필요가 없어졌다.
+    if (_pendingLocalClearSessionId == sessionId) {
+      _pendingLocalClearSessionId = null;
+    }
+
+    return true;
   }
 
   /// 로그인이 필요한 요청을 실행한다(장소 검색 등).

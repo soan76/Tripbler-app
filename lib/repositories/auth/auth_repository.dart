@@ -340,6 +340,7 @@ class AuthRepository {
   ///
   /// 세션 만료 처리나 탈퇴처럼 늦게 끝날 수 있는 작업이 그 사이 로그인한
   /// 다른 계정의 토큰을 지우지 않게 한다. 지웠으면 true.
+  /// 저장소 삭제가 실패하면 [TokenClearException]을 던진다.
   Future<bool> clearTokensIfSession(int sessionId) {
     return _session.clearTokensIfSession(sessionId);
   }

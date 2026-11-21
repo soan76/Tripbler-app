@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tripbler/repositories/auth/auth_exceptions.dart';
 import 'package:tripbler/repositories/auth/auth_token_session.dart';
 import 'package:tripbler/services/auth/token_storage_service.dart';
 
@@ -114,6 +115,49 @@ void main() {
     expect(session.sessionId, 1);
     expect(storage.clearCallCount, 1);
     expect(storage.accessToken, isNull);
+  });
+
+  test('clearTokensIfSession은 삭제가 실패하면 올린 번호와 원래 오류를 담아 던진다', () async {
+    storage.clearFailuresRemaining = 1;
+
+    final error = await session
+        .clearTokensIfSession(0)
+        .then<Object?>((_) => null, onError: (Object e) => e);
+
+    expect(error, isA<TokenClearException>());
+    final clearError = error! as TokenClearException;
+    expect(clearError.sessionId, 1);
+    expect(clearError.cause, isA<StateError>());
+    expect(clearError.toString(), contains('테스트용 저장소 삭제 실패'));
+    expect(session.sessionId, 1);
+    expect(storage.accessToken, 'a-access');
+  });
+
+  test('clearTokensIfSession 실패의 번호는 뒤이어 대기 중이던 로그인 번호가 아니다', () async {
+    final gate = Completer<void>();
+    storage
+      ..clearGate = gate
+      ..clearFailuresRemaining = 1;
+
+    final clearing = session
+        .clearTokensIfSession(0)
+        .then<Object?>((_) => null, onError: (Object e) => e);
+    final login = session.startSession(
+      accessToken: 'b-access',
+      refreshToken: 'b-refresh',
+      tokenType: 'Bearer',
+    );
+
+    await pumpEventQueue();
+    gate.complete();
+    storage.clearGate = null;
+    await login;
+
+    final error = await clearing;
+
+    expect(session.sessionId, 2);
+    expect((error! as TokenClearException).sessionId, 1);
+    expect(storage.accessToken, 'b-access');
   });
 
   test('로그아웃 로컬 부분은 삭제가 한 번 실패하면 다시 시도해 성공한다', () async {

@@ -11,6 +11,7 @@ import '../../widgets/user/user_account_actions.dart';
 import '../../widgets/user/account_deletion_dialog.dart';
 import '../auth/find_password_screen.dart';
 import '../settings_screen.dart';
+import '../../widgets/auth/logout_feedback.dart';
 
 class UserPage extends ConsumerStatefulWidget {
   const UserPage({super.key});
@@ -184,15 +185,24 @@ class _UserPageState extends ConsumerState<UserPage> {
 
   /// 로그아웃을 처리한다.
   Future<void> _handleLogout() async {
-    await ref.read(authProvider.notifier).logout();
+    // 로그아웃 뒤 이 화면이 닫혀도 안내와 다시 시도를 할 수 있게 미리 잡아 둔다.
+    final messenger = ScaffoldMessenger.of(context);
+    final notifier = ref.read(authProvider.notifier);
 
-    if (!mounted) {
+    final localTokensCleared = await notifier.logout();
+
+    // 이미 진행 중인 인증 작업이 있어 아무것도 하지 않았으면 화면과 안내를 그대로 둔다.
+    if (localTokensCleared == null || !mounted) {
       return;
     }
 
     Navigator.of(context).popUntil((route) => route.isFirst);
 
-    _showMessage('로그아웃되었습니다.');
+    showLogoutResult(
+      messenger: messenger,
+      notifier: notifier,
+      localTokensCleared: localTokensCleared,
+    );
   }
 
   /// 계정 탈퇴를 처리한다.

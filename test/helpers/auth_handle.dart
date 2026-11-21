@@ -48,7 +48,9 @@ class AuthHandle extends ChangeNotifier {
 
   Future<void> retryRestoreSession() => _notifier.retryRestoreSession();
 
-  Future<void> logout() => _notifier.logout();
+  Future<bool?> logout() => _notifier.logout();
+
+  Future<bool> retryClearLocalTokens() => _notifier.retryClearLocalTokens();
 
   Future<void> clearSession() => _notifier.clearSession();
 

@@ -83,14 +83,26 @@ class AuthTokenSession {
   ///
   /// 세션 만료 처리나 탈퇴처럼 늦게 끝날 수 있는 작업이 그 사이 로그인한
   /// 다른 계정의 토큰을 지우지 않게 한다. 지웠으면 true.
+  ///
+  /// 저장소 삭제가 실패하면 원래 오류를 [TokenClearException]으로 감싸 던진다(스택 유지).
+  /// 번호는 이미 올린 상태이며, 올린 번호를 순차 경로 안에서 읽어 담는다
+  /// (호출부가 catch에서 [sessionId]를 읽으면 그 사이 대기 중이던 로그인 번호일 수 있다).
   Future<bool> clearTokensIfSession(int sessionId) {
     return _serialized(() async {
       if (_sessionId != sessionId) {
         return false;
       }
 
-      _sessionId++;
-      await _tokenStorageService.clearTokens();
+      final endedSessionId = ++_sessionId;
+
+      try {
+        await _tokenStorageService.clearTokens();
+      } catch (error, stackTrace) {
+        Error.throwWithStackTrace(
+          TokenClearException(sessionId: endedSessionId, cause: error),
+          stackTrace,
+        );
+      }
 
       return true;
     });

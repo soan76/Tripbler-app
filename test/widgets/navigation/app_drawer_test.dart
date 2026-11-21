@@ -20,6 +20,9 @@ class _FakeAuth extends AuthNotifier {
     this.profileImageUrl,
     this.isLoading = false,
     this.logoutGate,
+    this.localTokensCleared = true,
+    this.retryResults = const [],
+    this.logoutSkipped = false,
   });
 
   final bool isAuthenticated;
@@ -32,6 +35,24 @@ class _FakeAuth extends AuthNotifier {
   final Future<void>? logoutGate;
 
   int logoutCount = 0;
+
+  /// 로그아웃 때 기기 토큰 삭제가 성공했는지.
+  final bool localTokensCleared;
+
+  /// 다시 시도마다 차례로 돌려줄 결과. 다 쓰면 true.
+  final List<bool> retryResults;
+  int retryCount = 0;
+
+  /// 주어지면 다시 시도가 이 Future가 끝날 때까지 기다린다.
+  Future<void>? retryGate;
+
+  /// true면 실제 [AuthNotifier.logout]이 다른 작업 진행 중일 때처럼 아무것도 하지 않고 null.
+  final bool logoutSkipped;
+
+  /// 새로 로그인한 것처럼 로그인 상태로 바꾼다.
+  void signIn() {
+    state = state.copyWith(isAuthenticated: true, nickname: '새 사용자');
+  }
 
   @override
   AuthState build() {
@@ -48,11 +69,25 @@ class _FakeAuth extends AuthNotifier {
   /// 실제 [AuthNotifier.logout]처럼 진행 중에는 [AuthState.isLoading]을 켜고,
   /// 끝나면 로그인 상태를 지운다.
   @override
-  Future<void> logout() async {
+  Future<bool?> logout() async {
     logoutCount++;
+    if (logoutSkipped) {
+      return null;
+    }
     state = state.copyWith(isLoading: true);
     await logoutGate;
     state = state.withoutUser().copyWith(isLoading: false);
+    return localTokensCleared;
+  }
+
+  @override
+  Future<bool> retryClearLocalTokens() async {
+    await retryGate;
+    final result = retryCount < retryResults.length
+        ? retryResults[retryCount]
+        : true;
+    retryCount++;
+    return result;
   }
 }
 
@@ -202,7 +237,8 @@ void main() {
   testWidgets('로그인하지 않았으면 로그인 진입을 두고 로그아웃은 없다', (tester) async {
     await _openDrawer(tester, _FakeAuth(isAuthenticated: false));
 
-    expect(find.text('로그인'), findsOneWidget);
+    expect(find.text('로그인이 필요합니다'), findsOneWidget);
+    expect(find.text('로그인하고 계정 기능을 이용하세요.'), findsOneWidget);
     expect(find.text('설정'), findsOneWidget);
     expect(find.text('로그아웃'), findsNothing);
   });
@@ -217,6 +253,113 @@ void main() {
     expect(auth.logoutCount, 1);
     expect(find.byType(Drawer), findsNothing);
     expect(find.text('로그아웃되었습니다.'), findsOneWidget);
+  });
+
+  testWidgets('사용자 이름만 굵게, 아이디와 미로그인 제목은 기본 굵기다', (tester) async {
+    FontWeight? weightOf(String text) =>
+        tester.widget<Text>(find.text(text)).style?.fontWeight;
+
+    await _openDrawer(
+      tester,
+      _FakeAuth(nickname: '여행자', loginId: 'tripbler_user'),
+    );
+    expect(weightOf('여행자'), FontWeight.w600);
+    expect(weightOf('tripbler_user'), isNot(FontWeight.w600));
+
+    // 다른 인증 대역으로 새로 그리려면 기존 트리를 먼저 걷어 낸다.
+    await tester.pumpWidget(const SizedBox());
+    await _openDrawer(tester, _FakeAuth(isAuthenticated: false));
+    expect(weightOf('로그인이 필요합니다'), isNot(FontWeight.w600));
+  });
+
+  testWidgets('기기 로그인 정보를 지우지 못하면 안내와 다시 시도를 띄운다', (tester) async {
+    final auth = _FakeAuth(
+      nickname: '여행자',
+      loginId: 'tripbler_user',
+      localTokensCleared: false,
+      retryResults: const [false, true],
+    );
+    await _openDrawer(tester, auth);
+
+    await tester.tap(find.text('로그아웃'));
+    await tester.pumpAndSettle();
+
+    const failed = '기기에 저장된 로그인 정보를 삭제하지 못했습니다. 다시 시도해 주세요.';
+    expect(find.text(failed), findsOneWidget);
+    expect(find.text('로그아웃되었습니다.'), findsNothing);
+
+    // 다시 시도도 실패하면 같은 안내를 다시 띄운다.
+    await tester.tap(find.text('다시 시도'));
+    await tester.pumpAndSettle();
+    expect(auth.retryCount, 1);
+    expect(find.text(failed), findsOneWidget);
+
+    // 성공하면 로그아웃 안내로 바뀐다.
+    await tester.tap(find.text('다시 시도'));
+    await tester.pumpAndSettle();
+    expect(auth.retryCount, 2);
+    expect(find.text(failed), findsNothing);
+    expect(find.text('로그아웃되었습니다.'), findsOneWidget);
+  });
+
+  testWidgets('로그인 정보 삭제 실패 안내가 떠 있는 동안 새로 로그인하면 안내를 닫는다', (tester) async {
+    final auth = _FakeAuth(
+      nickname: '여행자',
+      loginId: 'tripbler_user',
+      localTokensCleared: false,
+    );
+    await _openDrawer(tester, auth);
+
+    await tester.tap(find.text('로그아웃'));
+    await tester.pumpAndSettle();
+    const failed = '기기에 저장된 로그인 정보를 삭제하지 못했습니다. 다시 시도해 주세요.';
+    expect(find.text(failed), findsOneWidget);
+
+    auth.signIn();
+    await tester.pumpAndSettle();
+
+    expect(find.text(failed), findsNothing);
+    expect(find.text('다시 시도'), findsNothing);
+    expect(auth.retryCount, 0);
+  });
+
+  testWidgets('다시 시도하는 사이 새로 로그인하면 로그아웃 안내를 띄우지 않는다', (tester) async {
+    final gate = Completer<void>();
+    final auth = _FakeAuth(
+      nickname: '여행자',
+      loginId: 'tripbler_user',
+      localTokensCleared: false,
+    )..retryGate = gate.future;
+    await _openDrawer(tester, auth);
+
+    await tester.tap(find.text('로그아웃'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('다시 시도'));
+    await tester.pump();
+
+    auth.signIn();
+    gate.complete();
+    await tester.pumpAndSettle();
+
+    expect(auth.retryCount, 1);
+    expect(find.text('로그아웃되었습니다.'), findsNothing);
+    expect(find.text('기기에 저장된 로그인 정보를 삭제하지 못했습니다. 다시 시도해 주세요.'), findsNothing);
+  });
+
+  testWidgets('로그아웃이 아무것도 하지 않았으면 안내를 띄우지 않는다', (tester) async {
+    final auth = _FakeAuth(
+      nickname: '여행자',
+      loginId: 'tripbler_user',
+      logoutSkipped: true,
+    );
+    await _openDrawer(tester, auth);
+
+    await tester.tap(find.text('로그아웃'));
+    await tester.pumpAndSettle();
+
+    expect(auth.logoutCount, 1);
+    expect(find.text('로그아웃되었습니다.'), findsNothing);
+    expect(find.byType(SnackBar), findsNothing);
   });
 
   testWidgets('로그아웃이 서랍이 닫힌 뒤에 끝나도 안내를 띄운다', (tester) async {
@@ -373,7 +516,7 @@ void main() {
     await _expectOpens(
       tester,
       _FakeAuth(isAuthenticated: false),
-      '로그인',
+      '로그인이 필요합니다',
       LoginScreen,
     );
   });
@@ -413,5 +556,68 @@ void main() {
     // 바뀐 스크롤 위치는 다음 프레임에 반영된다.
     await tester.pump();
     expect(find.text('로그아웃').hitTestable(), findsOneWidget);
+  });
+
+  testWidgets('작은 화면·큰 글자에서도 미로그인 안내는 잘리지 않고 줄을 바꾼다', (tester) async {
+    await _openDrawer(
+      tester,
+      _FakeAuth(isAuthenticated: false),
+      size: const Size(320, 640),
+      textScale: 2,
+    );
+    expect(tester.takeException(), isNull);
+
+    for (final text in ['로그인이 필요합니다', '로그인하고 계정 기능을 이용하세요.']) {
+      final paragraph = tester.renderObject<RenderParagraph>(find.text(text));
+      expect(paragraph.didExceedMaxLines, isFalse, reason: text);
+    }
+    // 이 크기에서는 설명이 한 줄에 다 들어가지 않아 실제로 줄을 바꾼다.
+    final subtitle = tester.getSize(find.text('로그인하고 계정 기능을 이용하세요.'));
+    final line = tester
+        .renderObject<RenderParagraph>(find.text('로그인하고 계정 기능을 이용하세요.'))
+        .preferredLineHeight;
+    expect(subtitle.height, greaterThan(line * 1.5));
+  });
+
+  testWidgets('로그인 정보 삭제 실패 안내는 작은 화면·큰 글자에서도 넘치지 않는다', (tester) async {
+    await _openDrawer(
+      tester,
+      _FakeAuth(
+        nickname: '여행자',
+        loginId: 'tripbler_user',
+        localTokensCleared: false,
+      ),
+      size: const Size(320, 640),
+      textScale: 2,
+    );
+
+    await tester.tap(find.text('로그아웃'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    const failed = '기기에 저장된 로그인 정보를 삭제하지 못했습니다. 다시 시도해 주세요.';
+    expect(
+      tester.renderObject<RenderParagraph>(find.text(failed)).didExceedMaxLines,
+      isFalse,
+    );
+    final snackBar = tester.getRect(find.byType(SnackBar));
+    for (final finder in [
+      find.text(failed),
+      find.text('다시 시도'),
+      find.byIcon(Icons.close),
+    ]) {
+      final rect = tester.getRect(finder);
+      expect(snackBar.contains(rect.topLeft), isTrue);
+      expect(snackBar.contains(rect.bottomRight - const Offset(1, 1)), isTrue);
+    }
+    // 다시 시도와 닫기는 터치 영역 48 이상.
+    expect(
+      tester.getSize(find.widgetWithText(TextButton, '다시 시도')).height,
+      greaterThanOrEqualTo(48),
+    );
+    expect(
+      tester.getSize(find.widgetWithIcon(IconButton, Icons.close)).height,
+      greaterThanOrEqualTo(48),
+    );
   });
 }
