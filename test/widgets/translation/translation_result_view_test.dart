@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/core/theme/app_theme.dart';
 import 'package:tripbler/models/translation/line_translation_result.dart';
-import 'package:tripbler/providers/translation_provider.dart';
+import 'package:tripbler/providers/translation/translation_provider.dart';
 import 'package:tripbler/widgets/translation/translation_line_list.dart';
 import 'package:tripbler/widgets/translation/translation_result_view.dart';
 

@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'
     show ConsumerState, ConsumerStatefulWidget;
 
 import '../domain/translation/capture_frame.dart';
-import '../providers/translation_provider.dart';
+import '../providers/translation/translation_provider.dart';
 import '../widgets/translation/initial_camera_permission_view.dart';
 import '../widgets/translation/translation_camera_preview_card.dart';
 import '../widgets/translation/translation_header.dart';

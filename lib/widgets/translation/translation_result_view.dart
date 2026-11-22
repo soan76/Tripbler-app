@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../models/translation/line_translation_result.dart';
-import '../../providers/translation_provider.dart';
+import '../../providers/translation/translation_provider.dart';
 import 'translation_header.dart';
 import 'translation_line_list.dart';
 import 'translation_result_cards.dart';

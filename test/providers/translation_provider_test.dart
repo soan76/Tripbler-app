@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderContainer;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:tripbler/providers/translation_provider.dart';
+import 'package:tripbler/providers/translation/translation_provider.dart';
 import 'package:tripbler/services/ocr_service.dart';
 import 'package:tripbler/services/translation_service.dart';
 

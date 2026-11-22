@@ -4,9 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderContainer;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/core/network/api_exception.dart';
 import 'package:tripbler/domain/translation/capture_frame.dart';
+import 'package:tripbler/domain/translation/line_request_limits.dart';
 import 'package:tripbler/models/translation/line_translation_result.dart';
 import 'package:tripbler/providers/auth/auth_provider.dart';
-import 'package:tripbler/providers/translation_provider.dart';
+import 'package:tripbler/providers/translation/translation_provider.dart';
 import 'package:tripbler/repositories/auth/auth_exceptions.dart';
 import 'package:tripbler/services/line_translation_api_service.dart';
 import 'package:tripbler/services/ocr_service.dart';
@@ -501,19 +502,14 @@ void main() {
 
   group('linesForRequest', () {
     test('빈 줄은 빼고 앞뒤 공백을 지운다', () {
-      final (lines, omitted) = TranslationNotifier.linesForRequest([
-        ' a ',
-        '',
-        '  ',
-        'b',
-      ]);
+      final (lines, omitted) = linesForRequest([' a ', '', '  ', 'b']);
 
       expect(lines, ['a', 'b']);
       expect(omitted, 0);
     });
 
     test('50줄을 넘으면 뒤 줄은 빼고 뺀 줄 수를 돌려준다', () {
-      final (lines, omitted) = TranslationNotifier.linesForRequest([
+      final (lines, omitted) = linesForRequest([
         for (var i = 0; i < 53; i++) 'line $i',
       ]);
 
@@ -524,13 +520,13 @@ void main() {
 
     test('200자를 넘는 줄은 자르되 두 단위 문자를 반으로 자르지 않는다', () {
       final long = '${'a' * 199}😀tail';
-      final (lines, _) = TranslationNotifier.linesForRequest([long]);
+      final (lines, _) = linesForRequest([long]);
 
       expect(lines.single, 'a' * 199);
     });
 
     test('합계 5000자를 넘기는 줄부터는 뺀다', () {
-      final (lines, omitted) = TranslationNotifier.linesForRequest([
+      final (lines, omitted) = linesForRequest([
         for (var i = 0; i < 26; i++) 'x' * 200,
       ]);
 

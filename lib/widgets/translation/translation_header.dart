@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../providers/translation_provider.dart';
+import '../../providers/translation/translation_provider.dart';
+
 // 카메라 번역 제목 + 언어 선택 영역
 // 번역 화면의 헤더를 구성하는 위젯
 class TranslationHeader extends StatelessWidget {
@@ -23,7 +24,6 @@ class TranslationHeader extends StatelessWidget {
   // 헤더 위젯을 구성하는 build 메서드
   @override
   Widget build(BuildContext context) {
-
     final targetLanguages = languages
         .where((language) => language.code != 'auto')
         .toList();
@@ -68,6 +68,7 @@ class TranslationHeader extends StatelessWidget {
     );
   }
 }
+
 // 언어 선택 드롭다운 위젯
 class _LanguageDropdown extends StatelessWidget {
   final String label;
