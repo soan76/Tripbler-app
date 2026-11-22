@@ -1,5 +1,77 @@
 import 'package:flutter/material.dart';
 
+import '../../providers/translation/translation_provider.dart';
+import 'initial_camera_permission_view.dart';
+
+/// 카메라 대기 화면 전 단계(권한 확인·요청·거부, 카메라 준비·오류)를 상태에 맞게 보여 준다.
+///
+/// 결과 화면과 카메라 대기 화면(cameraReady·capturing) 상태는 화면이 따로 그리므로 여기서는 빈 칸이다.
+class TranslationCameraStatusView extends StatelessWidget {
+  final TranslationStatus status;
+  final String? errorMessage;
+  final Future<void> Function() onRequestPermission;
+  final Future<void> Function() onOpenSettings;
+  final Future<void> Function() onRetry;
+
+  const TranslationCameraStatusView({
+    super.key,
+    required this.status,
+    required this.errorMessage,
+    required this.onRequestPermission,
+    required this.onOpenSettings,
+    required this.onRetry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    switch (status) {
+      case TranslationStatus.checkingPermission:
+        return const TranslationLoadingView(message: '카메라 권한을 확인하고 있습니다.');
+
+      case TranslationStatus.permissionRequired:
+        return InitialCameraPermissionView(
+          onRequestPermission: onRequestPermission,
+        );
+
+      case TranslationStatus.permissionDenied:
+        return TranslationPermissionView(
+          title: '카메라 권한이 허용되지 않았습니다',
+          description: '카메라 번역을 사용하려면 카메라 권한을 허용해야 합니다.',
+          primaryButtonText: '다시 권한 요청',
+          onPrimaryPressed: onRequestPermission,
+        );
+
+      case TranslationStatus.permissionPermanentlyDenied:
+        return TranslationPermissionView(
+          title: '설정에서 카메라 권한을 허용해 주세요',
+          description:
+              '카메라 권한이 차단되어 있습니다. 기기 설정에서 이 앱의 카메라 권한을 허용한 뒤 다시 돌아와 주세요.',
+          primaryButtonText: '앱 설정 열기',
+          onPrimaryPressed: onOpenSettings,
+        );
+
+      case TranslationStatus.initializingCamera:
+        return const TranslationLoadingView(message: '카메라를 준비하고 있습니다.');
+
+      case TranslationStatus.cameraUnavailable:
+        return TranslationErrorView(
+          message:
+              errorMessage ?? '카메라를 시작할 수 없습니다.\n카메라 상태를 확인한 뒤 다시 시도해 주세요.',
+          buttonText: '다시 시도',
+          onPressed: onRetry,
+        );
+
+      case TranslationStatus.cameraReady:
+      case TranslationStatus.capturing:
+      case TranslationStatus.recognizing:
+      case TranslationStatus.translating:
+      case TranslationStatus.completed:
+      case TranslationStatus.failed:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
 // 로딩 화면
 class TranslationLoadingView extends StatelessWidget {
   final String message;
