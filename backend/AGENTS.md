@@ -36,6 +36,7 @@
   | `google.places.api-key` | `GOOGLE_PLACES_APIKEY` |
   | `google.translation.api-key` | `GOOGLE_TRANSLATION_APIKEY` |
   | `google.oauth.client-id` | `GOOGLE_OAUTH_CLIENTID` |
+  | `anthropic.api-key` (Claude, 줄별 번역) | `ANTHROPIC_API_KEY` |
 
 ## 아키텍처
 
@@ -44,7 +45,7 @@
 | 국가 통화 환율 + 기간별 시세 | `exchange` | Frankfurter (최신 환율만 대체 출처 fawazahmed0 currency-api) |
 | 암호화폐 시세 + 기간별 시세 | `crypto` | CoinGecko |
 | 장소 검색·상세(로그인 필요, 사용자별 호출 제한) / 주변 장소(외부 접근 차단) | `place` | Google Places |
-| 텍스트 번역 | `translation` | Google Translation |
+| 텍스트 번역 / 찍기 모드 줄별 번역·한글 발음(로그인 필요, 사용자·IP별 호출 제한) | `translation` | Google Translation / Claude API |
 | 인증, 회원, 구글 계정 연동, 프로필 이미지 | `auth`, `user` | 인증 코드 메일은 Gmail SMTP |
 
 기능 패키지마다 `controller → service → client` 구조다. `*Client` 인터페이스와 외부 서비스별 구현체(예: `FrankfurterExchangeRateClient`)가 있고, `dto/`에 API 응답과 외부 응답 형식을 둔다. 외부 API 키는 서버에만 두며 앱으로 내려보내지 않는다. 공통 요소는 `common/`에 있다.
@@ -52,4 +53,4 @@
 - `common/chart/HistoryDownsampler`: 기간별 시세 엔드포인트는 `maxPoints`(기본 300, 16~1000)를 받는다. 응답할 때만 샘플링하며 첫·마지막 점과 구간별 최저·최고점을 보존한다.
 - `common/exception`: `BusinessException` + `ErrorCode` → `GlobalExceptionHandler` → `ErrorResponse`. 외부 서비스 실패는 전용 예외(`ExchangeProviderException`, `PlacesProviderException`, `TranslationProviderException`)를 쓴다.
 - `common/config/SecurityConfig`: JWT 액세스 토큰을 쓰는 OAuth2 리소스 서버. 리프레시 토큰은 DB(`auth/RefreshToken`)에 저장하고, 인증 없이 열리는 엔드포인트는 여기서 지정한다.
-- 추가 API 설명: `docs/crypto-history-api.md`, `docs/places-api.md`(장소 API 계약, 호출 제한, 필드 마스크 비용 등급, 오류 기준), `docs/auth-logout-api.md`(로그아웃 계약: Refresh Token 본문, 일치하는 토큰만 폐기), `docs/auth-rate-limit-api.md`(공개 인증 API 요청 제한 429·`Retry-After`, 인증코드 5회 오답 폐기).
+- 추가 API 설명: `docs/crypto-history-api.md`, `docs/places-api.md`(장소 API 계약, 호출 제한, 필드 마스크 비용 등급, 오류 기준), `docs/auth-logout-api.md`(로그아웃 계약: Refresh Token 본문, 일치하는 토큰만 폐기), `docs/auth-rate-limit-api.md`(공개 인증 API 요청 제한 429·`Retry-After`, 인증코드 5회 오답 폐기), `docs/translation-lines-api.md`(찍기 모드 줄별 번역·발음·가격 원화 계약, 호출 제한, Claude 연동).

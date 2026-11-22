@@ -32,7 +32,20 @@ public enum RateLimitBucket {
     PLACE_SEARCH_GLOBAL_HOUR(125, Duration.ofMinutes(60), Duration.ZERO, true),
     PLACE_SEARCH_GLOBAL_DAY(1000, Duration.ofHours(24), Duration.ZERO, true),
     PLACE_DETAILS_GLOBAL_HOUR(250, Duration.ofMinutes(60), Duration.ZERO, true),
-    PLACE_DETAILS_GLOBAL_DAY(2000, Duration.ofHours(24), Duration.ZERO, true);
+    PLACE_DETAILS_GLOBAL_DAY(2000, Duration.ofHours(24), Duration.ZERO, true),
+
+    // 번역 찍기 모드의 줄별 번역(유료 Claude 호출). 키는 JWT sub와 서버 전체. 한 번 찍을 때 1회이고,
+    // 언어를 바꾸면 다시 부른다. 숫자는 개발 초기 설정값이다.
+    TRANSLATION_LINES_USER_MINUTE(10, Duration.ofMinutes(1), Duration.ZERO),
+    TRANSLATION_LINES_USER_DAY(100, Duration.ofHours(24), Duration.ZERO),
+    // 같은 IP(접속 주소)에서의 합산 한도. 가입 메일 인증이 없어 계정을 여러 개 만들어 사용자별 한도를 피하고
+    // 서버 전체 한도를 채워 모두를 막는 것을 늦춘다. 하루 한도 300은 계정 3개분이다. 공용 와이파이·통신사
+    // NAT 뒤의 여러 사람이 한 IP를 쓸 수 있어 사용자 한도보다 넉넉히 둔다. 서버 전체 하루 한도(2000)를
+    // 채우려면 IP가 7개 이상 필요하다. 근본 대책(가입 인증)은 docs/translation-lines-api.md의 남은 일이다.
+    TRANSLATION_LINES_IP_MINUTE(20, Duration.ofMinutes(1), Duration.ZERO),
+    TRANSLATION_LINES_IP_DAY(300, Duration.ofHours(24), Duration.ZERO),
+    TRANSLATION_LINES_GLOBAL_HOUR(300, Duration.ofMinutes(60), Duration.ZERO, true),
+    TRANSLATION_LINES_GLOBAL_DAY(2000, Duration.ofHours(24), Duration.ZERO, true);
 
     private final int maxRequests;
     private final Duration window;

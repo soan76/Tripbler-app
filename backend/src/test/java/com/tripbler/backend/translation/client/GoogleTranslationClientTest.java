@@ -187,4 +187,13 @@ class GoogleTranslationClientTest {
 
         mockServer.verify();
     }
+
+    @Test
+    void HTML_엔티티는_한_번만_풀고_amp는_마지막에_푼다() {
+        // "&amp;lt;"는 글자 그대로의 "&lt;"다. "<"로 두 번 풀면 안 된다.
+        assertEquals(
+            "&lt; < > \" ' &",
+            GoogleTranslationClient.decodeHtmlEntities("&amp;lt; &lt; &gt; &quot; &#39; &amp;")
+        );
+    }
 }

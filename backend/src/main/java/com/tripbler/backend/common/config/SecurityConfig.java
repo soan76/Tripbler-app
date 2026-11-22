@@ -87,6 +87,12 @@ public class SecurityConfig {
                         "/api/v1/places/**"
                     ).authenticated()
 
+                    // 찍기 모드 줄별 번역은 유료 Claude 호출이라 로그인 사용자만 쓴다.
+                    // 아래 permitAll보다 먼저 와야 한다(먼저 맞는 규칙이 적용됨).
+                    .requestMatchers(
+                        "/api/v1/translation/lines"
+                    ).authenticated()
+
                     .requestMatchers(
                         "/api/v1/translation/**"
                     ).permitAll()

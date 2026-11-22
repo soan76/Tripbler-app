@@ -120,6 +120,7 @@ Google 관련 속성은 `application.properties`에 없고, Spring 규칙에 따
 | `PROFILE_IMAGE_STORAGE_TYPE` | `local` |
 | `PROFILE_IMAGE_LOCAL_ROOT` | `./uploads` |
 | `PROFILE_IMAGE_PUBLIC_BASE_URL` | `http://localhost:8080/uploads` |
+| `ANTHROPIC_API_KEY` | 없음. 없으면 서버는 정상으로 뜨고, 번역 찍기 모드의 줄별 번역(`POST /api/v1/translation/lines`)은 Google 번역으로 대체합니다(한글 발음 없음) |
 
 DB 주소와 사용자 이름은 `application.properties`의 `spring.datasource.url`, `spring.datasource.username` 값을 씁니다.
 
