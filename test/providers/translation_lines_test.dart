@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart' show ProviderContainer;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/core/network/api_exception.dart';
+import 'package:tripbler/domain/translation/capture_frame.dart';
 import 'package:tripbler/models/translation/line_translation_result.dart';
 import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/providers/translation_provider.dart';
@@ -15,20 +16,37 @@ import '../helpers/fake_auth_notifier.dart';
 
 /// 줄 단위 인식과 통번역 인식을 각각 기록한다.
 class _FakeOcrService extends OcrService {
-  _FakeOcrService({this.lines = const <String>[], this.text = ''});
+  _FakeOcrService({
+    this.lines = const <String>[],
+    this.text = '',
+    this.frameFits = true,
+  });
 
   final List<String> lines;
   final String text;
+
+  /// 프레임을 요청받았을 때 맞출 수 있는 사진인지(false면 사진 전체를 읽은 것으로 돌려준다).
+  final bool frameFits;
   int lineCalls = 0;
   int textCalls = 0;
 
+  /// 마지막 줄 인식에서 프레임 안만 읽으라고 했는지.
+  bool? lastOnlyInCaptureFrame;
+
+  /// 마지막 줄 인식에 넘어온 미리보기 비율.
+  double? lastCameraPreviewAspect;
+
   @override
-  Future<List<String>> recognizeLines({
+  Future<CaptureFrameLines> recognizeLines({
     required String imagePath,
     required String sourceLanguageCode,
+    bool onlyInCaptureFrame = false,
+    double? cameraPreviewAspect,
   }) async {
     lineCalls++;
-    return lines;
+    lastOnlyInCaptureFrame = onlyInCaptureFrame;
+    lastCameraPreviewAspect = cameraPreviewAspect;
+    return (lines: lines, frameApplied: onlyInCaptureFrame && frameFits);
   }
 
   @override
@@ -110,8 +128,13 @@ void main() {
   late ProviderContainer container;
   late Object? runnerError;
 
-  ProviderContainer create({required bool signedIn, List<String>? lines}) {
+  ProviderContainer create({
+    required bool signedIn,
+    List<String>? lines,
+    bool frameFits = true,
+  }) {
     ocr = _FakeOcrService(
+      frameFits: frameFits,
       lines: lines ?? const ['醤油ラーメン 980円', '食券'],
       text: '醤油ラーメン 980円\n食券',
     );
@@ -163,6 +186,109 @@ void main() {
     expect(state().lineResult!.lines, hasLength(2));
     expect(state().translatedText, 'ko:醤油ラーメン 980円\nko:食券');
     expect(translator.calls, 0);
+  });
+
+  group('카메라 프레임', () {
+    // 세로 9:16 미리보기.
+    const aspect = 9 / 16;
+
+    test('카메라로 찍으면 줄 인식과 통번역 모두 프레임 안만 읽게 하고 미리보기 비율을 넘긴다', () async {
+      container = create(signedIn: true);
+      final processing = notifier().processImage(
+        'a.jpg',
+        fromCamera: true,
+        cameraPreviewAspect: aspect,
+      );
+      await pumpEventQueue();
+      expect(ocr.lastOnlyInCaptureFrame, isTrue);
+      expect(ocr.lastCameraPreviewAspect, aspect);
+      api.calls.single.completer.complete(_result(['醤油ラーメン 980円', '食券']));
+      await processing;
+      expect(state().frameFallback, isFalse);
+
+      container.dispose();
+      container = create(signedIn: false);
+      await notifier().processImage(
+        'a.jpg',
+        fromCamera: true,
+        cameraPreviewAspect: aspect,
+      );
+      // 통번역도 프레임 안 줄을 읽어 줄바꿈으로 이어 보낸다.
+      expect(ocr.lineCalls, 1);
+      expect(ocr.textCalls, 0);
+      expect(ocr.lastOnlyInCaptureFrame, isTrue);
+      expect(state().recognizedText, '醤油ラーメン 980円\n食券');
+      expect(state().recognizedLines, isEmpty);
+      expect(state().lineResult, isNull);
+      expect(state().frameFallback, isFalse);
+    });
+
+    test('갤러리 사진은 프레임 없이 전체를 읽고 안내도 띄우지 않는다', () async {
+      container = create(signedIn: true);
+      final processing = notifier().processImage('a.jpg');
+      await pumpEventQueue();
+      expect(ocr.lastOnlyInCaptureFrame, isFalse);
+      api.calls.single.completer.complete(_result(['醤油ラーメン 980円', '食券']));
+      await processing;
+      expect(state().frameFallback, isFalse);
+    });
+
+    test('프레임 안에 글자가 없으면 프레임에 맞춰 다시 찍으라고 안내한다', () async {
+      container = create(signedIn: true, lines: const []);
+
+      await notifier().processImage(
+        'a.jpg',
+        fromCamera: true,
+        cameraPreviewAspect: aspect,
+      );
+
+      expect(state().status, TranslationStatus.failed);
+      expect(state().errorMessage, contains('프레임 안'));
+      expect(api.calls, isEmpty);
+    });
+
+    test('프레임을 맞출 수 없어 사진 전체를 읽으면 안내 상태를 켜고 다시 찍으면 끈다', () async {
+      container = create(signedIn: true, frameFits: false);
+
+      final processing = notifier().processImage(
+        'a.jpg',
+        fromCamera: true,
+        cameraPreviewAspect: aspect,
+      );
+      await pumpEventQueue();
+      expect(state().frameFallback, isTrue);
+      api.calls.single.completer.complete(_result(['醤油ラーメン 980円', '食券']));
+      await processing;
+
+      expect(state().status, TranslationStatus.completed);
+      expect(state().frameFallback, isTrue);
+
+      notifier().resetForRetake();
+      expect(state().frameFallback, isFalse);
+    });
+
+    test('미리보기 비율을 모르면 프레임 없이 읽고 안내 상태를 켠다', () async {
+      container = create(signedIn: false);
+
+      await notifier().processImage('a.jpg', fromCamera: true);
+
+      expect(ocr.textCalls, 1);
+      expect(ocr.lineCalls, 0);
+      expect(state().frameFallback, isTrue);
+    });
+
+    test('프레임을 못 맞추고 글자도 없으면 프레임이 아닌 일반 안내를 띄운다', () async {
+      container = create(signedIn: true, lines: const [], frameFits: false);
+
+      await notifier().processImage(
+        'a.jpg',
+        fromCamera: true,
+        cameraPreviewAspect: aspect,
+      );
+
+      expect(state().status, TranslationStatus.failed);
+      expect(state().errorMessage, isNot(contains('프레임 안')));
+    });
   });
 
   test('로그인하지 않았으면 지금처럼 통번역을 쓴다', () async {

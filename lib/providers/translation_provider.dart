@@ -61,6 +61,7 @@ class TranslationState {
     this.translatedText = '',
     this.lineResult,
     this.omittedLineCount = 0,
+    this.frameFallback = false,
     this.errorMessage,
     this.sourceLanguageCode = 'auto',
     this.targetLanguageCode = 'ko',
@@ -88,6 +89,10 @@ class TranslationState {
 
   /// 줄 수·글자 수 제한으로 보내지 못한 줄 수.
   final int omittedLineCount;
+
+  /// 카메라로 찍었지만 가이드 프레임을 맞출 수 없어(가로로 든 사진, 사진·미리보기 크기를 모름) 사진 전체의
+  /// 글자를 번역했는지. 결과 화면이 안내 한 줄을 보여 준다.
+  final bool frameFallback;
   final String? errorMessage;
   final String sourceLanguageCode;
   final String targetLanguageCode;
@@ -114,6 +119,7 @@ class TranslationState {
     LineTranslationResult? lineResult,
     bool clearLineResult = false,
     int? omittedLineCount,
+    bool? frameFallback,
     String? errorMessage,
     bool clearErrorMessage = false,
     String? sourceLanguageCode,
@@ -129,6 +135,7 @@ class TranslationState {
       translatedText: translatedText ?? this.translatedText,
       lineResult: clearLineResult ? null : lineResult ?? this.lineResult,
       omittedLineCount: omittedLineCount ?? this.omittedLineCount,
+      frameFallback: frameFallback ?? this.frameFallback,
       errorMessage: clearErrorMessage
           ? null
           : errorMessage ?? this.errorMessage,
@@ -249,7 +256,16 @@ class TranslationNotifier extends Notifier<TranslationState> {
     }
   }
 
-  Future<void> processImage(String imagePath) async {
+  /// 사진의 글자를 읽어 번역한다.
+  ///
+  /// [fromCamera]이면 카메라 가이드 프레임 안의 글자만 쓴다(갤러리 사진은 프레임이 없어 전체).
+  /// [cameraPreviewAspect]는 촬영 순간 미리보기의 세로 기준 비율(짧은 변/긴 변)이다. 모르면 카드가
+  /// 미리보기를 제대로 그리지 못한 상태라 프레임을 쓰지 않고 사진 전체를 읽는다.
+  Future<void> processImage(
+    String imagePath, {
+    bool fromCamera = false,
+    double? cameraPreviewAspect,
+  }) async {
     if (state.status == TranslationStatus.recognizing ||
         state.status == TranslationStatus.translating) {
       return;
@@ -264,6 +280,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
       translatedText: '',
       clearLineResult: true,
       omittedLineCount: 0,
+      frameFallback: false,
       clearErrorMessage: true,
       status: TranslationStatus.recognizing,
     );
@@ -274,15 +291,25 @@ class TranslationNotifier extends Notifier<TranslationState> {
       // 로그인했으면 줄 단위로 읽어 줄별 번역(발음·가격)을 쓰고, 아니면 통번역을 쓴다.
       // 줄별 번역 API는 로그인이 필요하다.
       final ocr = ref.read(ocrServiceProvider);
+      final useFrame = fromCamera && cameraPreviewAspect != null;
       var lines = const <String>[];
+      var frameApplied = false;
       final String text;
 
-      if (_isSignedIn) {
-        lines = await ocr.recognizeLines(
+      if (_isSignedIn || useFrame) {
+        final result = await ocr.recognizeLines(
           imagePath: imagePath,
           sourceLanguageCode: state.sourceLanguageCode,
+          onlyInCaptureFrame: useFrame,
+          cameraPreviewAspect: cameraPreviewAspect,
         );
-        text = lines.join('\n');
+        frameApplied = result.frameApplied;
+        // 로그인하지 않았으면(통번역) 줄을 `\n`으로 이어 쓴다. ML Kit의 전체 글자(`recognizeText`)도
+        // 덩어리 안 줄과 덩어리 사이를 모두 `\n`으로 잇기 때문에 통번역에 보내는 형식이 같다.
+        if (_isSignedIn) {
+          lines = result.lines;
+        }
+        text = result.lines.join('\n');
       } else {
         text = await ocr.recognizeText(
           imagePath: imagePath,
@@ -300,7 +327,9 @@ class TranslationNotifier extends Notifier<TranslationState> {
         state = state.copyWith(
           recognizedText: '',
           translatedText: '',
-          errorMessage: '이미지에서 번역할 문자를 찾지 못했습니다.\n문자가 선명하게 보이도록 다시 촬영해 주세요.',
+          errorMessage: frameApplied
+              ? '프레임 안에서 번역할 문자를 찾지 못했습니다.\n번역할 글자를 프레임 안에 맞춰 다시 촬영해 주세요.'
+              : '이미지에서 번역할 문자를 찾지 못했습니다.\n문자가 선명하게 보이도록 다시 촬영해 주세요.',
           status: TranslationStatus.failed,
         );
         return;
@@ -309,6 +338,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
       state = state.copyWith(
         recognizedText: text.trim(),
         recognizedLines: lines,
+        frameFallback: fromCamera && !frameApplied,
         status: TranslationStatus.translating,
       );
 
@@ -531,6 +561,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
       translatedText: '',
       clearLineResult: true,
       omittedLineCount: 0,
+      frameFallback: false,
       clearErrorMessage: true,
       status: TranslationStatus.cameraReady,
     );

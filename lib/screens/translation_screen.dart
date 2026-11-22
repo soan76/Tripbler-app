@@ -5,6 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
     show ConsumerState, ConsumerStatefulWidget;
 
+import '../domain/translation/capture_frame.dart';
 import '../providers/translation_provider.dart';
 import '../widgets/translation/initial_camera_permission_view.dart';
 import '../widgets/translation/translation_camera_preview_card.dart';
@@ -249,6 +250,12 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
     final provider = ref.read(translationProvider.notifier);
     provider.setStatus(TranslationStatus.capturing);
 
+    // 가이드 프레임을 사진에 옮길 때 쓰는 미리보기 비율. 사진은 미리보기와 화각이 다를 수 있다
+    // (미리보기 16:9, 사진 4:3 등). 촬영 뒤에는 컨트롤러가 정리될 수 있어 찍기 전에 읽는다.
+    final cameraPreviewAspect = CaptureFrame.portraitAspectOf(
+      controller.value.previewSize,
+    );
+
     try {
       debugPrint('=== takePicture 시작 ===');
       final image = await controller.takePicture().timeout(
@@ -263,7 +270,11 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
 
       debugPrint('=== OCR 호출 직전 ===');
 
-      await provider.processImage(image.path);
+      await provider.processImage(
+        image.path,
+        fromCamera: true,
+        cameraPreviewAspect: cameraPreviewAspect,
+      );
     } catch (error, stackTrace) {
       debugPrint('=== takePicture catch 진입 ===');
       debugPrint('사진 촬영 실패: $error');
@@ -500,6 +511,7 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
       translatedText: provider.translatedText,
       lineResult: provider.lineResult,
       omittedLineCount: provider.omittedLineCount,
+      frameFallback: provider.frameFallback,
       isProcessing: provider.isProcessing,
       sourceLanguageCode: provider.sourceLanguageCode,
       targetLanguageCode: provider.targetLanguageCode,

@@ -12,6 +12,7 @@ void main() {
   Future<void> pumpView(
     WidgetTester tester, {
     LineTranslationResult? lineResult,
+    bool frameFallback = false,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -24,6 +25,7 @@ void main() {
             recognizedText: '醤油ラーメン',
             translatedText: '간장 라멘',
             lineResult: lineResult,
+            frameFallback: frameFallback,
             isProcessing: false,
             sourceLanguageCode: 'auto',
             targetLanguageCode: 'ko',
@@ -68,5 +70,17 @@ void main() {
     expect(find.text('쇼유 라멘'), findsOneWidget);
     expect(find.text(_slideHint), findsNothing);
     expect(find.byType(PageView), findsNothing);
+  });
+
+  testWidgets('프레임을 맞출 수 없어 사진 전체를 번역했으면 안내 한 줄을 보여 준다', (tester) async {
+    await pumpView(tester, frameFallback: true);
+
+    expect(find.text(TranslationResultView.frameFallbackText), findsOneWidget);
+  });
+
+  testWidgets('프레임을 적용했으면 안내를 보여 주지 않는다', (tester) async {
+    await pumpView(tester);
+
+    expect(find.text(TranslationResultView.frameFallbackText), findsNothing);
   });
 }

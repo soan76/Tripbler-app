@@ -19,6 +19,9 @@ class TranslationResultView extends StatefulWidget {
   /// 줄별 번역 결과(찍기 모드). 있으면 원문·번역 넘겨 보기 대신 줄 목록을 보여 준다.
   final LineTranslationResult? lineResult;
   final int omittedLineCount;
+
+  /// 카메라 프레임을 맞출 수 없어 사진 전체를 번역했는지. true면 안내 한 줄을 보여 준다.
+  final bool frameFallback;
   final bool isProcessing;
   final String sourceLanguageCode;
   final String targetLanguageCode;
@@ -38,6 +41,7 @@ class TranslationResultView extends StatefulWidget {
     required this.translatedText,
     this.lineResult,
     this.omittedLineCount = 0,
+    this.frameFallback = false,
     required this.isProcessing,
     required this.sourceLanguageCode,
     required this.targetLanguageCode,
@@ -48,6 +52,9 @@ class TranslationResultView extends StatefulWidget {
     required this.onRetake,
     required this.onPickFromGallery,
   });
+
+  /// 안내 문구: 가이드 프레임을 맞출 수 없어 사진 전체를 번역했을 때.
+  static const String frameFallbackText = '프레임을 맞출 수 없어 사진 전체를 번역했어요';
 
   @override
   State<TranslationResultView> createState() => _TranslationResultViewState();
@@ -118,6 +125,8 @@ class _TranslationResultViewState extends State<TranslationResultView> {
               message: widget.errorMessage!,
               icon: Icons.info_outline,
             ),
+
+          if (widget.frameFallback) _buildFrameFallbackNote(),
 
           if (lineResult != null)
             TranslationLineList(
@@ -202,6 +211,31 @@ class _TranslationResultViewState extends State<TranslationResultView> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFrameFallbackNote() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final style = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.info_outline,
+            size: 16,
+            color: colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(TranslationResultView.frameFallbackText, style: style),
           ),
         ],
       ),
