@@ -197,6 +197,50 @@ class LineTranslationServiceTest {
     }
 
     @Test
+    void 번역이_가격_통화를_잘못_옮기면_원문_통화에_맞추고_가격이_없는_줄은_그대로_둔다() {
+        when(exchangeService.getRates("CNY", "KRW")).thenReturn(krw("CNY", "200", false));
+        LineTranslationClient wrongYen = (lines, source, target) -> new LineTranslationClient.Result("zh", List.of(
+            new LineTranslationClient.Line("쿵파오 치킨 38엔", null),
+            new LineTranslationClient.Line("38엔 쿠폰", null)
+        ));
+        LineTranslationService yenService =
+            new LineTranslationService(wrongYen, fallbackClient, new PriceExtractor(), exchangeService, rateLimiter);
+
+        try {
+            LineTranslationResponse response = yenService.translate("user-1", IP, request("auto", "宫保鸡丁 ¥38", "优惠券"));
+
+            assertEquals("쿵파오 치킨 38위안", response.lines().get(0).translated());
+            assertEquals("CNY", response.lines().get(0).price().currency());
+            // 원문에서 가격을 찾지 못한 줄은 번역을 바꾸지 않는다.
+            assertEquals("38엔 쿠폰", response.lines().get(1).translated());
+        } finally {
+            yenService.destroy();
+        }
+    }
+
+    @Test
+    void Claude가_이미_맞는_통화_단어로_옮기면_그대로_둔다() {
+        when(exchangeService.getRates("CNY", "KRW")).thenReturn(krw("CNY", "200", false));
+        LineTranslationClient rightYuan = (lines, source, target) -> new LineTranslationClient.Result("zh", List.of(
+            new LineTranslationClient.Line("쿵파오 치킨 38위안 / 음료 38달러", "궁바오지딩")
+        ));
+        LineTranslationService yuanService =
+            new LineTranslationService(rightYuan, fallbackClient, new PriceExtractor(), exchangeService, rateLimiter);
+
+        try {
+            LineTranslationResponse response =
+                yuanService.translate("user-1", IP, request("auto", "宫保鸡丁 ¥38 / 饮料 $38"));
+
+            // 첫 짝이 이미 맞으므로 같은 숫자의 다른 가격(38달러)도 바꾸지 않는다.
+            assertEquals("쿵파오 치킨 38위안 / 음료 38달러", response.lines().get(0).translated());
+            assertEquals("CNY", response.lines().get(0).price().currency());
+            assertTrue(fallbackClient.calls.isEmpty());
+        } finally {
+            yuanService.destroy();
+        }
+    }
+
+    @Test
     void Claude가_실패하면_Google로_대체하고_발음은_비운다() {
         when(exchangeService.getRates("JPY", "KRW")).thenReturn(krw("JPY", "9.245", false));
         client.failure = new TranslationProviderException();

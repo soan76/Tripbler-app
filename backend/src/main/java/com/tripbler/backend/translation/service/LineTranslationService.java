@@ -95,6 +95,7 @@ public class LineTranslationService implements DisposableBean {
     private final AuthRateLimiter rateLimiter;
     private final ExecutorService rateExecutor;
     private final Duration rateLookupBudget;
+    private final TranslatedCurrencyFixer currencyFixer = new TranslatedCurrencyFixer();
 
     @Autowired
     public LineTranslationService(
@@ -193,11 +194,18 @@ public class LineTranslationService implements DisposableBean {
             String original = lines.get(index);
             LineTranslationClient.Line line = result.lines().get(index);
 
-            Price price = foundPrices.get(index)
-                .map(found -> toPrice(found, ratesByCurrency))
+            Optional<PriceExtractor.Found> found = foundPrices.get(index);
+
+            Price price = found
+                .map(each -> toPrice(each, ratesByCurrency))
                 .orElse(null);
 
-            translatedLines.add(new TranslatedLine(original, line.translated(), line.pronunciation(), price));
+            // 번역기가 가격의 통화를 잘못 옮긴 경우(예: 중국어 ¥38 → "38엔") 원문 통화에 맞춘다.
+            String translated = found
+                .map(each -> currencyFixer.fix(line.translated(), each.amount(), each.currency(), target))
+                .orElse(line.translated());
+
+            translatedLines.add(new TranslatedLine(original, translated, line.pronunciation(), price));
         }
 
         return new LineTranslationResponse(detectedSource, target, List.copyOf(translatedLines));
