@@ -2,8 +2,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
     show Notifier, NotifierProvider, Provider;
 
+import '../core/network/api_exception.dart';
+import '../models/translation/line_translation_result.dart';
+import '../repositories/auth/auth_exceptions.dart';
+import '../services/line_translation_api_service.dart';
 import '../services/ocr_service.dart';
 import '../services/translation_service.dart';
+import 'auth/auth_provider.dart';
 
 enum TranslationStatus {
   checkingPermission,
@@ -37,13 +42,25 @@ final translationServiceProvider = Provider<TranslationService>((ref) {
   return service;
 });
 
+/// 찍기 모드 줄별 번역 API를 호출하는 서비스(로그인 필요).
+final lineTranslationApiServiceProvider = Provider<LineTranslationApiService>((
+  ref,
+) {
+  final service = LineTranslationApiService();
+  ref.onDispose(service.dispose);
+  return service;
+});
+
 /// 번역 화면이 보여 주는 값.
 class TranslationState {
   const TranslationState({
     this.status = TranslationStatus.checkingPermission,
     this.selectedImagePath,
     this.recognizedText = '',
+    this.recognizedLines = const <String>[],
     this.translatedText = '',
+    this.lineResult,
+    this.omittedLineCount = 0,
     this.errorMessage,
     this.sourceLanguageCode = 'auto',
     this.targetLanguageCode = 'ko',
@@ -60,7 +77,17 @@ class TranslationState {
   final TranslationStatus status;
   final String? selectedImagePath;
   final String recognizedText;
+
+  /// 줄 단위로 읽은 원문(로그인 상태에서 찍었을 때만). 비어 있으면 통번역을 쓴다.
+  final List<String> recognizedLines;
+
   final String translatedText;
+
+  /// 줄별 번역 결과(찍기 모드). 통번역이면 null.
+  final LineTranslationResult? lineResult;
+
+  /// 줄 수·글자 수 제한으로 보내지 못한 줄 수.
+  final int omittedLineCount;
   final String? errorMessage;
   final String sourceLanguageCode;
   final String targetLanguageCode;
@@ -82,7 +109,11 @@ class TranslationState {
     String? selectedImagePath,
     bool clearSelectedImagePath = false,
     String? recognizedText,
+    List<String>? recognizedLines,
     String? translatedText,
+    LineTranslationResult? lineResult,
+    bool clearLineResult = false,
+    int? omittedLineCount,
     String? errorMessage,
     bool clearErrorMessage = false,
     String? sourceLanguageCode,
@@ -94,7 +125,10 @@ class TranslationState {
           ? null
           : selectedImagePath ?? this.selectedImagePath,
       recognizedText: recognizedText ?? this.recognizedText,
+      recognizedLines: recognizedLines ?? this.recognizedLines,
       translatedText: translatedText ?? this.translatedText,
+      lineResult: clearLineResult ? null : lineResult ?? this.lineResult,
+      omittedLineCount: omittedLineCount ?? this.omittedLineCount,
       errorMessage: clearErrorMessage
           ? null
           : errorMessage ?? this.errorMessage,
@@ -105,6 +139,11 @@ class TranslationState {
 }
 
 class TranslationNotifier extends Notifier<TranslationState> {
+  /// 줄별 번역 요청 제한(서버와 같다). 넘는 줄은 보내지 않고 [TranslationState.omittedLineCount]로 알린다.
+  static const int maxLines = 50;
+  static const int maxLineLength = 200;
+  static const int maxTotalCharacters = 5000;
+
   /// 가장 최근에 시작한 인식·번역 작업 번호.
   ///
   /// 새 사진 처리, 새 번역(언어 변경 포함), 다시 찍기 때마다 올린다. 늦게 끝난 이전 작업은
@@ -112,7 +151,36 @@ class TranslationNotifier extends Notifier<TranslationState> {
   int _requestId = 0;
 
   @override
-  TranslationState build() => const TranslationState();
+  TranslationState build() {
+    // 지도와 같은 기준: 로그인 세션 번호가 바뀌면(로그인·로그아웃·계정 전환) 이전 세션의 사진과
+    // 결과를 비운다. 구독이 멈춘 동안 로그아웃→재로그인이 하나로 합쳐져 와도 번호가 다르면 알아챈다.
+    ref.listen(authProvider, (previous, next) {
+      if (previous != null && previous.sessionId != next.sessionId) {
+        _onSessionChanged();
+      }
+    });
+
+    return const TranslationState();
+  }
+
+  /// 진행 중이던 인식·번역 응답을 버리고, 결과 화면이면 카메라 화면으로 돌아간다.
+  /// 권한 확인·카메라 준비처럼 결과가 없는 상태는 그대로 둔다.
+  void _onSessionChanged() {
+    _requestId++;
+
+    final showsResult =
+        state.hasImage ||
+        state.status == TranslationStatus.recognizing ||
+        state.status == TranslationStatus.translating ||
+        state.status == TranslationStatus.completed ||
+        state.status == TranslationStatus.failed;
+
+    if (!showsResult) {
+      return;
+    }
+
+    _clearResult();
+  }
 
   /// [requestId]가 아직 가장 최근 작업이고 상태 객체가 살아 있는지.
   bool _isCurrent(int requestId) => ref.mounted && requestId == _requestId;
@@ -140,6 +208,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
     state = state.copyWith(
       sourceLanguageCode: languageCode,
       translatedText: '',
+      clearLineResult: true,
     );
 
     if (state.recognizedText.trim().isNotEmpty) {
@@ -155,6 +224,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
     state = state.copyWith(
       targetLanguageCode: languageCode,
       translatedText: '',
+      clearLineResult: true,
     );
 
     if (state.recognizedText.trim().isNotEmpty) {
@@ -171,6 +241,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
       sourceLanguageCode: state.targetLanguageCode,
       targetLanguageCode: state.sourceLanguageCode,
       translatedText: '',
+      clearLineResult: true,
     );
 
     if (state.recognizedText.trim().isNotEmpty) {
@@ -189,7 +260,10 @@ class TranslationNotifier extends Notifier<TranslationState> {
     state = state.copyWith(
       selectedImagePath: imagePath,
       recognizedText: '',
+      recognizedLines: const <String>[],
       translatedText: '',
+      clearLineResult: true,
+      omittedLineCount: 0,
       clearErrorMessage: true,
       status: TranslationStatus.recognizing,
     );
@@ -197,19 +271,30 @@ class TranslationNotifier extends Notifier<TranslationState> {
     try {
       debugPrint('=== OCR 시작 ===');
 
-      final text = await ref
-          .read(ocrServiceProvider)
-          .recognizeText(
-            imagePath: imagePath,
-            sourceLanguageCode: state.sourceLanguageCode,
-          );
+      // 로그인했으면 줄 단위로 읽어 줄별 번역(발음·가격)을 쓰고, 아니면 통번역을 쓴다.
+      // 줄별 번역 API는 로그인이 필요하다.
+      final ocr = ref.read(ocrServiceProvider);
+      var lines = const <String>[];
+      final String text;
+
+      if (_isSignedIn) {
+        lines = await ocr.recognizeLines(
+          imagePath: imagePath,
+          sourceLanguageCode: state.sourceLanguageCode,
+        );
+        text = lines.join('\n');
+      } else {
+        text = await ocr.recognizeText(
+          imagePath: imagePath,
+          sourceLanguageCode: state.sourceLanguageCode,
+        );
+      }
 
       if (!_isCurrent(requestId)) {
         return;
       }
 
       debugPrint('=== OCR 완료 ===');
-      debugPrint('OCR 결과: $text');
 
       if (text.trim().isEmpty) {
         state = state.copyWith(
@@ -223,6 +308,7 @@ class TranslationNotifier extends Notifier<TranslationState> {
 
       state = state.copyWith(
         recognizedText: text.trim(),
+        recognizedLines: lines,
         status: TranslationStatus.translating,
       );
 
@@ -254,6 +340,11 @@ class TranslationNotifier extends Notifier<TranslationState> {
 
     // 원문을 그대로 쓰는 경우에도 진행 중이던 이전 번역 응답이 덮어쓰지 않게 번호를 올린다.
     final requestId = ++_requestId;
+
+    if (state.recognizedLines.isNotEmpty && _isSignedIn) {
+      await _translateLines(requestId);
+      return;
+    }
 
     if (state.sourceLanguageCode == state.targetLanguageCode) {
       state = state.copyWith(
@@ -300,14 +391,146 @@ class TranslationNotifier extends Notifier<TranslationState> {
     }
   }
 
+  /// 줄별 번역(찍기 모드). [requestId]는 [translateRecognizedText]가 올린 번호.
+  Future<void> _translateLines(int requestId) async {
+    final (lines, omitted) = linesForRequest(state.recognizedLines);
+    final source = state.sourceLanguageCode;
+    final target = state.targetLanguageCode;
+
+    if (source == target) {
+      // 원문 언어와 번역 언어가 같으면 서버에 보내지 않고 원문을 그대로 보여 준다.
+      state = state.copyWith(
+        lineResult: LineTranslationResult(
+          sourceLanguageCode: source,
+          targetLanguageCode: target,
+          lines: List<TranslatedLine>.unmodifiable(
+            lines.map(
+              (line) => TranslatedLine(original: line, translated: line),
+            ),
+          ),
+        ),
+        translatedText: lines.join('\n'),
+        omittedLineCount: omitted,
+        status: TranslationStatus.completed,
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      status: TranslationStatus.translating,
+      clearErrorMessage: true,
+    );
+
+    try {
+      final service = ref.read(lineTranslationApiServiceProvider);
+      final result = await ref.read(authorizedRequestRunnerProvider)(
+        (authorizationHeader) => service.translateLines(
+          lines: lines,
+          sourceLanguageCode: source,
+          targetLanguageCode: target,
+          authorizationHeader: authorizationHeader,
+        ),
+      );
+
+      if (!_isCurrent(requestId)) {
+        return;
+      }
+
+      state = state.copyWith(
+        lineResult: result,
+        translatedText: result.lines.map((line) => line.translated).join('\n'),
+        omittedLineCount: omitted,
+        status: TranslationStatus.completed,
+      );
+    } on SessionChangedException {
+      // 요청 중 로그아웃·재로그인됐다. 이 결과는 버린다.
+      if (_isCurrent(requestId)) {
+        state = state.copyWith(
+          errorMessage: '로그인 상태가 바뀌었습니다.\n다시 찍어 주세요.',
+          status: TranslationStatus.failed,
+        );
+      }
+    } catch (error) {
+      debugPrint('줄별 번역 실패: $error');
+
+      if (!_isCurrent(requestId)) {
+        return;
+      }
+
+      state = state.copyWith(
+        errorMessage: _lineErrorMessage(error),
+        status: TranslationStatus.failed,
+      );
+    }
+  }
+
+  static String _lineErrorMessage(Object error) {
+    if (error is SessionExpiredException) {
+      return '로그인이 만료되었습니다.\n다시 로그인한 뒤 찍어 주세요.';
+    }
+
+    if (error is ApiException) {
+      return error.message;
+    }
+
+    return '번역 중 문제가 발생했습니다.\n잠시 후 다시 시도해 주세요.';
+  }
+
+  /// 서버 제한(줄 수·줄 길이·합계)에 맞게 줄을 고른다. 긴 줄은 자르고, 제한을 넘으면 그 뒤 줄은 뺀다.
+  /// 두 번째 값은 보내지 못한 줄 수(빈 줄은 세지 않음).
+  @visibleForTesting
+  static (List<String>, int) linesForRequest(List<String> lines) {
+    final selected = <String>[];
+    var total = 0;
+    var nonEmpty = 0;
+
+    for (final raw in lines) {
+      var line = raw.trim();
+
+      if (line.isEmpty) {
+        continue;
+      }
+
+      nonEmpty++;
+
+      if (line.length > maxLineLength) {
+        var end = maxLineLength;
+        // 이모지처럼 두 단위로 된 문자를 반으로 자르지 않는다.
+        final last = line.codeUnitAt(end - 1);
+        if (last >= 0xD800 && last <= 0xDBFF) {
+          end -= 1;
+        }
+        line = line.substring(0, end);
+      }
+
+      if (selected.length < maxLines &&
+          total + line.length <= maxTotalCharacters &&
+          selected.length == nonEmpty - 1) {
+        selected.add(line);
+        total += line.length;
+      }
+    }
+
+    return (List<String>.unmodifiable(selected), nonEmpty - selected.length);
+  }
+
+  /// 지금 로그인돼 있는지(줄별 번역은 로그인이 필요하다).
+  bool get _isSignedIn => ref.read(authProvider).isAuthenticated;
+
   void resetForRetake() {
     // 진행 중이던 인식·번역 결과가 다시 찍는 화면에 들어오지 않게 한다.
     _requestId++;
+    _clearResult();
+  }
 
+  void _clearResult() {
     state = state.copyWith(
       clearSelectedImagePath: true,
       recognizedText: '',
+      recognizedLines: const <String>[],
       translatedText: '',
+      clearLineResult: true,
+      omittedLineCount: 0,
       clearErrorMessage: true,
       status: TranslationStatus.cameraReady,
     );

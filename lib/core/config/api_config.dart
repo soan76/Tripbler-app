@@ -62,6 +62,13 @@ class ApiConfig {
 
   static const String usersCheckLoginIdPath = '/api/v1/users/check-login-id';
 
+  /// 찍기 모드 줄별 번역·한글 발음·가격(로그인 필요).
+  static const String translationLinesPath = '/api/v1/translation/lines';
+
+  static Uri get translationLinesUri {
+    return Uri.parse(baseUrl).replace(path: translationLinesPath);
+  }
+
   static const String placesPath = '/api/v1/places';
   static const String placesSearchPath = '$placesPath/search';
 

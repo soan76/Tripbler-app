@@ -478,10 +478,8 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
           ),
           const SizedBox(height: 18),
           Text(
-            '촬영하거나 갤러리에서 선택한 이미지는 OCR 처리를 위해 사용됩니다. 현재 OCR은 기기 내 ML Kit 기능을 사용하며, 번역 API는 아직 연결하지 않았습니다.',
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.45, // 라이트/다크 모드에 맞는 보조 텍스트 색상
+            '사진 속 글자는 기기에서 읽어요. 서버에는 읽은 글자만 보내고 사진은 보내지 않아요.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
             ),
           ),
@@ -500,6 +498,8 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
       errorMessage: provider.errorMessage,
       recognizedText: provider.recognizedText,
       translatedText: provider.translatedText,
+      lineResult: provider.lineResult,
+      omittedLineCount: provider.omittedLineCount,
       isProcessing: provider.isProcessing,
       sourceLanguageCode: provider.sourceLanguageCode,
       targetLanguageCode: provider.targetLanguageCode,

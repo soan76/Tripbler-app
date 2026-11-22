@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../models/translation/line_translation_result.dart';
 import '../../providers/translation_provider.dart';
 import 'translation_header.dart';
+import 'translation_line_list.dart';
 import 'translation_result_cards.dart';
 
 // 촬영/선택한 이미지, 인식/번역 결과, 다시 촬영/다시 선택 버튼
@@ -13,6 +15,10 @@ class TranslationResultView extends StatefulWidget {
   final String? errorMessage;
   final String recognizedText;
   final String translatedText;
+
+  /// 줄별 번역 결과(찍기 모드). 있으면 원문·번역 넘겨 보기 대신 줄 목록을 보여 준다.
+  final LineTranslationResult? lineResult;
+  final int omittedLineCount;
   final bool isProcessing;
   final String sourceLanguageCode;
   final String targetLanguageCode;
@@ -30,6 +36,8 @@ class TranslationResultView extends StatefulWidget {
     required this.errorMessage,
     required this.recognizedText,
     required this.translatedText,
+    this.lineResult,
+    this.omittedLineCount = 0,
     required this.isProcessing,
     required this.sourceLanguageCode,
     required this.targetLanguageCode,
@@ -64,7 +72,10 @@ class _TranslationResultViewState extends State<TranslationResultView> {
 
     final hasTranslatedText = widget.translatedText.trim().isNotEmpty;
 
-    final shouldShowTextSlider = hasRecognizedText || hasTranslatedText;
+    final lineResult = widget.lineResult;
+
+    final shouldShowTextSlider =
+        lineResult == null && (hasRecognizedText || hasTranslatedText);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -82,7 +93,7 @@ class _TranslationResultViewState extends State<TranslationResultView> {
 
           const SizedBox(height: 18),
 
-          if (widget.selectedImagePath != null)
+          if (widget.selectedImagePath != null && lineResult == null)
             ClipRRect(
               borderRadius: BorderRadius.circular(24),
               child: Image.file(
@@ -93,7 +104,8 @@ class _TranslationResultViewState extends State<TranslationResultView> {
               ),
             ),
 
-          const SizedBox(height: 18),
+          // 줄 목록은 사진을 썸네일로만 보여 주므로 사진 아래 간격을 두지 않는다.
+          if (lineResult == null) const SizedBox(height: 18),
 
           if (widget.status == TranslationStatus.recognizing)
             const TranslationProcessingCard(message: '문자를 인식하고 있습니다.'),
@@ -105,6 +117,13 @@ class _TranslationResultViewState extends State<TranslationResultView> {
             TranslationMessageCard(
               message: widget.errorMessage!,
               icon: Icons.info_outline,
+            ),
+
+          if (lineResult != null)
+            TranslationLineList(
+              result: lineResult,
+              imagePath: widget.selectedImagePath,
+              omittedLineCount: widget.omittedLineCount,
             ),
 
           if (shouldShowTextSlider) ...[
