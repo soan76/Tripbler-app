@@ -705,9 +705,9 @@ void main() {
       h.permissions.checkResult = _denied;
       await tapAndFlush(tester, find.text(_retakeButton));
 
-      // 지금 코드는 다시 촬영에서 한 번, 권한 재확인에서 한 번 더 확인해 3번이 된다.
-      // 확인 횟수를 줄이는 정리는 허용하도록 "다시 확인했는지"만 본다.
-      expect(h.permissions.checkCount, greaterThanOrEqualTo(2));
+      // 버그 수정(다시 촬영 권한 중복 확인): 예전에는 다시 촬영에서 한 번, 권한 재확인에서 한 번 더
+      // 조회해 3번이었다. 이제 다시 촬영은 한 번 조회한 결과로 처리하므로 들어올 때 1번 + 다시 촬영 1번.
+      expect(h.permissions.checkCount, 2);
       expect(h.camera.createdCameraIds, hasLength(1));
       expect(find.byType(InitialCameraPermissionView), findsOneWidget);
 

@@ -13,6 +13,7 @@ class TranslationCameraView extends StatelessWidget {
     required this.cameraController,
     required this.isCameraReady,
     required this.isFlashOn,
+    this.isCaptureInFlight = false,
     required this.onSourceLanguageChanged,
     required this.onTargetLanguageChanged,
     required this.onSwapLanguages,
@@ -30,6 +31,9 @@ class TranslationCameraView extends StatelessWidget {
   final CameraController? cameraController;
   final bool isCameraReady;
   final bool isFlashOn;
+
+  /// 앞 촬영이 기기에서 아직 끝나지 않았는지(시간 제한 뒤 포함). 이때 셔터는 촬영 중처럼 비활성이다.
+  final bool isCaptureInFlight;
   final ValueChanged<String> onSourceLanguageChanged;
   final ValueChanged<String> onTargetLanguageChanged;
   final VoidCallback onSwapLanguages;
@@ -59,7 +63,9 @@ class TranslationCameraView extends StatelessWidget {
           TranslationCameraPreviewCard(
             cameraController: cameraController,
             isCameraReady: isCameraReady,
-            isCapturing: state.status == TranslationStatus.capturing,
+            isCapturing:
+                state.status == TranslationStatus.capturing ||
+                isCaptureInFlight,
             isFlashOn: isFlashOn,
             onToggleFlash: onToggleFlash,
             onCapture: onCapture,

@@ -17,6 +17,7 @@ import 'package:flutter/widgets.dart';
 /// - `takePicture` → [takePictureError]가 있으면 던지고, 아니면 [picturePath]
 /// - `setFlashMode` → [setFlashModeError]가 있으면 던진다. 성공·실패 모두 [flashModes]에 기록한다.
 /// - `dispose` → [disposedCameraIds]에 기록
+/// - [initializeGate]·[takePictureGate]·[disposeGate]를 두면 해당 호출이 그 Completer를 기다린다.
 /// - `buildPreview` → 빈 위젯
 class FakeCameraPlatform extends CameraPlatform {
   FakeCameraPlatform({
@@ -55,6 +56,15 @@ class FakeCameraPlatform extends CameraPlatform {
 
   /// `takePicture`가 돌려줄 사진 경로.
   String picturePath = '/fake/camera/photo.jpg';
+
+  /// 있으면 `initializeCamera`가 이 값이 끝날 때까지 기다린다(초기화 시점 조절).
+  Completer<void>? initializeGate;
+
+  /// 있으면 `takePicture`가 이 값이 끝날 때까지 기다린다(촬영 시점 조절).
+  Completer<void>? takePictureGate;
+
+  /// 있으면 `dispose`가 이 값이 끝날 때까지 기다린다(정리 시점 조절).
+  Completer<void>? disposeGate;
 
   int availableCamerasCallCount = 0;
   final List<CameraDescription> createdDescriptions = <CameraDescription>[];
@@ -111,6 +121,11 @@ class FakeCameraPlatform extends CameraPlatform {
   }) async {
     initializedCameraIds.add(cameraId);
 
+    final gate = initializeGate;
+    if (gate != null) {
+      await gate.future;
+    }
+
     final error = initializeError;
     if (error != null) {
       throw error;
@@ -148,6 +163,11 @@ class FakeCameraPlatform extends CameraPlatform {
   Future<XFile> takePicture(int cameraId) async {
     takePictureCameraIds.add(cameraId);
 
+    final gate = takePictureGate;
+    if (gate != null) {
+      await gate.future;
+    }
+
     final error = takePictureError;
     if (error != null) {
       throw error;
@@ -172,6 +192,11 @@ class FakeCameraPlatform extends CameraPlatform {
   @override
   Future<void> dispose(int cameraId) async {
     disposedCameraIds.add(cameraId);
+
+    final gate = disposeGate;
+    if (gate != null) {
+      await gate.future;
+    }
   }
 }
 
