@@ -57,6 +57,9 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # 번역 화면 카메라 테스트에서 CameraPlatform.instance를 가짜로 바꾼다(앱 빌드에는 포함되지 않음).
+  # camera 패키지가 이미 쓰는 버전과 맞춘다.
+  camera_platform_interface: ^2.13.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
