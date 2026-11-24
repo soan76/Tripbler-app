@@ -1,9 +1,13 @@
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/core/theme/app_theme.dart';
 import 'package:tripbler/domain/translation/capture_frame.dart';
 import 'package:tripbler/widgets/translation/translation_camera_preview_card.dart';
+
+import '../../helpers/fake_camera_platform.dart';
 
 // 실제 카메라는 테스트에서 쓸 수 없어 카메라 준비 전 상태(controller null)나, 초기화하지 않은 컨트롤러에
 // 값만 넣은 상태로 그린다.
@@ -66,6 +70,66 @@ void main() {
       height: card.height * CaptureFrame.heightFactor,
     );
   }
+
+  testWidgets('방향이 연속으로 바뀌어도 미리보기의 원래 비율을 유지한다', (tester) async {
+    final originalPlatform = CameraPlatform.instance;
+    CameraPlatform.instance = FakeCameraPlatform();
+    final controller = CameraController(
+      FakeCameraPlatform.backCamera,
+      ResolutionPreset.high,
+    );
+    addTearDown(() async {
+      await controller.dispose();
+      CameraPlatform.instance = originalPlatform;
+    });
+    controller.value = controller.value.copyWith(
+      isInitialized: true,
+      previewSize: const Size(1920, 1080),
+    );
+    await pumpCard(tester, controller: controller);
+
+    for (final orientation in [
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.portraitDown,
+      DeviceOrientation.portraitUp,
+    ]) {
+      controller.value = controller.value.copyWith(
+        deviceOrientation: orientation,
+      );
+      await tester.pump();
+      final size = tester.getSize(find.byType(CameraPreview));
+      final landscape =
+          orientation == DeviceOrientation.landscapeLeft ||
+          orientation == DeviceOrientation.landscapeRight;
+      expect(size.aspectRatio, closeTo(landscape ? 16 / 9 : 9 / 16, 0.0001));
+      expect(tester.takeException(), isNull);
+    }
+
+    controller.value = controller.value.copyWith(
+      deviceOrientation: DeviceOrientation.landscapeLeft,
+      lockedCaptureOrientation: const Optional.of(DeviceOrientation.portraitUp),
+    );
+    await tester.pump();
+    expect(
+      tester.getSize(find.byType(CameraPreview)).aspectRatio,
+      closeTo(9 / 16, 0.0001),
+    );
+
+    controller.value = controller.value.copyWith(
+      isPreviewPaused: true,
+      previewPauseOrientation: const Optional.of(
+        DeviceOrientation.landscapeRight,
+      ),
+    );
+    await tester.pump();
+    expect(
+      tester.getSize(find.byType(CameraPreview)).aspectRatio,
+      closeTo(16 / 9, 0.0001),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 
   testWidgets('안내 문구와 카메라 준비 중 표시를 보여준다', (tester) async {
     await pumpCard(tester);

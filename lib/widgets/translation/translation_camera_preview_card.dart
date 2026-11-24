@@ -246,8 +246,9 @@ class TranslationCameraPreviewCard extends StatelessWidget {
     return FittedBox(
       fit: BoxFit.cover,
       child: SizedBox(
-        width: previewSize.height,
-        height: previewSize.width,
+        // 높이는 CameraPreview가 현재 기기·잠금·일시정지 방향의 비율로 정한다.
+        // 세로 크기로 고정하면 가로로 회전한 영상이 눌려 보인다.
+        width: previewSize.width,
         child: CameraPreview(controller),
       ),
     );
