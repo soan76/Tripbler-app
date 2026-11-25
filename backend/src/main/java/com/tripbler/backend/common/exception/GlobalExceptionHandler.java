@@ -17,6 +17,7 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -25,6 +26,8 @@ public class GlobalExceptionHandler {
 
     private static final Logger log =
         LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private static final String PHOTO_TRANSLATION_PATH = "/api/v1/translation/photo";
 
     // 요청 제한: 429와 함께 다시 시도할 수 있을 때까지 남은 초를 Retry-After로 알린다.
     @ExceptionHandler(TooManyRequestsException.class)
@@ -185,6 +188,24 @@ public class GlobalExceptionHandler {
             .body(response);
     }
 
+    // multipart 요청에 필수 파트(예: 사진 번역의 image)가 없으면 500 대신 400으로 응답한다.
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingRequestPartException(
+        MissingServletRequestPartException exception,
+        HttpServletRequest request
+    ) {
+        ErrorResponse response = ErrorResponse.of(
+            ErrorCode.INVALID_REQUEST,
+            "필수 요청 파트가 없습니다: "
+                + exception.getRequestPartName(),
+            request.getRequestURI()
+        );
+
+        return ResponseEntity
+            .badRequest()
+            .body(response);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
         IllegalArgumentException exception,
@@ -222,6 +243,19 @@ public class GlobalExceptionHandler {
             MaxUploadSizeExceededException exception,
             HttpServletRequest request
         ) {
+
+        // 사진 번역은 계약대로 413으로 알린다. 프로필 이미지 업로드는 기존 응답(400)을 유지한다.
+        if (PHOTO_TRANSLATION_PATH.equals(request.getRequestURI())) {
+            ErrorResponse response = ErrorResponse.of(
+                ErrorCode.PAYLOAD_TOO_LARGE,
+                "사진은 5MB 이하만 보낼 수 있습니다.",
+                request.getRequestURI()
+            );
+
+            return ResponseEntity
+                .status(ErrorCode.PAYLOAD_TOO_LARGE.getStatus())
+                .body(response);
+        }
 
         String message =
             "프로필 이미지는 5MB 이하만 업로드할 수 있습니다.";

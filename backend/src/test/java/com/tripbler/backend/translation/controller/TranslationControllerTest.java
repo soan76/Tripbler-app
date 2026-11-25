@@ -19,6 +19,7 @@ import com.tripbler.backend.common.exception.GlobalExceptionHandler;
 import com.tripbler.backend.common.exception.TranslationProviderException;
 import com.tripbler.backend.translation.dto.TranslationResponse;
 import com.tripbler.backend.translation.service.LineTranslationService;
+import com.tripbler.backend.translation.service.PhotoTranslationService;
 import com.tripbler.backend.translation.service.TranslationService;
 
 @WebMvcTest(TranslationController.class)
@@ -34,6 +35,10 @@ class TranslationControllerTest {
     // 같은 컨트롤러의 줄별 번역이 쓰는 서비스. 이 테스트에서는 부르지 않는다.
     @MockitoBean
     private LineTranslationService lineTranslationService;
+
+    // 같은 컨트롤러의 사진 번역이 쓰는 서비스. 이 테스트에서는 부르지 않는다.
+    @MockitoBean
+    private PhotoTranslationService photoTranslationService;
 
     @Test
     void 정상_번역요청은_200을_반환한다()

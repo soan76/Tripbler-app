@@ -36,6 +36,7 @@ import com.tripbler.backend.common.security.CustomAuthenticationEntryPoint;
 import com.tripbler.backend.translation.dto.LineTranslationRequest;
 import com.tripbler.backend.translation.dto.LineTranslationResponse;
 import com.tripbler.backend.translation.service.LineTranslationService;
+import com.tripbler.backend.translation.service.PhotoTranslationService;
 import com.tripbler.backend.translation.service.TranslationService;
 
 // 줄별 번역은 로그인이 필요하므로 실제 SecurityConfig를 불러온다.
@@ -55,6 +56,10 @@ class LineTranslationControllerTest {
 
     @MockitoBean
     private LineTranslationService lineTranslationService;
+
+    // 같은 컨트롤러의 사진 번역이 쓰는 서비스. 이 테스트에서는 부르지 않는다.
+    @MockitoBean
+    private PhotoTranslationService photoTranslationService;
 
     @MockitoBean
     private TranslationService translationService;

@@ -22,6 +22,12 @@ public enum ErrorCode {
         "요청값이 올바르지 않습니다."
     ),
 
+    PAYLOAD_TOO_LARGE(
+        HttpStatus.CONTENT_TOO_LARGE,
+        "PAYLOAD_TOO_LARGE",
+        "요청 크기가 허용 한도를 넘었습니다."
+    ),
+
     INVALID_CURRENCY_CODE(
         HttpStatus.BAD_REQUEST,
         "INVALID_CURRENCY_CODE",
