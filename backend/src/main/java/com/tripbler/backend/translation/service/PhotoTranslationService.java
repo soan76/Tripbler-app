@@ -2,6 +2,7 @@ package com.tripbler.backend.translation.service;
 
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.Currency;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -231,8 +232,21 @@ public class PhotoTranslationService {
     }
 
     private static boolean isConfirmable(PhotoTranslationClient.AiPrice price) {
-        return !price.uncertain() && price.amount() != null
-            && price.currency() != null && !price.currency().isBlank();
+        return !price.uncertain() && price.amount() != null && isIsoCurrency(price.currency());
+    }
+
+    /** ISO 4217에 있는 통화 코드인지. 형식만 맞는 모르는 코드(예: XYZ)는 통화를 모르는 것으로 본다. */
+    private static boolean isIsoCurrency(String code) {
+        if (code == null || code.isBlank()) {
+            return false;
+        }
+
+        try {
+            Currency.getInstance(code);
+            return true;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private TranslatedParagraph fromFallback(

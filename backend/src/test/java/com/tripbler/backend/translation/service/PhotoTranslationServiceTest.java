@@ -273,6 +273,17 @@ class PhotoTranslationServiceTest {
     }
 
     @Test
+    void unrecognizedCurrencyCode_notConfirmed() {
+        aiReturns(aiParagraph("p1", new PhotoTranslationClient.AiPrice("980 XYZ", new BigDecimal("980"), "XYZ", false)));
+
+        PhotoTranslationResponse.Price price = run(request(paragraph("p1", "980 XYZ"))).paragraphs().get(0).prices().get(0);
+
+        assertFalse(price.confirmed());
+        assertNull(price.krwAmount());
+        verifyNoInteractions(exchangeService);
+    }
+
+    @Test
     void fallbackParagraphPrice_extractedButNotConfirmed() {
         ai.failure = new TranslationProviderException();
 
