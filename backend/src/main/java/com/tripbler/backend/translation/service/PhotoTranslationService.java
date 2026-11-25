@@ -222,11 +222,12 @@ public class PhotoTranslationService {
                 price.amount().setScale(0, RoundingMode.HALF_UP), null, null, false);
         }
 
-        // 환율을 받지 못하면 원화를 채울 수 없으므로 확정하지 않는다.
+        // confirmed는 가격이 확실한지만 뜻한다. 환율을 받지 못하면 원화 없이 확정으로 돌려준다.
         return priceConverter.convert(price.amount(), price.currency(), rates)
             .map(krw -> new Price(price.text(), price.amount(), price.currency(), true,
                 krw.krwAmount(), krw.krwRate(), krw.fetchedAt(), krw.stale()))
-            .orElse(unconfirmed);
+            .orElseGet(() -> new Price(price.text(), price.amount(), price.currency(), true,
+                null, null, null, false));
     }
 
     private static boolean isConfirmable(PhotoTranslationClient.AiPrice price) {

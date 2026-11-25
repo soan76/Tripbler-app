@@ -214,6 +214,44 @@ class PhotoTranslationServiceTest {
     }
 
     @Test
+    void confirmedPrice_rateUnavailable_confirmedWithoutKrw() {
+        when(exchangeService.getRates("JPY", "KRW")).thenThrow(new TranslationProviderException());
+        aiReturns(aiParagraph("p1", new PhotoTranslationClient.AiPrice("980円", new BigDecimal("980"), "JPY", false)));
+
+        PhotoTranslationResponse.Price price = run(request(paragraph("p1", "980円"))).paragraphs().get(0).prices().get(0);
+
+        assertTrue(price.confirmed());
+        assertNull(price.krwAmount());
+        assertNull(price.krwRate());
+        assertNull(price.rateFetchedAt());
+    }
+
+    @Test
+    void krwPrice_confirmedWithoutRateLookup() {
+        aiReturns(aiParagraph("p1", new PhotoTranslationClient.AiPrice("5,000원", new BigDecimal("5000"), "KRW", false)));
+
+        PhotoTranslationResponse.Price price = run(request(paragraph("p1", "5,000원"))).paragraphs().get(0).prices().get(0);
+
+        assertTrue(price.confirmed());
+        assertEquals(new BigDecimal("5000"), price.krwAmount());
+        verifyNoInteractions(exchangeService);
+    }
+
+    @Test
+    void fallbackResultCountMismatch_throws503() {
+        ai.failure = new TranslationProviderException();
+        LineTranslationClient shortGoogle = (lines, source, target) ->
+            new LineTranslationClient.Result("ja", List.of(new LineTranslationClient.Line("하나", null)));
+        service = new PhotoTranslationService(inspector, validator, ai, shortGoogle, new PriceExtractor(), converter,
+            rateLimiter);
+
+        BusinessException exception = assertThrows(BusinessException.class,
+            () -> run(request(paragraph("p1", "a"), paragraph("p2", "b"))));
+
+        assertEquals(ErrorCode.TRANSLATION_PROVIDER_UNAVAILABLE, exception.getErrorCode());
+    }
+
+    @Test
     void uncertainPrice_notConfirmedNoKrw() {
         aiReturns(aiParagraph("p1", new PhotoTranslationClient.AiPrice("980円", new BigDecimal("980"), "JPY", true)));
 
