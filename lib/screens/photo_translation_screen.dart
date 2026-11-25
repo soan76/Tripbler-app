@@ -47,7 +47,7 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
   bool _hasRequestedPermission = false;
   bool _isRequestingPermission = false;
   bool _isTakingPicture = false;
-  bool _consentOpen = false;
+  PhotoConsentPrompt? _consentPrompt;
 
   /// 권한 확인·카메라 준비 흐름 번호. 늦게 끝난 이전 흐름은 반영하지 않는다.
   int _flowId = 0;
@@ -72,7 +72,10 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
     WidgetsBinding.instance.removeObserver(this);
     _camera.captureInFlight.removeListener(_refresh);
     unawaited(_camera.dispose());
-    _notifier.leave();
+    // 위젯 트리를 정리하는 중에는 provider 상태를 바꿀 수 없으므로 정리가 끝난 뒤 떠난다.
+    // ProviderScope까지 사라졌으면 Notifier가 이미 정리되어 leave가 아무것도 하지 않는다.
+    final notifier = _notifier;
+    Future.microtask(notifier.leave);
     super.dispose();
   }
 
@@ -218,13 +221,18 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
     }
   }
 
-  // 동의 대화상자. 상태가 먼저 바뀌어(세션 변경 등) 코드로 닫힌 경우에는 취소를 알리지 않는다.
-  Future<void> _askConsent() async {
-    _consentOpen = true;
-    await showPhotoConsentDialog(
+  // 동의 대화상자. 사용자가 닫으면 콜백보다 먼저 [_consentPrompt]를 비워, 콜백이 바꾼 상태를 보고
+  // 대화상자를 다시 닫으려 하지 않게 한다. 상태가 먼저 바뀌어(세션 변경 등) 코드로 닫은 경우에는
+  // 취소를 알리지 않는다(이미 동의를 기다리지 않는다).
+  void _askConsent() {
+    _consentPrompt = showPhotoConsentDialog(
       context,
-      onAccept: () => unawaited(_notifier.acceptConsentAndTranslate()),
+      onAccept: () {
+        _consentPrompt = null;
+        unawaited(_notifier.acceptConsentAndTranslate());
+      },
       onCancel: () {
+        _consentPrompt = null;
         if (mounted &&
             ref.read(photoTranslationProvider).status ==
                 PhotoTranslationStatus.awaitingConsent) {
@@ -232,7 +240,6 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
         }
       },
     );
-    _consentOpen = false;
   }
 
   void _onStateChanged(
@@ -242,10 +249,13 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
     final wasAwaiting =
         previous?.status == PhotoTranslationStatus.awaitingConsent;
     final isAwaiting = next.status == PhotoTranslationStatus.awaitingConsent;
-    if (isAwaiting && !wasAwaiting && !_consentOpen) {
-      unawaited(_askConsent());
-    } else if (wasAwaiting && !isAwaiting && _consentOpen) {
-      Navigator.of(context, rootNavigator: true).pop();
+    if (isAwaiting && !wasAwaiting && _consentPrompt == null) {
+      _askConsent();
+    } else if (wasAwaiting && !isAwaiting) {
+      // 이 대화상자 경로만 닫는다. 이미 닫혔으면 아무것도 하지 않는다.
+      final prompt = _consentPrompt;
+      _consentPrompt = null;
+      prompt?.close();
     }
     if (next.status == PhotoTranslationStatus.idle &&
         previous?.status != PhotoTranslationStatus.idle) {

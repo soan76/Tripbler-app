@@ -8,6 +8,8 @@ typedef _PlacedLine = ({
   Offset textOffset,
   TextPainter text,
   String? id,
+  TextPainter? marker,
+  Offset markerOffset,
 });
 
 // 단위(문단·항목)마다 원문 영역을 가리고 번역을 그 안에 맞춰 배치한다. 라벨을 영역 위에 띄우지 않는다.
@@ -87,12 +89,17 @@ class _TranslationBoxLayout {
     // 않게 조금 넓힌다(원문 줄 높이의 80% 글자 × 1.25 = 원문 줄 간격).
     var lineSpacing = _itemLineSpacing;
 
+    // 표시 아이콘은 글자와 따로 그리고 그 폭만큼 글자 폭을 줄여 둔다. 말줄임해도 아이콘이 남는다.
     TextPainter layout(
       TranslationBox line,
       double fontSize, {
       required double maxWidth,
       int? maxLines,
     }) {
+      final marker = _markerFor(line, fontSize, baseStyle, textDirection);
+      final markerWidth = marker == null ? 0.0 : marker.width;
+      marker?.dispose();
+      maxWidth -= markerWidth;
       return TextPainter(
         text: _spanFor(
           line,
@@ -169,27 +176,53 @@ class _TranslationBoxLayout {
         layout: layout,
       );
 
-      final box = _boxFor(rect, text, size);
+      final marker = _markerFor(
+        line,
+        (text.text! as TextSpan).style!.fontSize!,
+        baseStyle,
+        textDirection,
+      );
+      final box = _boxFor(rect, text, marker?.width ?? 0, size);
       final radius = Radius.circular(
         math.min(AppTheme.cornerRadius, box.shortestSide / 2),
       );
       // 한 줄 항목은 세로 가운데, 여러 줄 문단은 위에서부터 그린다.
       final centered =
           line.lineCount <= 1 && text.computeLineMetrics().length <= 1;
+      final textOffset = Offset(
+        box.left + _padding,
+        centered
+            ? box.top + (box.height - text.height) / 2
+            : box.top + _padding,
+      );
+      // 아이콘은 첫 줄 오른쪽 끝(상자 안쪽 여백 앞)에 둔다.
+      final firstLine = text.computeLineMetrics().firstOrNull;
+      final firstLineHeight = firstLine?.height ?? text.height;
       placed.add((
         box: RRect.fromRectAndRadius(box, radius),
-        textOffset: Offset(
-          box.left + _padding,
-          centered
-              ? box.top + (box.height - text.height) / 2
-              : box.top + _padding,
-        ),
+        textOffset: textOffset,
         text: text,
         id: line.id,
+        marker: marker,
+        markerOffset: marker == null
+            ? Offset.zero
+            : Offset(
+                box.right - _padding - marker.width,
+                textOffset.dy + (firstLineHeight - marker.height) / 2,
+              ),
       ));
     }
     assert(() {
       debugTranslationBoxes = [for (final line in placed) line.box.outerRect];
+      debugTranslationBoxMarkers = [
+        for (final line in placed)
+          if (line.marker case final marker?)
+            (
+              rect: line.markerOffset & marker.size,
+              glyphs: marker.plainText,
+              box: line.box.outerRect,
+            ),
+      ];
       return true;
     }());
     return _TranslationBoxLayout._(placed);
@@ -253,18 +286,12 @@ class _TranslationBoxLayout {
     return layout(translated, minFontSize, maxWidth: width, maxLines: maxLines);
   }
 
-  // 번역 글자. `[읽을 수 없음]`은 다른 색으로, 불확실·대체 번역이면 끝에 표시 아이콘을 붙인다.
-  // 아이콘도 글자 배치에 들어가므로 상자 크기 계산에 포함된다.
+  // 번역 글자. `[읽을 수 없음]`은 다른 색으로 그린다.
   static TextSpan _spanFor(TranslationBox line, TextStyle style) {
     final parts = line.translated.split(unreadableMarker);
     final markerStyle = style.copyWith(
       color: _TranslationBoxPainter.unreadableColor,
     );
-    final icon = line.uncertain
-        ? Icons.warning_amber_rounded
-        : line.fallback
-        ? Icons.info_outline
-        : null;
     return TextSpan(
       style: style,
       children: [
@@ -272,25 +299,61 @@ class _TranslationBoxLayout {
           if (i > 0) TextSpan(text: unreadableMarker, style: markerStyle),
           if (parts[i].isNotEmpty) TextSpan(text: parts[i]),
         ],
-        if (icon != null)
-          TextSpan(
-            text: ' ${String.fromCharCode(icon.codePoint)}',
-            style: style.copyWith(
-              fontFamily: icon.fontFamily,
-              package: icon.fontPackage,
-              color: line.uncertain
-                  ? _TranslationBoxPainter.uncertainColor
-                  : _TranslationBoxPainter.fallbackColor,
-            ),
-          ),
       ],
     );
   }
 
+  // 불확실(⚠)·대체 번역(ⓘ) 표시. 둘 다면 둘 다 그린다. 표시가 없으면 null.
+  static TextPainter? _markerFor(
+    TranslationBox line,
+    double fontSize,
+    TextStyle baseStyle,
+    TextDirection textDirection,
+  ) {
+    if (!line.uncertain && !line.fallback) {
+      return null;
+    }
+    TextSpan glyph(IconData icon, Color color) => TextSpan(
+      text: String.fromCharCode(icon.codePoint),
+      style: baseStyle.copyWith(
+        fontFamily: icon.fontFamily,
+        package: icon.fontPackage,
+        fontSize: fontSize,
+        height: 1,
+        color: color,
+      ),
+    );
+    return TextPainter(
+      text: TextSpan(
+        style: baseStyle.copyWith(fontSize: fontSize, height: 1),
+        children: [
+          const TextSpan(text: ' '),
+          if (line.uncertain)
+            glyph(uncertainIcon, _TranslationBoxPainter.uncertainColor),
+          if (line.fallback)
+            glyph(fallbackIcon, _TranslationBoxPainter.fallbackColor),
+        ],
+      ),
+      textDirection: textDirection,
+      maxLines: 1,
+    )..layout();
+  }
+
+  static const IconData uncertainIcon = Icons.warning_amber_rounded;
+  static const IconData fallbackIcon = Icons.info_outline;
+
   // 원문 영역을 덮으면서 번역 글자가 들어가는 배경 영역. 영역 밖으로 나가지 않게 옮긴다.
-  static Rect _boxFor(Rect rect, TextPainter painter, Size size) {
+  static Rect _boxFor(
+    Rect rect,
+    TextPainter painter,
+    double markerWidth,
+    Size size,
+  ) {
     final covered = rect.inflate(1);
-    final width = math.max(covered.width, painter.width + _padding * 2);
+    final width = math.max(
+      covered.width,
+      painter.width + markerWidth + _padding * 2,
+    );
     final height = math.max(covered.height, painter.height + _padding * 2);
 
     var left = covered.left;
@@ -303,6 +366,7 @@ class _TranslationBoxLayout {
   void dispose() {
     for (final line in lines) {
       line.text.dispose();
+      line.marker?.dispose();
     }
   }
 }
@@ -340,6 +404,7 @@ class _TranslationBoxPainter extends CustomPainter {
       canvas.drawRRect(line.box, background);
       canvas.drawRRect(line.box.deflate(_borderWidth / 2), border);
       line.text.paint(canvas, line.textOffset);
+      line.marker?.paint(canvas, line.markerOffset);
     }
 
     canvas.restore();

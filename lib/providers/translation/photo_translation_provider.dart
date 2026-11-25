@@ -252,7 +252,15 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
   }
 
   /// 화면을 떠난다. 진행 중인 작업을 버리고 임시 사진을 지운다.
-  void leave() => retake();
+  ///
+  /// 화면 제거 뒤 늦게 불릴 수 있다. 그 사이 Notifier가 정리됐으면 정리 때 사진을 이미 지웠으므로
+  /// 아무것도 하지 않는다.
+  void leave() {
+    if (!ref.mounted) {
+      return;
+    }
+    retake();
+  }
 
   void toggleOriginal() {
     state = state.copyWith(showOriginal: !state.showOriginal);

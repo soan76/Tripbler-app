@@ -353,6 +353,21 @@ void main() {
     await processing;
   });
 
+  test('leaveAfterDispose_doesNothing', () async {
+    await notifier().processPhoto('a.jpg');
+    final captured = notifier();
+
+    container.dispose();
+    disposed = true;
+    await pumpEventQueue();
+    expect(normalizer.deleted, ['tmp/photo_1.jpg']);
+
+    // 화면 제거 뒤 늦게 부른 leave는 오류 없이 아무것도 하지 않는다.
+    captured.leave();
+    await pumpEventQueue();
+    expect(normalizer.deleted, ['tmp/photo_1.jpg']);
+  });
+
   test('retryAfterFailure_resendsSamePhoto_noConsentPrompt', () async {
     await notifier().processPhoto('a.jpg');
     final accepting = notifier().acceptConsentAndTranslate();

@@ -168,3 +168,8 @@ int debugTranslationBoxLayoutCount = 0;
 /// 테스트용: 마지막으로 배치한 배경 상자(그리는 영역 좌표). 단위끼리 겹치지 않는지 확인한다.
 @visibleForTesting
 List<Rect> debugTranslationBoxes = const <Rect>[];
+
+/// 테스트용: 마지막으로 그린 불확실·대체 표시(표시 영역, 아이콘 글자, 그 표시가 붙은 상자).
+@visibleForTesting
+List<({Rect rect, String glyphs, Rect box})> debugTranslationBoxMarkers =
+    const [];

@@ -194,4 +194,71 @@ void main() {
       findsOneWidget,
     );
   });
+
+  group('불확실·대체 표시', () {
+    String glyph(IconData icon) => String.fromCharCode(icon.codePoint);
+
+    void expectMarkers(Rect box, {required List<IconData> icons}) {
+      final marker = debugTranslationBoxMarkers.singleWhere(
+        (marker) => marker.box == box,
+      );
+      for (final icon in icons) {
+        expect(marker.glyphs, contains(glyph(icon)));
+      }
+      // 표시는 상자 안에 그린다.
+      expect(box.inflate(0.01).contains(marker.rect.topLeft), isTrue);
+      expect(box.inflate(0.01).contains(marker.rect.bottomRight), isTrue);
+    }
+
+    testWidgets('불확실이면서 대체 번역이면 두 표시를 모두 그리고 낭독기에도 알린다', (tester) async {
+      await pumpOverlay(tester, [
+        const TranslationBox(
+          Rect.fromLTWH(20, 40, 240, 30),
+          1,
+          '매주 [읽을 수 없음] 휴무',
+          uncertain: true,
+          fallback: true,
+        ),
+      ]);
+
+      expect(tester.takeException(), isNull);
+      expectMarkers(
+        debugTranslationBoxes.single,
+        icons: [Icons.warning_amber_rounded, Icons.info_outline],
+      );
+      expect(
+        find.bySemanticsLabel(
+          RegExp(
+            '${TranslationBoxOverlay.uncertainLabel}, '
+            '${TranslationBoxOverlay.fallbackLabel}',
+          ),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('말줄임한 번역에도 표시가 남는다', (tester) async {
+      const upper = Rect.fromLTWH(20, 40, 120, 16);
+      const lower = Rect.fromLTWH(20, 64, 120, 16);
+      await pumpOverlay(tester, [
+        const TranslationBox(
+          upper,
+          1,
+          '아주 길게 늘어진 번역 문장이 원문 영역에 도저히 들어가지 않는 경우를 확인합니다',
+          uncertain: true,
+          fallback: true,
+        ),
+        const TranslationBox(lower, 1, '아래'),
+      ]);
+
+      expect(tester.takeException(), isNull);
+      final boxes = debugTranslationBoxes;
+      expect(boxes[0].bottom, lessThanOrEqualTo(lower.top));
+      expectMarkers(
+        boxes[0],
+        icons: [Icons.warning_amber_rounded, Icons.info_outline],
+      );
+      expect(debugTranslationBoxMarkers, hasLength(1));
+    });
+  });
 }

@@ -58,7 +58,10 @@ class _FakePhotoNotifier extends PhotoTranslationNotifier {
   @override
   void leave() {
     leaves++;
-    // 실제 Notifier처럼 상태를 비운다.
+    // 실제 Notifier처럼, 정리된 뒤면 아무것도 하지 않고 아니면 상태를 비운다.
+    if (!ref.mounted) {
+      return;
+    }
     state = state.reset();
   }
 }
@@ -224,5 +227,140 @@ void main() {
     await unmount(tester);
 
     expect(h.notifier.leaves, 1);
+  });
+
+  group('화면 위 경로 유지와 ProviderScope가 남는 제거', () {
+    const awaiting = PhotoTranslationState(
+      status: PhotoTranslationStatus.awaitingConsent,
+      photo: NormalizedPhoto(path: 'tmp/p.jpg', width: 800, height: 600),
+    );
+
+    /// 실제 시간을 흘려 애니메이션·경로 전환을 끝낸다.
+    Future<void> settle(WidgetTester tester) async {
+      for (var i = 0; i < 10; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+    }
+
+    void mockGrantedPermission(WidgetTester tester) {
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(_permissionChannel, (call) async {
+        return call.method == 'checkPermissionStatus' ? _granted : null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(_permissionChannel, null),
+      );
+      CameraPlatform.instance = FakeCameraPlatform();
+    }
+
+    /// 기본 경로('BASE') 위에 사진 번역 화면 경로를 올린다.
+    Future<({_FakePhotoNotifier notifier, NavigatorState navigator})>
+    pushOverBase(WidgetTester tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      mockGrantedPermission(tester);
+      final notifier = _FakePhotoNotifier();
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [photoTranslationProvider.overrideWith(() => notifier)],
+          child: MaterialApp(
+            home: const Scaffold(body: Text('BASE')),
+            routes: {
+              '/photo': (_) => const Scaffold(body: PhotoTranslationScreen()),
+            },
+          ),
+        ),
+      );
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      navigator.pushNamed('/photo');
+      await settle(tester);
+      expect(find.byType(PhotoTranslationScreen), findsOneWidget);
+
+      notifier.emit(awaiting);
+      await settle(tester);
+      expect(find.byType(PhotoConsentDialog), findsOneWidget);
+      return (notifier: notifier, navigator: navigator);
+    }
+
+    void expectScreenKept(NavigatorState navigator) {
+      expect(find.byType(PhotoConsentDialog), findsNothing);
+      expect(find.byType(PhotoTranslationScreen), findsOneWidget);
+      expect(find.text('BASE', skipOffstage: false), findsOneWidget);
+      // 남은 경로는 기본 경로와 사진 번역 화면뿐이다.
+      expect(navigator.canPop(), isTrue);
+    }
+
+    testWidgets('동의하면 대화상자만 닫고 화면과 기본 경로는 남는다', (tester) async {
+      final h = await pushOverBase(tester);
+
+      await tester.tap(find.text(PhotoConsentDialog.acceptLabel));
+      await settle(tester);
+
+      expect(h.notifier.accepted, 1);
+      expectScreenKept(h.navigator);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await settle(tester);
+    });
+
+    testWidgets('취소하면 대화상자만 닫고 화면과 기본 경로는 남는다', (tester) async {
+      final h = await pushOverBase(tester);
+
+      await tester.tap(find.text(PhotoConsentDialog.cancelLabel));
+      await settle(tester);
+
+      expect(h.notifier.cancelled, 1);
+      expectScreenKept(h.navigator);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await settle(tester);
+    });
+
+    testWidgets('상태가 바뀌어 대화상자를 닫아도 화면과 기본 경로는 남는다', (tester) async {
+      final h = await pushOverBase(tester);
+
+      h.notifier.emit(const PhotoTranslationState());
+      await settle(tester);
+
+      expect(h.notifier.cancelled, 0);
+      expectScreenKept(h.navigator);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await settle(tester);
+    });
+
+    testWidgets('ProviderScope를 남기고 화면만 제거해도 오류 없이 떠난다', (tester) async {
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      mockGrantedPermission(tester);
+      final notifier = _FakePhotoNotifier();
+      final show = ValueNotifier<bool>(true);
+      addTearDown(show.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [photoTranslationProvider.overrideWith(() => notifier)],
+          child: MaterialApp(
+            home: Scaffold(
+              body: ValueListenableBuilder<bool>(
+                valueListenable: show,
+                builder: (_, visible, _) => visible
+                    ? const PhotoTranslationScreen()
+                    : const Text('OTHER'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await flush(tester);
+
+      show.value = false;
+      await flush(tester);
+
+      expect(tester.takeException(), isNull);
+      expect(find.text('OTHER'), findsOneWidget);
+      expect(notifier.leaves, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await flush(tester);
+    });
   });
 }
