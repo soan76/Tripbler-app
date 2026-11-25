@@ -39,16 +39,18 @@ public record PhotoTranslationRequest(
     int imageHeight,
 
     @NotNull(message = "번역할 문단을 보내 주세요.")
+    // 임시값: 실제 Claude 측정(작업 14) 뒤 확정
     @Size(min = 1, max = 50, message = "한 번에 번역할 수 있는 문단은 1~50개입니다.")
-    @Valid
-    List<Paragraph> paragraphs
+    List<@NotNull(message = "문단이 비어 있습니다.") @Valid Paragraph> paragraphs
 ) {
 
     public record Paragraph(
+        @NotNull(message = "문단 ID를 보내 주세요.")
         @Pattern(regexp = "^p[0-9]{1,3}$", message = "문단 ID가 올바르지 않습니다.")
         String id,
 
         @NotBlank(message = "빈 문단은 보낼 수 없습니다.")
+        // 임시값: 실제 Claude 측정(작업 14) 뒤 확정
         @Size(max = 300, message = "한 문단은 300자 이하여야 합니다.")
         String text,
 

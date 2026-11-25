@@ -18,7 +18,7 @@ import com.tripbler.backend.translation.dto.PhotoTranslationRequest.Paragraph;
 @Component
 public class PhotoRequestValidator {
 
-    /** 임시값. 실제 비용·지연을 보고 조정한다. */
+    // 임시값: 실제 Claude 측정(작업 14) 뒤 확정
     static final int MAX_TOTAL_CHARACTERS = 4000;
 
     private static final double BOX_TOLERANCE = 0.02;

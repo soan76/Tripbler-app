@@ -7,6 +7,7 @@ import java.util.Iterator;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+import javax.imageio.stream.MemoryCacheImageInputStream;
 
 import org.springframework.stereotype.Component;
 
@@ -26,10 +27,7 @@ public class PhotoImageInspector {
         if (!hasJpegSignature(image)) {
             throw invalid(null);
         }
-        try (ImageInputStream input = ImageIO.createImageInputStream(new ByteArrayInputStream(image))) {
-            if (input == null) {
-                throw invalid(null);
-            }
+        try (ImageInputStream input = new MemoryCacheImageInputStream(new ByteArrayInputStream(image))) {
             Iterator<ImageReader> readers = ImageIO.getImageReadersByFormatName("jpeg");
             if (!readers.hasNext()) {
                 throw invalid(null);
