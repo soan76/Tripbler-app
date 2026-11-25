@@ -12,7 +12,14 @@ import '../widgets/navigation/app_top_bar.dart';
 import 'ai_chat_screen.dart';
 import 'exchange_screen.dart';
 import 'map_screen.dart';
+import 'photo_translation_screen.dart';
 import 'translation_screen.dart';
+
+// 실기기 시험용 사진 번역 진입점. `--dart-define=TRIPBLER_PHOTO_TRANSLATION=true`로 빌드할 때만 번역 탭이
+// 사진 번역 화면을 보여 준다. 사용자에게 보이는 스위치가 아니며, 번역 탭을 전환할 때(작업 16) 지운다.
+const bool _photoTranslationEnabled = bool.fromEnvironment(
+  'TRIPBLER_PHOTO_TRANSLATION',
+);
 
 // 메인 화면을 구성하는 StatelessWidget
 class MainScreen extends ConsumerWidget {
@@ -93,7 +100,9 @@ class MainScreen extends ConsumerWidget {
                     children: const [
                       ExchangeScreen(),
                       MapScreen(),
-                      TranslationScreen(),
+                      _photoTranslationEnabled
+                          ? PhotoTranslationScreen()
+                          : TranslationScreen(),
                       AiChatScreen(),
                     ],
                   ),
