@@ -18,8 +18,10 @@ import '../widgets/translation/translation_state_views.dart';
 
 /// 사진 번역 화면: 전체 화면 촬영 → (동의) → 사진 위 번역 상자.
 ///
-/// 사진 번역 상태가 `idle`이면 촬영 화면, 그 밖이면 결과 화면을 보여 준다. 카메라는 촬영 화면에서만
-/// 켜 두고, 사진을 고르면 끈다. 상태가 다시 `idle`이 되면(재촬영·동의 취소·세션 변경) 다시 켠다.
+/// 사진 번역 상태가 `idle`이면 촬영 화면, 그 밖이면 결과 화면을 보여 준다. 카메라는 번역 탭이 선택된
+/// 촬영 화면에서만 켜 두고, 사진을 고르거나 탭을 떠나면 끈다. 상태가 다시 `idle`이 되면(재촬영·동의
+/// 취소·세션 변경) 번역 탭일 때만 다시 켠다. MainScreen의 IndexedStack은 다른 탭에서도 이 화면을
+/// 만들어 두므로, 탭 확인 없이 켜면 보이지 않는 카메라가 켜진다.
 class PhotoTranslationScreen extends ConsumerStatefulWidget {
   const PhotoTranslationScreen({super.key});
 
@@ -82,6 +84,12 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
   bool get _inCaptureMode =>
       ref.read(photoTranslationProvider).status == PhotoTranslationStatus.idle;
 
+  bool get _isTabSelected =>
+      ref.read(tabProvider).selectedIndex == _translationTabIndex;
+
+  /// 카메라를 켜도 되는지: 번역 탭이 보이고 촬영 화면일 때.
+  bool get _wantsCamera => _isTabSelected && _inCaptureMode;
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
@@ -95,9 +103,9 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
     }
   }
 
-  // 촬영 화면일 때만 권한을 확인하고 카메라를 켠다.
+  // 번역 탭의 촬영 화면일 때만 권한을 확인하고 카메라를 켠다.
   Future<void> _startCamera() async {
-    if (!mounted || !_inCaptureMode) {
+    if (!mounted || !_wantsCamera) {
       return;
     }
     final flowId = ++_flowId;
@@ -121,7 +129,7 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
   }
 
   Future<void> _applyPermission(PermissionStatus status, int flowId) async {
-    if (!mounted || flowId != _flowId || !_inCaptureMode) {
+    if (!mounted || flowId != _flowId || !_wantsCamera) {
       return;
     }
     if (!status.isGranted) {
@@ -145,8 +153,8 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
         result == TranslationCameraInitResult.ignored) {
       return;
     }
-    if (!_inCaptureMode) {
-      // 준비하는 사이 사진을 골랐다: 카메라는 필요 없다.
+    if (!_wantsCamera) {
+      // 준비하는 사이 사진을 골랐거나 탭을 떠났다: 카메라는 필요 없다.
       unawaited(_camera.suspend());
       return;
     }
@@ -266,11 +274,16 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
   @override
   Widget build(BuildContext context) {
     ref.listen(photoTranslationProvider, _onStateChanged);
-    // 번역 탭을 떠나면 진행 중인 작업을 버리고 임시 사진을 지운다.
+    // 번역 탭을 떠나면 카메라를 끄고 진행 중인 작업을 버리고 임시 사진을 지운다. 돌아오면 다시 켠다.
     ref.listen(tabProvider, (previous, next) {
-      if (previous?.selectedIndex == _translationTabIndex &&
-          next.selectedIndex != _translationTabIndex) {
+      final wasSelected = previous?.selectedIndex == _translationTabIndex;
+      final isSelected = next.selectedIndex == _translationTabIndex;
+      if (wasSelected && !isSelected) {
+        _flowId++;
+        unawaited(_camera.suspend());
         _notifier.leave();
+      } else if (!wasSelected && isSelected) {
+        unawaited(_startCamera());
       }
     });
 

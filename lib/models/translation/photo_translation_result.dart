@@ -37,7 +37,8 @@ class PhotoPrice {
   /// 원문에 적힌 가격 그대로(예: `980円`).
   final String text;
 
-  /// 확정하지 못한 가격이면 null.
+  /// 금액. 확정하지 못한 가격이라도 서버가 금액을 읽었으면 들어 있고, 읽지 못했으면 null.
+  /// 확정 여부는 [confirmed]로 판단한다.
   final double? amount;
   final String? currency;
 

@@ -144,7 +144,11 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
       if (!_isCurrent(requestId)) {
         return;
       }
-      ocr = toOcrParagraphs(lines);
+      ocr = toOcrParagraphs(
+        lines,
+        photoWidth: photo.width,
+        photoHeight: photo.height,
+      );
     } catch (error) {
       debugPrint('사진 글자 인식 실패: ${error.runtimeType}');
       if (_isCurrent(requestId)) {
@@ -234,8 +238,10 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
   }
 
   /// 실패한 업로드를 같은 기준 사진·같은 문단으로 다시 보낸다. 동의는 다시 묻지 않는다.
+  /// 다시 보내도 같은 결과일 실패([PhotoTranslationState.canRetry]가 false)는 무시한다.
   Future<void> retry() async {
     if (state.status != PhotoTranslationStatus.failed ||
+        !state.canRetry ||
         state.photo == null ||
         state.paragraphs.isEmpty) {
       return;
@@ -313,6 +319,7 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
       status: PhotoTranslationStatus.uploading,
       clearResult: true,
       clearErrorMessage: true,
+      canRetry: false,
     );
 
     try {
@@ -345,9 +352,19 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
 
       state = state.copyWith(
         errorMessage: _errorMessage(error),
+        canRetry: _isRetryable(error),
         status: PhotoTranslationStatus.failed,
       );
     }
+  }
+
+  /// 같은 사진을 다시 보내 나아질 수 있는 실패인지(연결 실패·시간 초과, 429, 5xx).
+  static bool _isRetryable(Object error) {
+    if (error is! ApiException) {
+      return false;
+    }
+    final statusCode = error.statusCode;
+    return statusCode == null || statusCode == 429 || statusCode >= 500;
   }
 
   static String _errorMessage(Object error) {

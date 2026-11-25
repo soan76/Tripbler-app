@@ -119,7 +119,7 @@ class _PhotoResultViewState extends State<PhotoResultView> {
             box.right * fit,
             box.bottom * fit,
           ),
-          1,
+          paragraph.lineCount,
           translated.translated,
           id: paragraph.id,
           uncertain: translated.uncertain,
@@ -242,8 +242,8 @@ class _PhotoResultViewState extends State<PhotoResultView> {
             message: state.errorMessage,
             // 사진이 있으면 그대로 보이게 아래에 두고, 없으면 가운데에 둔다.
             hasPhoto: state.photo != null,
-            // 사진이 없으면(정리·글자 인식 실패) 다시 보낼 것이 없으므로 재촬영만 둔다.
-            onRetry: failed && state.photo != null ? widget.onRetry : null,
+            // 다시 보내 나아질 수 있는 실패일 때만 다시 시도를 둔다(판단은 Notifier가 한다).
+            onRetry: failed && state.canRetry ? widget.onRetry : null,
             onRetake: widget.onRetake,
           ),
         ];

@@ -66,6 +66,18 @@ class _FakePhotoNotifier extends PhotoTranslationNotifier {
   }
 }
 
+/// 처음 선택된 탭을 정한다(실제 앱은 홈에서 시작한다).
+class _TabAt extends TabNotifier {
+  _TabAt(this.initialIndex);
+
+  final int initialIndex;
+
+  @override
+  TabState build() => TabState(selectedIndex: initialIndex);
+}
+
+const int _translationTab = 2;
+
 void main() {
   late CameraPlatform originalCameraPlatform;
 
@@ -79,8 +91,9 @@ void main() {
   }
 
   Future<({_FakePhotoNotifier notifier, FakeCameraPlatform camera})> pumpScreen(
-    WidgetTester tester,
-  ) async {
+    WidgetTester tester, {
+    int tabIndex = _translationTab,
+  }) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -102,7 +115,10 @@ void main() {
 
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [photoTranslationProvider.overrideWith(() => notifier)],
+        overrides: [
+          photoTranslationProvider.overrideWith(() => notifier),
+          tabProvider.overrideWith(() => _TabAt(tabIndex)),
+        ],
         child: const MaterialApp(
           home: Scaffold(body: PhotoTranslationScreen()),
         ),
@@ -209,14 +225,50 @@ void main() {
       tester.element(find.byType(PhotoTranslationScreen)),
     );
     final tabs = container.read(tabProvider.notifier);
-
-    tabs.selectTab(2);
-    await flush(tester);
     expect(h.notifier.leaves, 0);
 
     tabs.selectTab(0);
     await flush(tester);
     expect(h.notifier.leaves, 1);
+
+    await unmount(tester);
+  });
+
+  testWidgets('다른 탭에 있으면 카메라를 켜지 않고, 번역 탭을 고르면 켠다', (tester) async {
+    final h = await pumpScreen(tester, tabIndex: TabState.homeIndex);
+    expect(h.camera.initializedCameraIds, isEmpty);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(PhotoTranslationScreen)),
+    );
+    container.read(tabProvider.notifier).selectTab(_translationTab);
+    await flush(tester);
+    expect(h.camera.initializedCameraIds, hasLength(1));
+
+    await unmount(tester);
+  });
+
+  testWidgets('결과 화면에서 탭을 떠나면 촬영 화면으로 돌아가도 카메라를 켜지 않는다', (tester) async {
+    final h = await pumpScreen(tester);
+    expect(h.camera.initializedCameraIds, hasLength(1));
+    h.notifier.emit(
+      const PhotoTranslationState(
+        status: PhotoTranslationStatus.failed,
+        photo: NormalizedPhoto(path: 'tmp/p.jpg', width: 800, height: 600),
+      ),
+    );
+    await flush(tester);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(PhotoTranslationScreen)),
+    );
+    // 탭을 떠나면 leave()로 상태가 idle이 되지만, 보이지 않는 카메라는 켜지 않는다.
+    container.read(tabProvider.notifier).selectTab(0);
+    await flush(tester);
+
+    expect(h.notifier.leaves, 1);
+    expect(h.camera.initializedCameraIds, hasLength(1));
+    expect(h.camera.disposedCameraIds, hasLength(1));
 
     await unmount(tester);
   });

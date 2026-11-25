@@ -24,6 +24,22 @@ File _writeJpeg(Directory dir, int width, int height, {int? orientation}) {
   return file;
 }
 
+int _indexOf(List<int> bytes, List<int> pattern) {
+  for (var i = 0; i + pattern.length <= bytes.length; i++) {
+    var matched = true;
+    for (var j = 0; j < pattern.length; j++) {
+      if (bytes[i + j] != pattern[j]) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 bool _isReddish(img.Pixel p) => p.r > 180 && p.g < 90 && p.b < 90;
 
 void main() {
@@ -102,6 +118,30 @@ void main() {
     );
 
     expect(decoded.exif.imageIfd.hasOrientation, isFalse);
+  });
+
+  test('outputHasNoExifAtAll_evenWithGpsAndCameraInfo', () async {
+    final image = img.Image(width: 400, height: 300);
+    img.fill(image, color: img.ColorRgb8(255, 255, 255));
+    image.exif.imageIfd.orientation = 6;
+    image.exif.imageIfd.make = 'TestCamera';
+    image.exif.gpsIfd.gpsLatitude = 37.5665;
+    image.exif.gpsIfd.gpsLongitude = 126.978;
+    final source = File('${dir.path}/source_gps.jpg')
+      ..writeAsBytesSync(img.encodeJpg(image, quality: 95));
+    // 원본에는 GPS가 실제로 들어 있다(전제 확인).
+    final sourceExif = img.decodeJpg(source.readAsBytesSync())!.exif;
+    expect(sourceExif.gpsIfd.hasGPSLatitude, isTrue);
+
+    final result = await normalizer.normalize(
+      sourcePath: source.path,
+      outputDirectory: dir.path,
+    );
+    final bytes = File(result.path).readAsBytesSync();
+
+    // EXIF APP1 서명("Exif\0\0")이 파일에 없고, 다시 읽어도 EXIF가 비어 있다.
+    expect(_indexOf(bytes, const [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]), -1);
+    expect(img.decodeJpg(bytes)!.exif.isEmpty, isTrue);
   });
 
   test('nonImageFile_throwsUnsupportedPhotoException', () async {

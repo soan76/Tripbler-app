@@ -164,6 +164,7 @@ void main() {
     expect(state().status, PhotoTranslationStatus.failed);
     expect(state().errorMessage, '번역 서버에 연결할 수 없습니다.');
     expect(state().photo, isNotNull);
+    expect(state().canRetry, isTrue);
 
     final retrying = notifier().retry();
     expect(state().status, PhotoTranslationStatus.uploading);
@@ -203,7 +204,8 @@ void main() {
   test('omittedParagraphs_countKept', () async {
     ocr.lines = [
       for (var i = 0; i < PhotoParagraphLimits.maxParagraphs + 3; i++)
-        fakeLine('글$i', i, i * 40.0),
+        // 기준 사진(세로 600) 안에 모두 들어가게 촘촘히 둔다.
+        fakeLine('글$i', i, i * 10.0),
     ];
 
     await notifier().processPhoto('a.jpg');
@@ -221,6 +223,32 @@ void main() {
 
     expect(state().status, PhotoTranslationStatus.failed);
     expect(state().errorMessage, contains('로그인이 만료'));
+    expect(state().canRetry, isFalse);
+  });
+
+  test('canRetry_onlyForNetwork429And5xx', () async {
+    consent.valid = true;
+    final cases = <Object, bool>{
+      const ApiException(message: '연결 실패'): true,
+      const ApiException(message: '요청 제한', statusCode: 429): true,
+      const ApiException(message: '서버 오류', statusCode: 503): true,
+      const ApiException(message: '잘못된 요청', statusCode: 400): false,
+      const ApiException(message: '사진이 큼', statusCode: 413): false,
+      const SessionChangedException(): false,
+    };
+    for (final MapEntry(key: error, value: retryable) in cases.entries) {
+      runnerError = error;
+      await notifier().processPhoto('a.jpg');
+
+      expect(state().status, PhotoTranslationStatus.failed, reason: '$error');
+      expect(state().canRetry, retryable, reason: '$error');
+    }
+
+    // 다시 보내도 같은 실패면 retry()는 아무것도 보내지 않는다.
+    runnerError = null;
+    await notifier().retry();
+    expect(api.calls, isEmpty);
+    expect(state().status, PhotoTranslationStatus.failed);
   });
 
   test('toggleOriginal_flips', () async {

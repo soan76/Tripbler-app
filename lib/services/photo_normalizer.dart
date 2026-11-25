@@ -26,7 +26,7 @@ class UnsupportedPhotoException implements Exception {
   String toString() => 'UnsupportedPhotoException';
 }
 
-/// 선택한 사진을 기준 사진 하나로 만든다. EXIF 방향을 픽셀에 반영하고(결과에는 방향 정보가 남지 않는다),
+/// 선택한 사진을 기준 사진 하나로 만든다. EXIF 방향을 픽셀에 반영하고(결과에는 EXIF가 하나도 남지 않는다),
 /// 긴 변을 [maxLongSide] 이하로 줄이고, JPEG로 저장한다. 무거운 처리는 별도 Isolate에서 한다.
 class PhotoNormalizer {
   // 임시값: 실제 Claude 측정(작업 14) 뒤 확정
@@ -79,6 +79,9 @@ class PhotoNormalizer {
           ? img.copyResize(image, width: PhotoNormalizer.maxLongSide)
           : img.copyResize(image, height: PhotoNormalizer.maxLongSide);
     }
+
+    // 위치(GPS)·기기·촬영 시각 같은 EXIF를 서버로 보내지 않도록 모두 지운다. 방향은 이미 픽셀에 반영했다.
+    image.exif = img.ExifData();
 
     File(outputPath).writeAsBytesSync(
       img.encodeJpg(image, quality: PhotoNormalizer.jpegQuality),

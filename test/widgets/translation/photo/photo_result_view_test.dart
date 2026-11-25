@@ -55,6 +55,7 @@ void main() {
             id: 'p1',
             text: 'ラーメン',
             box: Rect.fromLTWH(200, 300, 400, 100),
+            lineCount: 3,
           ),
         ];
     return PhotoTranslationState(
@@ -324,13 +325,14 @@ void main() {
     expect(retakes, 1);
   });
 
-  testWidgets('failed_showsRetry', (tester) async {
+  testWidgets('failed_showsRetryOnlyWhenRetryable', (tester) async {
     await pumpView(
       tester,
       const PhotoTranslationState(
         status: PhotoTranslationStatus.failed,
         photo: portrait,
         errorMessage: '번역 중 문제가 발생했습니다.',
+        canRetry: true,
       ),
     );
 
@@ -338,6 +340,30 @@ void main() {
     expect(find.text('번역 중 문제가 발생했습니다.'), findsOneWidget);
     await tester.tap(find.text(PhotoResultView.retryLabel));
     expect(retries, 1);
+
+    // 다시 보내도 같은 실패(400·413·로그인 만료 등)면 재촬영만 둔다.
+    await pumpView(
+      tester,
+      const PhotoTranslationState(
+        status: PhotoTranslationStatus.failed,
+        photo: portrait,
+        errorMessage: '로그인이 만료되었습니다.',
+      ),
+    );
+    expect(find.text(PhotoResultView.retryLabel), findsNothing);
+    expect(
+      find.widgetWithText(FilledButton, PhotoResultView.retakeLabel),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('번역 상자는 문단의 줄 수를 쓴다', (tester) async {
+    await pumpView(tester, completed());
+
+    final overlay = tester.widget<TranslationBoxOverlay>(
+      find.byType(TranslationBoxOverlay),
+    );
+    expect(overlay.boxes.single.lineCount, 3);
   });
 
   testWidgets('사진 없이 실패하면 다시 시도 없이 재촬영만 보인다', (tester) async {

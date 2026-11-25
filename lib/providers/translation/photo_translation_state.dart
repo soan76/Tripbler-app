@@ -37,6 +37,7 @@ class PhotoTranslationState {
     this.result,
     this.showOriginal = false,
     this.errorMessage,
+    this.canRetry = false,
     this.sourceLanguageCode = 'auto',
     this.targetLanguageCode = 'ko',
   });
@@ -56,6 +57,10 @@ class PhotoTranslationState {
   /// 번역 대신 원문을 보여 줄지.
   final bool showOriginal;
   final String? errorMessage;
+
+  /// 실패한 업로드를 같은 사진으로 다시 보내 볼 만한지. 연결 실패·429·5xx처럼 잠시 뒤 나아질 수 있는
+  /// 실패일 때만 true다. 잘못된 요청(400·413)이나 로그인 문제는 다시 보내도 같으므로 false다.
+  final bool canRetry;
   final String sourceLanguageCode;
   final String targetLanguageCode;
 
@@ -83,6 +88,7 @@ class PhotoTranslationState {
     bool? showOriginal,
     String? errorMessage,
     bool clearErrorMessage = false,
+    bool? canRetry,
     String? sourceLanguageCode,
     String? targetLanguageCode,
   }) {
@@ -96,6 +102,7 @@ class PhotoTranslationState {
       errorMessage: clearErrorMessage
           ? null
           : errorMessage ?? this.errorMessage,
+      canRetry: canRetry ?? this.canRetry,
       sourceLanguageCode: sourceLanguageCode ?? this.sourceLanguageCode,
       targetLanguageCode: targetLanguageCode ?? this.targetLanguageCode,
     );
