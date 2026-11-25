@@ -200,6 +200,19 @@ class PhotoTranslationServiceTest {
     }
 
     @Test
+    void correctedOriginalWithMarker_returnedAsOriginal() {
+        String corrected = "ラーメン " + PhotoTranslationResponse.UNREADABLE_MARKER;
+        aiReturns(new PhotoTranslationClient.Paragraph("p1", corrected,
+            "라멘 " + PhotoTranslationResponse.UNREADABLE_MARKER, true, null, List.of()));
+
+        TranslatedParagraph paragraph = run(request(paragraph("p1", "ラ-メン 9?0"))).paragraphs().get(0);
+
+        assertEquals(corrected, paragraph.original());
+        assertEquals(TranslationSource.AI, paragraph.translationSource());
+        assertTrue(paragraph.uncertain());
+    }
+
+    @Test
     void confirmedPrice_hasKrw() {
         when(exchangeService.getRates("JPY", "KRW")).thenReturn(new ExchangeRateResponse("JPY",
             Map.of("KRW", new BigDecimal("9.29")), LocalDate.of(2026, 11, 21), FETCHED_AT, false));

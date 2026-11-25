@@ -66,7 +66,7 @@
 ```
 
 - 문단 순서·개수·ID는 요청과 같다. `sourceLanguageCode`는 요청이 `auto`면 감지한 언어(AI 감지 → 대체 번역 감지 순, 모르면 `auto`).
-- `original`: AI가 사진과 대조해 보정한 원문. 대체 번역 문단은 OCR 원문 그대로.
+- `original`: AI가 사진과 대조해 보정한 원문(사진에서 분명히 다를 때만 고침, 읽지 못한 부분은 표식). AI 원문이 비었거나 길이 상한(max(200, OCR 글자 수×4))을 넘으면 OCR 원문을 쓴다. 대체 번역 문단은 OCR 원문 그대로.
 - `uncertain`: 읽지 못한 부분이 있으면 `true`. 그 부분은 `original`·`translated` 안에 정확히 `[읽을 수 없음]`(`PhotoTranslationResponse.UNREADABLE_MARKER`, 앱 `unreadableMarker`와 같은 값)으로 남는다.
 - `translationSource`: 문단마다 `AI`(사진 대조 번역) 또는 `OCR_TEXT`(OCR 글자만으로 한 대체 번역).
 - `pronunciation`: 원문을 소리 나는 대로 적은 한글(참고용). 규칙은 `/lines`와 같고, `OCR_TEXT` 문단은 `null`.
@@ -75,7 +75,7 @@
 ### 대체 번역 규칙
 
 - AI 호출이 실패하면(시간 초과, 거절, 출력 한도 도달, 응답 해석 실패, 키·크레딧 없음 등 `TranslationProviderException`) 모든 문단을 대체한다.
-- AI 응답의 문단은 ID로 맞춘다. 요청에 없는 ID는 버리고, 같은 ID가 여러 번 오면 처음 것만 쓴다. **AI가 돌려주지 않은 문단만** 대체한다(문단별 대체).
+- AI 응답의 문단은 ID로 맞춘다. 요청에 없는 ID는 버리고, 같은 ID가 여러 번 오면 처음 것만 쓴다. **AI가 돌려주지 않은 문단만** 대체한다(문단별 대체). 번역이 비었거나 길이 상한을 넘은 AI 문단도 돌려주지 않은 것으로 보고 대체한다.
 - 대체는 대체할 문단의 OCR 글자를 Google 번역(`GoogleLineTranslationClient`)으로 한 번에 번역한다. Google도 실패하거나 개수가 맞지 않으면 요청 전체가 503이다.
 - 대체 문단의 가격은 OCR 글자에서 `PriceExtractor`로 찾고, 번역문의 통화 단어를 원문 통화에 맞춘다(`TranslatedCurrencyFixer`, `/lines`와 같음).
 

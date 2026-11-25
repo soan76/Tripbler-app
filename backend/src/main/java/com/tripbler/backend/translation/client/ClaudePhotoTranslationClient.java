@@ -83,6 +83,8 @@ public class ClaudePhotoTranslationClient implements PhotoTranslationClient {
           uncertain to true.
         - Use each paragraph id exactly as given. Return one item per input paragraph. Never merge,
           split, or create paragraphs.
+        - original: the paragraph's source text as shown in the photo. Start from the OCR text and fix it
+          only where the photo clearly shows different text; put %1$s in place of unreadable parts.
         - translated: a natural translation into the target language. Keep numbers and amounts as
           written, but translate currency units into the target language's words (for Korean:
           円 -> 엔, 元 -> 위안). Do not add explanations or facts that are not in the photo.
@@ -112,6 +114,8 @@ public class ClaudePhotoTranslationClient implements PhotoTranslationClient {
     record OutputParagraph(
         @JsonPropertyDescription("Id of the input paragraph, unchanged")
         String id,
+        @JsonPropertyDescription("Source text corrected against the photo; unreadable parts replaced by the marker")
+        String original,
         @JsonPropertyDescription("Translation into the target language; unreadable parts replaced by the marker")
         String translated,
         @JsonPropertyDescription("True if any part was unreadable or the translation is not certain")
@@ -343,8 +347,9 @@ public class ClaudePhotoTranslationClient implements PhotoTranslationClient {
     }
 
     /**
-     * 출력을 검사해 결과로 옮긴다. ID는 걸러 내지 않는다(서비스가 검증). 번역이 비정상적으로 긴 문단은 빼서
-     * 서비스가 그 문단만 대체 번역하게 한다. 발음은 참고용이라 너무 길거나 한글이 아닌 문자가 섞이면 버린다.
+     * 출력을 검사해 결과로 옮긴다. ID는 걸러 내지 않는다(서비스가 검증). 번역이 비었거나 비정상적으로 긴
+     * 문단은 빼서 서비스가 그 문단만 대체 번역하게 한다. 보정한 원문이 비었거나 너무 길면 OCR 글자를 쓴다.
+     * 발음은 참고용이라 너무 길거나 한글이 아닌 문자가 섞이면 버린다.
      */
     static Result toResult(Output output, List<PhotoTranslationRequest.Paragraph> requested) {
         Map<String, String> originals = new HashMap<>();
@@ -362,20 +367,25 @@ public class ClaudePhotoTranslationClient implements PhotoTranslationClient {
                 continue;
             }
 
-            String original = originals.get(item.id());
-            int limit = ClaudeOutputText.lengthLimit(original == null ? 0 : original.length());
+            String ocrText = originals.get(item.id());
+            int limit = ClaudeOutputText.lengthLimit(ocrText == null ? 0 : ocrText.length());
             String translated = ClaudeOutputText.clean(item.translated());
 
-            if (translated.length() > limit) {
+            // 빈 번역은 빈 상자로 보이므로 긴 번역과 같이 빼서 대체 번역하게 한다.
+            if (translated.isEmpty() || translated.length() > limit) {
                 dropped++;
                 continue;
             }
+
+            String corrected = ClaudeOutputText.clean(item.original());
+            String original = corrected.isEmpty() || corrected.length() > limit ? ocrText : corrected;
 
             paragraphs.add(new Paragraph(
                 item.id(),
                 original,
                 translated,
-                item.uncertain() || translated.contains(PhotoTranslationResponse.UNREADABLE_MARKER),
+                item.uncertain() || translated.contains(PhotoTranslationResponse.UNREADABLE_MARKER)
+                    || (original != null && original.contains(PhotoTranslationResponse.UNREADABLE_MARKER)),
                 ClaudeOutputText.pronunciationOrNull(ClaudeOutputText.clean(item.pronunciation()), limit),
                 toPrices(item.prices(), limit)
             ));

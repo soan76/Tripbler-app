@@ -7,6 +7,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -104,6 +105,12 @@ class ClaudePhotoTranslationClientTest {
     ) {
         return Map.of("id", id, "translated", translated, "uncertain", uncertain,
             "pronunciation", pronunciation, "prices", prices);
+    }
+
+    private static Map<String, Object> withOriginal(Map<String, Object> paragraph, String original) {
+        Map<String, Object> copy = new HashMap<>(paragraph);
+        copy.put("original", original);
+        return copy;
     }
 
     private static Map<String, Object> price(String text, String amount, String currency, boolean uncertain) {
@@ -353,5 +360,53 @@ class ClaudePhotoTranslationClientTest {
         assertEquals(1, paragraphs.size());
         assertEquals("p2", paragraphs.get(0).id());
         assertNull(paragraphs.get(0).pronunciation());
+    }
+
+    @Test
+    void mapsCorrectedOriginalAndFallsBackToOcrTextWhenBlankOrTooLong() throws Exception {
+        FakeSender sender = new FakeSender();
+        String corrected = "醤油ラーメン " + PhotoTranslationResponse.UNREADABLE_MARKER + "円";
+        sender.response = response("end_turn", outputJson(List.of(
+            withOriginal(paragraph("p1", "간장 라멘", false, "", List.of()), " " + corrected + "‮ "),
+            withOriginal(paragraph("p2", "교자", false, "", List.of()), "  ")
+        )));
+        ClaudePhotoTranslationClient client = new ClaudePhotoTranslationClient(sender, MODEL);
+
+        List<PhotoTranslationClient.Paragraph> paragraphs =
+            client.translate(JPEG, "image/jpeg", PARAGRAPHS, "ja", "ko").paragraphs();
+
+        // 보정한 원문은 정리해서 쓰고, 표식이 있으면 확실하지 않은 문단이 된다. 빈 원문은 OCR 글자로 둔다.
+        assertEquals(corrected, paragraphs.get(0).original());
+        assertTrue(paragraphs.get(0).uncertain());
+        assertEquals("餃子 450円", paragraphs.get(1).original());
+        assertFalse(paragraphs.get(1).uncertain());
+
+        sender.response = response("end_turn", outputJson(List.of(
+            withOriginal(paragraph("p1", "간장 라멘", false, "", List.of()), "가".repeat(201))
+        )));
+
+        assertEquals("醤油ラーメン 980円",
+            client.translate(JPEG, "image/jpeg", PARAGRAPHS, "ja", "ko").paragraphs().get(0).original());
+    }
+
+    @Test
+    void promptAsksForCorrectedOriginal() {
+        assertTrue(ClaudePhotoTranslationClient.SYSTEM_PROMPT.contains("- original:"));
+    }
+
+    @Test
+    void dropsParagraphWithBlankTranslation() throws Exception {
+        FakeSender sender = new FakeSender();
+        sender.response = response("end_turn", outputJson(List.of(
+            paragraph("p1", " ‏ ", false, "", List.of()),
+            paragraph("p2", "교자", false, "", List.of())
+        )));
+        ClaudePhotoTranslationClient client = new ClaudePhotoTranslationClient(sender, MODEL);
+
+        List<PhotoTranslationClient.Paragraph> paragraphs =
+            client.translate(JPEG, "image/jpeg", PARAGRAPHS, "ja", "ko").paragraphs();
+
+        // 빈 번역은 빈 상자가 되므로 빼서 서비스가 그 문단만 대체 번역하게 한다.
+        assertEquals(List.of("p2"), paragraphs.stream().map(PhotoTranslationClient.Paragraph::id).toList());
     }
 }

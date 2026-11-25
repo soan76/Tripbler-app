@@ -28,7 +28,8 @@ public interface PhotoTranslationClient {
     }
 
     /**
-     * @param original      요청에서 같은 ID의 OCR 글자. 요청에 없는 ID면 null.
+     * @param original      AI가 사진과 대조해 보정한 원문. 비었거나 너무 길면 요청에서 같은 ID의 OCR 글자,
+     *                      그것도 없으면(요청에 없는 ID) null.
      * @param uncertain     읽을 수 없는 부분이 있거나 확실하지 않은 번역이면 true.
      * @param pronunciation 원문의 한글 발음. 없으면 null.
      */
