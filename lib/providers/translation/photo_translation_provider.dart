@@ -67,6 +67,14 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
   @override
   PhotoTranslationState build() {
     _normalizer = ref.read(photoNormalizerProvider);
+    // 로그인 세션이 바뀌면(로그인·로그아웃·계정 전환) 이전 세션의 사진·문단·결과를 비운다.
+    ref.listen(authProvider, (previous, next) {
+      if (previous != null && previous.sessionId != next.sessionId) {
+        _requestId++;
+        _releasePhoto();
+        state = state.reset();
+      }
+    });
     ref.onDispose(() {
       _requestId++;
       _releasePhoto();

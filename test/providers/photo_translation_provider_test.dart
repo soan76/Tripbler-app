@@ -153,6 +153,7 @@ void main() {
   late ProviderContainer container;
   late Object? runnerError;
   late bool disposed;
+  late FakeAuthNotifier auth;
 
   setUp(() {
     normalizer = _FakeNormalizer();
@@ -161,6 +162,7 @@ void main() {
     api = _FakeApi();
     runnerError = null;
     disposed = false;
+    auth = FakeAuthNotifier();
     container = ProviderContainer(
       overrides: [
         photoNormalizerProvider.overrideWithValue(normalizer),
@@ -168,7 +170,7 @@ void main() {
         ocrServiceProvider.overrideWithValue(ocr),
         photoConsentStoreProvider.overrideWithValue(consent),
         photoTranslationApiServiceProvider.overrideWithValue(api),
-        authProvider.overrideWith(() => FakeAuthNotifier()),
+        authProvider.overrideWith(() => auth),
         authorizedRequestRunnerProvider.overrideWithValue(<T>(
           Future<T> Function(String) request,
         ) async {
@@ -420,6 +422,44 @@ void main() {
 
     expect(state().status, PhotoTranslationStatus.failed);
     expect(state().errorMessage, contains('로그인이 만료'));
+  });
+
+  test('sessionChange_clearsStateAndDeletesPhoto', () async {
+    // 결과를 보고 있던 중 로그아웃하면 사진·문단·결과를 비운다.
+    notifier()
+      ..changeSourceLanguage('ja')
+      ..changeTargetLanguage('ja');
+    await notifier().processPhoto('a.jpg');
+    expect(state().status, PhotoTranslationStatus.completed);
+
+    auth.signOut();
+    await pumpEventQueue();
+
+    expect(state().status, PhotoTranslationStatus.idle);
+    expect(state().photo, isNull);
+    expect(state().paragraphs, isEmpty);
+    expect(state().result, isNull);
+    expect(state().targetLanguageCode, 'ja');
+    expect(normalizer.deleted, ['tmp/photo_1.jpg']);
+
+    // 업로드 중 계정이 바뀌면 늦게 온 응답을 버린다.
+    notifier().changeTargetLanguage('ko');
+    consent.valid = true;
+    final processing = notifier().processPhoto('b.jpg');
+    await pumpEventQueue();
+    expect(api.calls, hasLength(1));
+
+    auth.signIn();
+    await pumpEventQueue();
+    expect(state().status, PhotoTranslationStatus.idle);
+    expect(normalizer.deleted, ['tmp/photo_1.jpg', 'tmp/photo_2.jpg']);
+
+    api.calls.single.completer.complete(_result(api.calls.single.paragraphs));
+    await processing;
+
+    expect(state().status, PhotoTranslationStatus.idle);
+    expect(state().result, isNull);
+    expect(state().photo, isNull);
   });
 
   test('toggleOriginal_flips', () async {
