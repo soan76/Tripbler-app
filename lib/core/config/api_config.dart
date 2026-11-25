@@ -69,6 +69,12 @@ class ApiConfig {
     return Uri.parse(baseUrl).replace(path: translationLinesPath);
   }
 
+  static const String translationPhotoPath = '/api/v1/translation/photo';
+
+  static Uri get translationPhotoUri {
+    return Uri.parse(baseUrl).replace(path: translationPhotoPath);
+  }
+
   static const String placesPath = '/api/v1/places';
   static const String placesSearchPath = '$placesPath/search';
 
