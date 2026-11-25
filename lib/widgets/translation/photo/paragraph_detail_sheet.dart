@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/app_theme.dart';
 import '../../../models/translation/photo_translation_result.dart';
 
 /// 문단 상세를 아래 시트로 띄운다.
@@ -12,11 +13,18 @@ Future<void> showParagraphDetailSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(
+        top: Radius.circular(AppTheme.cornerRadius),
+      ),
+    ),
     builder: (_) => ParagraphDetailSheet(paragraph: paragraph),
   );
 }
 
 /// 문단 하나의 원문(보정된 원문)·번역·한글 발음·가격과, 불확실·대체 번역이면 그 이유를 보여 준다.
+///
+/// 번역을 가장 크게 두고, 이유는 번역 바로 아래에 상자 표시와 같은 아이콘으로 붙인다.
 class ParagraphDetailSheet extends StatelessWidget {
   const ParagraphDetailSheet({super.key, required this.paragraph});
 
@@ -33,6 +41,7 @@ class ParagraphDetailSheet extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final pronunciation = paragraph.pronunciation;
+    final fallback = paragraph.source == PhotoTranslationSource.ocrText;
 
     return SafeArea(
       child: ConstrainedBox(
@@ -40,24 +49,41 @@ class ParagraphDetailSheet extends StatelessWidget {
           maxHeight: MediaQuery.sizeOf(context).height * 0.8,
         ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (paragraph.uncertain) _ReasonLine(text: uncertainReason),
-              if (paragraph.source == PhotoTranslationSource.ocrText)
-                _ReasonLine(text: fallbackReason),
               _Section(
                 label: '번역',
                 child: Text(
                   paragraph.translated,
-                  style: theme.textTheme.titleMedium,
+                  style: theme.textTheme.titleLarge,
                 ),
               ),
-              _Section(label: '원문', child: Text(paragraph.original)),
+              // 상자의 표시 아이콘(⚠ 불확실, ⓘ 대체)과 같은 아이콘으로 이유를 붙인다.
+              if (paragraph.uncertain)
+                const _ReasonLine(
+                  icon: Icons.warning_amber_rounded,
+                  text: uncertainReason,
+                ),
+              if (fallback)
+                const _ReasonLine(
+                  icon: Icons.info_outline,
+                  text: fallbackReason,
+                ),
+              _Section(
+                label: '원문',
+                child: Text(
+                  paragraph.original,
+                  style: theme.textTheme.bodyLarge,
+                ),
+              ),
               if (pronunciation != null)
-                _Section(label: '한글 발음', child: Text(pronunciation)),
+                _Section(
+                  label: '한글 발음',
+                  child: Text(pronunciation, style: theme.textTheme.bodyLarge),
+                ),
               if (paragraph.prices.isNotEmpty)
                 _Section(
                   label: '가격',
@@ -77,24 +103,38 @@ class ParagraphDetailSheet extends StatelessWidget {
   }
 
   // 확정하지 못한 가격은 원문 가격만 보이고 표시를 붙인다. 확정했지만 환율이 없으면 가격만 보인다.
+  // 원화 금액이 이 시트에서 가장 먼저 찾는 값이라 강조색으로 둔다.
   Widget _priceLine(ThemeData theme, PhotoPrice price) {
+    final colorScheme = theme.colorScheme;
     final krw = price.krwAmount;
     final muted = theme.textTheme.bodySmall?.copyWith(
-      color: theme.colorScheme.onSurfaceVariant,
+      color: colorScheme.onSurfaceVariant,
     );
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Wrap(
         spacing: 8,
+        runSpacing: 4,
         crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          Text(price.text),
+          Text(price.text, style: theme.textTheme.bodyLarge),
           if (!price.confirmed)
-            Text(unconfirmedPriceLabel, style: muted)
+            DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(color: colorScheme.outline),
+                borderRadius: BorderRadius.circular(AppTheme.cornerRadius),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: Text(unconfirmedPriceLabel, style: muted),
+              ),
+            )
           else if (krw != null) ...[
             Text(
               '≈ ${_krwFormat.format(krw)}원',
-              style: theme.textTheme.titleSmall,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: colorScheme.primary,
+              ),
             ),
             if (price.rateStale) Text(staleRateLabel, style: muted),
           ],
@@ -114,7 +154,7 @@ class _Section extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.only(top: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -133,25 +173,29 @@ class _Section extends StatelessWidget {
 }
 
 class _ReasonLine extends StatelessWidget {
-  const _ReasonLine({required this.text});
+  const _ReasonLine({required this.icon, required this.text});
 
+  final IconData icon;
   final String text;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Padding(
-      padding: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.only(top: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            size: 18,
-            color: theme.colorScheme.onSurfaceVariant,
+          Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
-          const SizedBox(width: 6),
-          Expanded(child: Text(text, style: theme.textTheme.bodySmall)),
         ],
       ),
     );

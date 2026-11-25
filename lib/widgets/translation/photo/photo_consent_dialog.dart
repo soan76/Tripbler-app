@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/app_theme.dart';
+
 /// 사진 전송 동의 안내. 동의하면 [onAccept]를, 취소·뒤로가기·바깥 누르기면 [onCancel]을 한 번 부른다.
 ///
 /// 부르는 쪽이 대화상자를 코드로 닫으면(상태가 바뀌어 더 묻지 않아도 될 때) [onCancel]도 불린다.
@@ -30,7 +32,11 @@ class PhotoConsentDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 앱의 다른 버튼·입력창과 같은 둥글기(4)로 맞춘다.
     return AlertDialog(
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(Radius.circular(AppTheme.cornerRadius)),
+      ),
       title: const Text('사진 전송 안내'),
       content: const SingleChildScrollView(child: Text(message)),
       actions: [

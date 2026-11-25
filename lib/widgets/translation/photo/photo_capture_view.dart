@@ -46,28 +46,43 @@ class PhotoCaptureView extends StatelessWidget {
   final VoidCallback onCapture;
   final VoidCallback onPickFromGallery;
 
+  // 촬영 화면은 미리보기 위에 그려 바탕이 늘 사진이라 앱 테마와 상관없이 어두운 테마로 그린다.
+  static final ThemeData _theme = AppTheme.darkTheme;
+
+  // 셔터 지름. 엄지로 바로 누를 수 있게 터치 영역 48dp보다 넉넉하게 둔다.
+  static const double _shutterIconSize = 64;
+
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (isCameraReady) _buildPreview(),
-          Positioned(
-            top: 8,
-            left: 12,
-            right: 12,
-            child: _LanguageBar(
-              sourceLanguageCode: sourceLanguageCode,
-              targetLanguageCode: targetLanguageCode,
-              languages: languages,
-              onSourceLanguageChanged: onSourceLanguageChanged,
-              onTargetLanguageChanged: onTargetLanguageChanged,
+    final colorScheme = _theme.colorScheme;
+    return Theme(
+      data: _theme,
+      child: Material(
+        color: colorScheme.surfaceContainerLowest,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (isCameraReady) _buildPreview(),
+            Positioned(
+              top: 8,
+              left: 8,
+              right: 8,
+              child: _LanguageBar(
+                sourceLanguageCode: sourceLanguageCode,
+                targetLanguageCode: targetLanguageCode,
+                languages: languages,
+                onSourceLanguageChanged: onSourceLanguageChanged,
+                onTargetLanguageChanged: onTargetLanguageChanged,
+              ),
             ),
-          ),
-          Positioned(left: 0, right: 0, bottom: 0, child: _buildControls()),
-        ],
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _buildControls(colorScheme),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -92,44 +107,57 @@ class PhotoCaptureView extends StatelessWidget {
     );
   }
 
-  Widget _buildControls() {
-    const white = Colors.white;
-    return DecoratedBox(
-      decoration: const BoxDecoration(color: Colors.black54),
+  // 아래 막대: 갤러리 · 셔터 · 플래시, 그 아래 전송 안내. 사진 위에서도 읽히게 단색으로 어둡게 덮는다.
+  Widget _buildControls(ColorScheme colorScheme) {
+    final shutterEnabled = isCameraReady && !isCapturing;
+    return ColoredBox(
+      color: colorScheme.scrim.withValues(alpha: 0.6),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                IconButton(
+                IconButton.filledTonal(
                   tooltip: galleryTooltip,
-                  color: white,
                   onPressed: isCapturing ? null : onPickFromGallery,
                   icon: const Icon(Icons.photo_library_outlined),
                 ),
+                // 촬영 중에는 셔터 자리에 진행 표시를 두어 눌렸음을 알린다.
                 IconButton(
                   tooltip: shutterTooltip,
-                  iconSize: 64,
-                  color: white,
-                  onPressed: isCameraReady && !isCapturing ? onCapture : null,
-                  icon: const Icon(Icons.radio_button_checked),
+                  iconSize: _shutterIconSize,
+                  color: colorScheme.onSurface,
+                  disabledColor: colorScheme.onSurface.withValues(alpha: 0.38),
+                  onPressed: shutterEnabled ? onCapture : null,
+                  icon: isCapturing
+                      ? const SizedBox.square(
+                          dimension: _shutterIconSize,
+                          child: Padding(
+                            padding: EdgeInsets.all(12),
+                            child: CircularProgressIndicator(strokeWidth: 3),
+                          ),
+                        )
+                      : const Icon(Icons.radio_button_checked),
                 ),
-                IconButton(
+                IconButton.filledTonal(
                   tooltip: isFlashOn ? flashOffTooltip : flashOnTooltip,
-                  color: white,
+                  isSelected: isFlashOn,
                   onPressed: isCameraReady ? onToggleFlash : null,
-                  icon: Icon(isFlashOn ? Icons.flash_on : Icons.flash_off),
+                  icon: const Icon(Icons.flash_off),
+                  selectedIcon: const Icon(Icons.flash_on),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            const Text(
+            const SizedBox(height: 8),
+            Text(
               notice,
               textAlign: TextAlign.center,
-              style: TextStyle(color: white),
+              style: _theme.textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurface,
+              ),
             ),
           ],
         ),
@@ -147,6 +175,9 @@ class _LanguageBar extends StatelessWidget {
     required this.onTargetLanguageChanged,
   });
 
+  static const String sourceLabel = '원문 언어';
+  static const String targetLabel = '번역 언어';
+
   final String sourceLanguageCode;
   final String targetLanguageCode;
   final List<TranslationLanguage> languages;
@@ -155,29 +186,38 @@ class _LanguageBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final targets = languages.where((language) => language.code != 'auto');
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.black54,
+        color: theme.colorScheme.scrim.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(AppTheme.cornerRadius),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
           children: [
             Expanded(
               child: _dropdown(
+                theme,
+                sourceLabel,
                 sourceLanguageCode,
                 languages,
                 onSourceLanguageChanged,
               ),
             ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Icon(Icons.arrow_forward, color: Colors.white, size: 18),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Icon(
+                Icons.arrow_forward,
+                color: theme.colorScheme.onSurfaceVariant,
+                size: 20,
+              ),
             ),
             Expanded(
               child: _dropdown(
+                theme,
+                targetLabel,
                 targetLanguageCode,
                 targets.toList(),
                 onTargetLanguageChanged,
@@ -190,6 +230,8 @@ class _LanguageBar extends StatelessWidget {
   }
 
   Widget _dropdown(
+    ThemeData theme,
+    String label,
     String value,
     List<TranslationLanguage> options,
     ValueChanged<String> onChanged,
@@ -197,25 +239,32 @@ class _LanguageBar extends StatelessWidget {
     final safeValue = options.any((language) => language.code == value)
         ? value
         : options.first.code;
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: safeValue,
-        isExpanded: true,
-        dropdownColor: Colors.black87,
-        iconEnabledColor: Colors.white,
-        style: const TextStyle(color: Colors.white, fontSize: 14),
-        items: [
-          for (final language in options)
-            DropdownMenuItem(
-              value: language.code,
-              child: Text(language.label, overflow: TextOverflow.ellipsis),
-            ),
-        ],
-        onChanged: (selected) {
-          if (selected != null) {
-            onChanged(selected);
-          }
-        },
+    // 낭독기가 어느 쪽 언어인지 알 수 있게 이름을 붙인다.
+    return Semantics(
+      label: label,
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: safeValue,
+          isExpanded: true,
+          borderRadius: BorderRadius.circular(AppTheme.cornerRadius),
+          dropdownColor: theme.colorScheme.surfaceContainerHigh,
+          iconEnabledColor: theme.colorScheme.onSurface,
+          style: theme.textTheme.titleSmall?.copyWith(
+            color: theme.colorScheme.onSurface,
+          ),
+          items: [
+            for (final language in options)
+              DropdownMenuItem(
+                value: language.code,
+                child: Text(language.label, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: (selected) {
+            if (selected != null) {
+              onChanged(selected);
+            }
+          },
+        ),
       ),
     );
   }

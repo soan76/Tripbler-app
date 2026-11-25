@@ -11,6 +11,12 @@ import '../../../services/photo_normalizer.dart';
 import '../translation_box_overlay.dart';
 import 'paragraph_detail_sheet.dart';
 
+part 'photo_result_panels.dart';
+
+/// 결과 화면은 사진을 보여 주는 화면이라 앱 테마(라이트/다크)와 상관없이 어두운 테마로 그린다.
+/// 상세 시트처럼 사진을 덮지 않는 화면은 앱 테마를 따른다.
+final ThemeData _photoViewTheme = AppTheme.darkTheme;
+
 /// 사진 번역 결과 화면: 기준 사진 전체(contain) 위에 번역 상자를 덮어 그린다.
 ///
 /// 사진과 상자는 한 [InteractiveViewer] 안의 같은 `Stack`에 있어 확대·이동을 함께 한다. 상자 좌표는
@@ -138,32 +144,32 @@ class _PhotoResultViewState extends State<PhotoResultView> {
     final state = widget.state;
     final completed = state.status == PhotoTranslationStatus.completed;
 
-    return ColoredBox(
-      color: Colors.black,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _TopBar(
-            onRetake: widget.onRetake,
-            toggleLabel: !completed
-                ? null
-                : state.showOriginal
-                ? PhotoResultView.showTranslationLabel
-                : PhotoResultView.showOriginalLabel,
-            onToggleOriginal: widget.onToggleOriginal,
-          ),
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) => Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (state.photo != null) _buildPhoto(state.photo!),
-                  ..._buildStatus(constraints),
-                ],
+    // Material: 안쪽 글자·아이콘이 어두운 테마의 기본 글자 색을 쓰게 한다.
+    return Theme(
+      data: _photoViewTheme,
+      child: Material(
+        color: _photoViewTheme.colorScheme.surfaceContainerLowest,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _TopBar(
+              onRetake: widget.onRetake,
+              showingOriginal: completed ? state.showOriginal : null,
+              onToggleOriginal: widget.onToggleOriginal,
+            ),
+            Expanded(
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (state.photo != null) _buildPhoto(state.photo!),
+                    ..._buildStatus(constraints),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -197,8 +203,11 @@ class _PhotoResultViewState extends State<PhotoResultView> {
                     File(photo.path),
                     fit: BoxFit.fill,
                     gaplessPlayback: true,
-                    errorBuilder: (_, _, _) =>
-                        const ColoredBox(color: Color(0xFF303030)),
+                    errorBuilder: (context, _, _) => ColoredBox(
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                    ),
                   ),
                   if (showBoxes)
                     TranslationBoxOverlay(
@@ -214,10 +223,9 @@ class _PhotoResultViewState extends State<PhotoResultView> {
     );
   }
 
-  // 진행 표시, 실패·안내 카드, 결과 안내 줄.
+  // 진행 표시, 실패 안내, 결과 안내 묶음.
   List<Widget> _buildStatus(BoxConstraints constraints) {
     final state = widget.state;
-    final maxNoticeHeight = constraints.maxHeight * 0.4;
 
     switch (state.status) {
       case PhotoTranslationStatus.preparing:
@@ -229,11 +237,14 @@ class _PhotoResultViewState extends State<PhotoResultView> {
       case PhotoTranslationStatus.unsupportedPhoto:
         final failed = state.status == PhotoTranslationStatus.failed;
         return [
-          _MessageCard(
-            title: failed ? PhotoResultView.failedTitle : null,
+          _FailurePanel(
+            failed: failed,
             message: state.errorMessage,
+            // 사진이 있으면 그대로 보이게 아래에 두고, 없으면 가운데에 둔다.
+            hasPhoto: state.photo != null,
             // 사진이 없으면(정리·글자 인식 실패) 다시 보낼 것이 없으므로 재촬영만 둔다.
             onRetry: failed && state.photo != null ? widget.onRetry : null,
+            onRetake: widget.onRetake,
           ),
         ];
       case PhotoTranslationStatus.completed:
@@ -242,20 +253,9 @@ class _PhotoResultViewState extends State<PhotoResultView> {
           return const [];
         }
         return [
-          Positioned(
-            left: 12,
-            right: 12,
-            bottom: 12,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: maxNoticeHeight),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [for (final notice in notices) _Notice(notice)],
-                ),
-              ),
-            ),
+          _NoticePanel(
+            notices: notices,
+            maxHeight: constraints.maxHeight * 0.4,
           ),
         ];
       case PhotoTranslationStatus.idle:
@@ -278,164 +278,5 @@ class _PhotoResultViewState extends State<PhotoResultView> {
       if (missing > 0) PhotoResultView.missingNotice(missing),
       if (state.omittedCount > 0) PhotoResultView.omittedNotice,
     ];
-  }
-}
-
-class _TopBar extends StatelessWidget {
-  const _TopBar({
-    required this.onRetake,
-    required this.toggleLabel,
-    required this.onToggleOriginal,
-  });
-
-  final VoidCallback onRetake;
-  final String? toggleLabel;
-  final VoidCallback onToggleOriginal;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = TextButton.styleFrom(foregroundColor: Colors.white);
-    final label = toggleLabel;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      child: Row(
-        children: [
-          Flexible(
-            child: TextButton.icon(
-              style: style,
-              onPressed: onRetake,
-              icon: const Icon(Icons.arrow_back),
-              label: const Text(PhotoResultView.retakeLabel),
-            ),
-          ),
-          const Spacer(),
-          if (label != null)
-            Flexible(
-              child: TextButton(
-                style: style,
-                onPressed: onToggleOriginal,
-                child: Text(label),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Progress extends StatelessWidget {
-  const _Progress({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.black38,
-      child: Center(
-        child: _Card(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const SizedBox.square(
-                dimension: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-              const SizedBox(width: 12),
-              Flexible(child: Text(label)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MessageCard extends StatelessWidget {
-  const _MessageCard({
-    required this.title,
-    required this.message,
-    this.onRetry,
-  });
-
-  final String? title;
-  final String? message;
-  final VoidCallback? onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final title = this.title;
-    final message = this.message;
-    final onRetry = this.onRetry;
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: _Card(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (title != null)
-                Text(
-                  title,
-                  style: theme.textTheme.titleMedium,
-                  textAlign: TextAlign.center,
-                ),
-              if (message != null) ...[
-                const SizedBox(height: 8),
-                Text(message, textAlign: TextAlign.center),
-              ],
-              if (onRetry != null) ...[
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: onRetry,
-                  child: const Text(PhotoResultView.retryLabel),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Notice extends StatelessWidget {
-  const _Notice(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 6),
-      child: _Card(
-        child: Row(
-          children: [
-            const Icon(Icons.info_outline, size: 18),
-            const SizedBox(width: 8),
-            Expanded(child: Text(text)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Card extends StatelessWidget {
-  const _Card({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(AppTheme.cornerRadius),
-      ),
-      child: Padding(padding: const EdgeInsets.all(12), child: child),
-    );
   }
 }

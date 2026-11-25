@@ -145,6 +145,17 @@ void main() {
       expect(tapped, ['p2']);
     });
 
+    testWidgets('상자 바로 바깥(8 이내)을 눌러도 가까운 상자를 연다', (tester) async {
+      final tapped = <String>[];
+      await pumpOverlay(tester, boxes, onBoxTap: tapped.add);
+
+      final box = debugTranslationBoxes[1];
+      await tester.tapAt(Offset(box.center.dx, box.bottom + 6));
+      await tester.pump();
+
+      expect(tapped, ['p2']);
+    });
+
     testWidgets('tapOutside_noCallback', (tester) async {
       final tapped = <String>[];
       await pumpOverlay(tester, boxes, onBoxTap: tapped.add);

@@ -350,7 +350,12 @@ void main() {
     );
 
     expect(find.text(PhotoResultView.retryLabel), findsNothing);
-    expect(find.text(PhotoResultView.retakeLabel), findsOneWidget);
+    // 위 막대와 실패 안내 아래(엄지가 닿는 곳) 두 곳에서 재촬영할 수 있다.
+    expect(find.text(PhotoResultView.retakeLabel), findsNWidgets(2));
+    await tester.tap(
+      find.widgetWithText(FilledButton, PhotoResultView.retakeLabel),
+    );
+    expect(retakes, 1);
   });
 
   testWidgets('글자를 찾지 못하면 안내와 재촬영만 보인다', (tester) async {
@@ -364,7 +369,10 @@ void main() {
 
     expect(find.text('사진에서 번역할 글자를 찾지 못했습니다.'), findsOneWidget);
     expect(find.text(PhotoResultView.retryLabel), findsNothing);
-    expect(find.text(PhotoResultView.retakeLabel), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, PhotoResultView.retakeLabel),
+      findsOneWidget,
+    );
   });
 
   testWidgets('작은 화면(320폭)·글자 배율 2에서 넘치지 않는다', (tester) async {

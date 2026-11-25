@@ -24,14 +24,40 @@ class _TranslationBoxLayout {
   final List<_PlacedLine> lines;
 
   /// [position]을 덮는 상자의 id. 나중에 그린(위에 있는) 상자를 먼저 본다.
+  ///
+  /// 작은 상자도 손가락으로 누를 수 있게, 덮는 상자가 없으면 [_tapSlop] 안의 가장 가까운 상자를 고른다.
   String? idAt(Offset position) {
     for (final line in lines.reversed) {
       if (line.id != null && line.box.outerRect.contains(position)) {
         return line.id;
       }
     }
-    return null;
+    String? nearest;
+    var nearestDistance = double.infinity;
+    for (final line in lines.reversed) {
+      final rect = line.box.outerRect;
+      if (line.id == null || !rect.inflate(_tapSlop).contains(position)) {
+        continue;
+      }
+      final dx = math.max(
+        0.0,
+        math.max(rect.left - position.dx, position.dx - rect.right),
+      );
+      final dy = math.max(
+        0.0,
+        math.max(rect.top - position.dy, position.dy - rect.bottom),
+      );
+      final distance = dx * dx + dy * dy;
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = line.id;
+      }
+    }
+    return nearest;
   }
+
+  // 상자 밖이어도 이 거리(그리는 영역 좌표) 안이면 그 상자를 누른 것으로 본다.
+  static const double _tapSlop = 8;
 
   // 배경 안쪽 여백, 영역 가장자리 여백, 이웃 단위와의 간격.
   static const double _padding = 2;

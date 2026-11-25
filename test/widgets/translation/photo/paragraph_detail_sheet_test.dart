@@ -11,6 +11,7 @@ void main() {
     TranslatedParagraph paragraph, {
     Size size = const Size(400, 900),
     double textScale = 1,
+    ThemeData? theme,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -20,7 +21,7 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        theme: AppTheme.lightTheme,
+        theme: theme ?? AppTheme.lightTheme,
         home: Scaffold(body: ParagraphDetailSheet(paragraph: paragraph)),
       ),
     );
@@ -142,5 +143,36 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('다크 모드·작은 화면에서 확인되지 않은 가격도 넘치지 않는다', (tester) async {
+    await pumpSheet(
+      tester,
+      TranslatedParagraph(
+        id: 'p1',
+        original: '長い原文' * 20,
+        translated: '아주 긴 번역 문장 ' * 20,
+        uncertain: false,
+        source: PhotoTranslationSource.ai,
+        prices: const [
+          PhotoPrice(
+            text: '1,280,000,000円',
+            amount: 1280000000,
+            currency: 'JPY',
+            confirmed: false,
+          ),
+        ],
+      ),
+      size: const Size(320, 568),
+      textScale: 2,
+      theme: AppTheme.darkTheme,
+    );
+
+    expect(tester.takeException(), isNull);
+    expect(
+      find.text(ParagraphDetailSheet.unconfirmedPriceLabel),
+      findsOneWidget,
+    );
+    expect(find.textContaining(RegExp(r'[0-9]원')), findsNothing);
   });
 }
