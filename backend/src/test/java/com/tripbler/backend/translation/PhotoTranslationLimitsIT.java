@@ -63,8 +63,8 @@ import com.tripbler.backend.translation.service.PriceExtractor;
 import com.tripbler.backend.translation.service.TranslationService;
 
 /**
- * 사진 번역의 호출 제한·동시 처리 상한이 실제 요청 경로(내장 Tomcat의 multipart 해석 → 보안 → 인터셉터 →
- * 인자 해석·@Valid → 서비스)의 어디에서 적용되는지 확인한다. 서비스·검증·제한기·WebConfig는 실제 것이고,
+ * 사진 번역의 호출 제한·동시 처리 상한이 실제 요청 경로(내장 Tomcat → 보안 → 인터셉터 →
+ * 인자 해석(지연 multipart 해석)·@Valid → 서비스)의 어디에서 적용되는지 확인한다. 서비스·검증·제한기·WebConfig는 실제 것이고,
  * AI·Google·환율만 대역이다. DB 없이 띄운다.
  *
  * <p>접속 주소가 모두 127.0.0.1이라 IP 1분 한도(20회)를 이 클래스 전체가 함께 쓴다. 요청 수를 그 아래로 둔다.
@@ -141,15 +141,35 @@ class PhotoTranslationLimitsIT {
         assertThat(ai.calls()).isZero();
     }
 
-    // multipart 해석이 인터셉터보다 먼저다: 크기 초과(413)는 해석 단계에서 끝나 어떤 한도도 쓰지 않는다.
+    // multipart는 인자 해석 때 지연 해석한다(resolve-lazily). 그래서 크기 초과 413도 인터셉터 뒤에 나며
+    // 사용자·IP 한도를 쓴다. 응답 형식(413 PAYLOAD_TOO_LARGE)은 그대로고, 전체 한도는 쓰지 않는다.
     @Test
-    void oversizeUpload_failsInMultipartParsing_beforeInterceptor() throws Exception {
+    void oversizeUpload_failsAfterInterceptor_consumesUserAndIp() throws Exception {
         byte[] oversize = Arrays.copyOf(jpeg(), 5 * 1024 * 1024 + 256 * 1024);
 
         HttpResponse<String> response = send("oversize", body(oversize, "application/json", VALID_JSON));
 
         assertThat(response.statusCode()).isEqualTo(413);
-        assertThat(consumedBy("oversize")).isEmpty();
+        assertThat(response.body()).contains("\"code\":\"PAYLOAD_TOO_LARGE\"").contains(PATH);
+        assertThat(consumedBy("oversize")).containsExactly(USER_AND_IP);
+        assertThat(globalCalls()).isZero();
+        assertThat(ai.calls()).isZero();
+    }
+
+    // 경계가 닫히지 않은 multipart 본문은 인자 해석 중 MultipartException이 되고 이 경로에서는 400이다.
+    @Test
+    void brokenMultipart_returns400_afterInterceptor() throws Exception {
+        byte[] broken = ("--" + BOUNDARY + "\r\n"
+            + "Content-Disposition: form-data; name=\"image\"; filename=\"photo.jpg\"\r\n"
+            + "Content-Type: image/jpeg\r\n\r\nnot finished").getBytes(StandardCharsets.UTF_8);
+
+        HttpResponse<String> response = send("broken", broken);
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).contains("\"code\":\"INVALID_REQUEST\"").contains(PATH)
+            .doesNotContain("not finished");
+        assertThat(consumedBy("broken")).containsExactly(USER_AND_IP);
+        assertThat(globalCalls()).isZero();
     }
 
     // (c)(d) 같은 사용자의 두 번째 동시 요청은 사용자 상한으로, 전체 자리가 차면 다른 사용자도 429 + Retry-After: 3.

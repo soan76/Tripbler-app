@@ -14,8 +14,8 @@ import jakarta.servlet.http.HttpServletResponse;
  * 사진 번역(POST /api/v1/translation/photo)의 사용자별·IP별 호출 한도를 컨트롤러 인자 해석 전에 차감한다.
  *
  * 인자 해석(request JSON 해석, @Valid, 파트 확인)에서 실패하는 요청도 한도를 쓰게 하려고 서비스가 아니라 여기서 센다.
- * 그래서 큰 사진에 잘못된 request를 붙여 한도 없이 반복할 수 없다. multipart 해석은 DispatcherServlet이
- * 인터셉터보다 먼저 하므로(크기 초과 413 등) 그 단계에서 끝나는 요청은 한도를 쓰지 않는다.
+ * 그래서 큰 사진에 잘못된 request를 붙여 한도 없이 반복할 수 없다. multipart는 지연 해석(resolve-lazily)이라
+ * 인자 해석 때 일어나므로, 해석에서 끝나는 요청(크기 초과 413, 깨진 multipart 400)도 이 한도를 쓴다.
  * 서버 전체 한도는 검증을 통과하고 동시 처리 자리를 잡은 뒤 PhotoTranslationService가 차감한다.
  *
  * 경로는 원문 URI가 아니라 Spring이 매칭한 경로 패턴으로 판단한다(AuthRateLimitInterceptor와 같은 이유).

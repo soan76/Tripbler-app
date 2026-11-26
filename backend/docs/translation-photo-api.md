@@ -96,7 +96,7 @@
 | --- | --- | --- |
 | 400 | `INVALID_REQUEST` | 위 요청 규칙 위반(ID 형식·중복, 크기 불일치, 상자 범위, 한도 초과, JPEG 아님), `image`·`request` 파트 없음, `request` JSON이 깨졌거나 형식이 틀림, `request` 파트의 `Content-Type`이 JSON이 아님, multipart 해석 실패 |
 | 401 | - | 로그인하지 않음 |
-| 413 | `PAYLOAD_TOO_LARGE` | multipart 한도 초과(파일 5MB, 요청 6MB). 프로필 이미지 업로드는 기존대로 400 `INVALID_PROFILE_IMAGE` |
+| 413 | `PAYLOAD_TOO_LARGE` | multipart 한도 초과(파일 5MB, 요청 6MB). 사용자·IP 한도를 쓴다(아래 "호출 제한"). 프로필 이미지 업로드는 기존대로 400 `INVALID_PROFILE_IMAGE` |
 | 429 | `TOO_MANY_REQUESTS` | 호출 제한, 또는 동시 처리 상한(사용자별·전체) 도달(기다리지 않고 거절). `Retry-After`(초) 포함 |
 | 503 | `TRANSLATION_PROVIDER_UNAVAILABLE` | AI와 Google 대체 번역이 모두 실패 |
 
@@ -108,15 +108,20 @@
 
 요청이 지나가는 순서와 한도를 쓰는 위치:
 
-1. **multipart 해석**(DispatcherServlet, 인터셉터보다 먼저). 크기 초과 413이나 본문이 깨진 multipart는 여기서 끝나며 **어떤 한도도 쓰지 않는다.** 인터셉터보다 앞이라 막을 수 없다(아래 "업로드 단계 메모리"). 해석은 `resolve-lazily` 기본값(false)이라 이 단계에서 사진 파트를 끝까지 읽는다.
-2. 로그인 확인(`SecurityConfig`). 실패하면 401이며 한도를 쓰지 않는다.
-3. **사용자별·IP별 한도 차감**(`PhotoTranslationRateLimitInterceptor.preHandle`, 컨트롤러 인자 해석 전). 사용자 키는 JWT `sub`다. 그래서 그 뒤에 실패하는 요청 — `@Valid` 실패(문단 0개·51개 이상, 언어 코드 형식, 크기 범위 등), `request` JSON 해석 실패, `image`·`request` 파트 없음, `request` 파트가 JSON이 아님, 사진 검사·문단 검증 실패, 자리 부족 429 — 도 **모두 이 한도를 쓴다.** 큰 사진에 잘못된 `request`를 붙여 한도 없이 반복할 수 없다.
-4. 컨트롤러 인자 해석·`@Valid` → 서비스의 사진 검사·문단 검증. 실패하면 400이며 자리와 전체 한도는 쓰지 않는다.
-5. 동시 처리 자리(아래). 없으면 429이며 **전체 한도는 쓰지 않는다**(3의 사용자·IP 한도는 이미 썼고 되돌리지 않는다).
-6. **전체(GLOBAL) 한도 차감**(`PhotoTranslationService`, 검증을 통과하고 자리를 잡은 뒤). 잘못된 요청이나 거절된 요청으로 전체 한도를 소진할 수 없다. 여기서 429가 나도 3의 차감은 되돌리지 않는다.
-7. 번역 제공자 호출. 실패해도 한도는 되돌리지 않는다.
+multipart는 지연 해석한다(`spring.servlet.multipart.resolve-lazily=true`). `DispatcherServlet`은 요청을 감싸기만 하고, 파트는 컨트롤러 인자 해석(`@RequestPart`)이 처음 읽을 때 해석한다.
 
-검증: `PhotoTranslationLimitsIT`가 실제 내장 Tomcat에 multipart 요청을 보내 3·4 단계에서 실패하는 요청(`@Valid` 실패, JSON 해석 실패, 파트 없음, JSON이 아닌 `request` 파트, JPEG가 아닌 사진)이 모두 사용자·IP 한도를 한 번씩 쓰고 전체 한도는 쓰지 않음을, 크기 초과 413은 어떤 한도도 쓰지 않음(1이 인터셉터보다 먼저임)을 확인한다.
+1. **로그인 확인**(Spring Security 필터, `DispatcherServlet`보다 먼저). 로그인하지 않으면 401이며 multipart를 해석하지 않고 한도를 쓰지 않는다. 읽지 않은 본문은 Tomcat이 `max-swallow-size`(2MB)까지 버리며 읽는다(메모리에 쌓지 않음).
+2. 핸들러 매핑(`DispatcherServlet`). multipart는 아직 해석하지 않는다.
+3. **사용자별·IP별 한도 차감**(`PhotoTranslationRateLimitInterceptor.preHandle`, 컨트롤러 인자 해석 전). 사용자 키는 JWT `sub`다. 그래서 그 뒤에 실패하는 요청 — multipart 해석 실패(크기 초과 413, 깨진 본문 400), `@Valid` 실패(문단 0개·51개 이상, 언어 코드 형식, 크기 범위 등), `request` JSON 해석 실패, `image`·`request` 파트 없음, `request` 파트가 JSON이 아님, 사진 검사·문단 검증 실패, 자리 부족 429 — 도 **모두 이 한도를 쓴다.** 큰 사진에 잘못된 `request`를 붙이거나 크기를 넘겨 한도 없이 반복할 수 없고, 한도를 넘은 요청은 multipart를 해석하지 않는다.
+4. **컨트롤러 인자 해석**: 여기서 multipart를 해석한다. 크기 초과는 413 `PAYLOAD_TOO_LARGE`, 깨진 multipart는 400 `INVALID_REQUEST`다. 이어서 `request` JSON 해석·`@Valid`.
+5. 서비스의 사진 검사·문단 검증. 4·5에서 실패하면 자리와 전체 한도는 쓰지 않는다.
+6. 동시 처리 자리(아래). 없으면 429이며 **전체 한도는 쓰지 않는다**(3의 사용자·IP 한도는 이미 썼고 되돌리지 않는다).
+7. **전체(GLOBAL) 한도 차감**(`PhotoTranslationService`, 검증을 통과하고 자리를 잡은 뒤). 잘못된 요청이나 거절된 요청으로 전체 한도를 소진할 수 없다. 여기서 429가 나도 3의 차감은 되돌리지 않는다.
+8. 번역 제공자 호출. 실패해도 한도는 되돌리지 않는다.
+
+413·400 응답은 `GlobalExceptionHandler`가 요청 URI로 사진 경로를 가려 만든다. 지연 해석에서도 예외가 같은 요청에서 나므로 응답 형식은 전과 같다(`PhotoTranslationLimitsIT`, `PhotoTranslationNoStorageIT`에서 확인).
+
+검증: `PhotoTranslationLimitsIT`가 실제 내장 Tomcat에 multipart 요청을 보내 3 뒤에서 실패하는 요청(`@Valid` 실패, JSON 해석 실패, 파트 없음, JSON이 아닌 `request` 파트, JPEG가 아닌 사진, 크기 초과 413, 경계가 닫히지 않은 multipart 400)이 모두 사용자·IP 한도를 한 번씩 쓰고 전체 한도는 쓰지 않음을 확인한다. `MultipartPublicPathIT`는 로그인하지 않은 사진 요청이 해석 없이 401로 끝남을 확인한다.
 
 ### 동시 처리 상한
 
@@ -145,27 +150,31 @@
 | 설정 | 값 | 출처 |
 | --- | --- | --- |
 | `spring.servlet.multipart.max-file-size` / `max-request-size` | 5MB / 6MB | `application.properties` |
-| `spring.servlet.multipart.file-size-threshold` | 6MB(파트를 메모리에만 둠) | `application.properties` |
-| `spring.servlet.multipart.resolve-lazily` | false(기본) — 인터셉터 전에 끝까지 해석 | Spring Boot 기본 |
+| `spring.servlet.multipart.file-size-threshold` | 6MB(파트를 메모리에만 둠, 사진 비저장) | `application.properties` |
+| `spring.servlet.multipart.resolve-lazily` | true — 파트를 받는 핸들러의 인자 해석 때만 해석 | `application.properties` |
 | `server.tomcat.threads.max` | 200(기본) | 설정 없음 |
 | `server.tomcat.max-connections` / `accept-count` | 8192 / 100(기본) | 설정 없음 |
 | `server.tomcat.max-swallow-size` | 2MB(기본). 본문을 읽지 않고 거절한 요청(예: 401)에서 Tomcat이 버리며 읽는 상한. 메모리에 쌓지 않는다 | 설정 없음 |
 
 요청 하나가 쓰는 메모리(추정, 실측 아님):
 
-- 업로드 단계: multipart 파트 버퍼 최대 약 6MB. 인터셉터를 통과해 컨트롤러까지 가면 `getBytes()` 사본 5MB가 더해져 약 11MB. 인터셉터에서 거절된 요청도 해석은 끝났으므로 약 6MB를 쓴다.
+- 업로드 단계: multipart 파트 버퍼 최대 약 6MB. 컨트롤러까지 가면 `getBytes()` 사본 5MB가 더해져 약 11MB. 로그인하지 않았거나(401) 사용자·IP 한도에서 거절된(429) 요청은 해석하지 않으므로 파트 버퍼를 쓰지 않는다.
 - 처리 단계(자리를 잡은 뒤): 사진 5MB + base64 약 6.7MB + SDK 요청 본문 직렬화 약 7MB + 위 파트 버퍼 → 약 25MB.
+
+**multipart를 해석해 메모리에 올리는 요청은 파트를 받는 핸들러(사진 번역, 프로필 이미지)에 닿은 로그인 사용자 요청뿐이다.** 두 경로 모두 `SecurityConfig`에서 로그인이 필요하다. `file-size-threshold=6MB`는 전역 설정이지만, 지연 해석이라 로그인 없이 열린 경로(`/api/v1/auth/**`, `/api/v1/exchange/**`, `/api/v1/translation/**`, `anyRequest().permitAll()`)나 없는 경로로 보낸 multipart에는 적용되지 않는다. 그런 본문은 해석하지 않으며 Tomcat이 버리며 읽는다(`MultipartPublicPathIT`).
+
+- 고치기 전(`resolve-lazily` 기본값 false)에는 `DispatcherServlet`이 핸들러를 찾기 전에 multipart를 끝까지 해석했다. 그래서 로그인하지 않은 사람이 공개 경로에 6MB multipart를 동시에 보내면 요청마다 약 6MB가 힙에 올라갔고 어떤 호출 한도에도 걸리지 않았다(스레드 200 × 6MB ≈ 1.2GB). 공개 경로의 깨진 multipart는 `MultipartException`으로 500과 ERROR 로그를 냈다.
 
 동시 요청 수 × 요청당 바이트로 본 상한(추정):
 
 - 처리 단계: 전체 자리 4 × 약 25MB ≈ **100MB**.
-- 업로드 단계: 동시에 해석 중인 요청 수는 Tomcat 작업 스레드 수(200)가 상한이다. 200 × 약 11MB ≈ **2.2GB**(최악). 연결은 8192개까지 받지만 본문은 스레드가 있어야 읽으므로 스레드 수가 상한이다.
+- 업로드 단계: 해석 중인 요청은 로그인하고 사용자·IP 한도를 통과한 사진 요청과 로그인한 프로필 이미지 요청뿐이다. 그래도 동시에 해석 중인 요청 수의 최종 상한은 Tomcat 작업 스레드 수(200)이며, 200 × 약 11MB ≈ **2.2GB**가 최악이다. 이 최악에 이르려면 로그인한 계정이 여러 개 필요하다(사진 경로는 계정당 1분 10회, IP당 20회. 프로필 이미지 경로에는 호출 한도가 없다).
 
-**이번에는 업로드 단계 제한 설정을 적용하지 않았다.** 이유:
+**업로드 단계의 별도 동시 처리 제한(필터·스레드 수)은 적용하지 않았다.** 지연 해석으로 로그인 없는 해석은 없앴다. 남은 이유:
 
 - 사진 경로 전체 동시 업로드 수를 제한하는 필터는 그 자체로 값싼 공격 수단이 된다. 로그인한 계정 몇 개가 사진을 아주 느리게 올려 그 자리를 잡고 있으면 모든 사용자의 사진 번역이 막힌다. 사용자별로 세려면 인증 뒤에 둬야 하고, 계정을 여러 개 만들면(가입 인증 없음) 효과가 없다.
 - `server.tomcat.threads.max`를 줄이면 모든 API에 영향을 준다. 알맞은 값은 배포 서버의 메모리를 정해야 알 수 있는데 아직 정하지 않았다.
-- 사용자·IP 한도를 인터셉터로 앞당겨, 같은 계정·IP가 1분에 보낼 수 있는 업로드 수가 줄었다(사용자 10회, IP 20회). 다만 한도는 해석이 끝난 뒤 판정하므로 동시에 몰려 온 요청의 해석 메모리는 막지 못한다.
+- 사용자·IP 한도는 해석 전에 판정하므로 한도를 넘은 요청은 해석하지 않는다. 다만 한도 안에서 동시에 몰려 온 요청(계정당 1분 10회까지)의 해석 메모리는 막지 못한다.
 
 **운영 권장값**(배포 때 정한다):
 
@@ -181,7 +190,7 @@
 
 Tripbler 서버가 통제하는 범위다. 사진과 글자는 요청을 처리하는 동안 메모리에만 두고, 디스크에 저장하지 않으며 로그에 남기지 않는다.
 
-- **multipart 임시 파일**: Spring(내장 Tomcat)은 `file-size-threshold`보다 큰 파트를 `spring.servlet.multipart.location`(기본은 Tomcat 임시 폴더)에 임시 파일로 쓴다. `application.properties`에서 `spring.servlet.multipart.file-size-threshold=6MB`(요청 한도 이상)로 두어 파트를 메모리에만 둔다. 이 설정은 전역이라 프로필 이미지 업로드 파트도 메모리에 둔다(5MB 이하).
+- **multipart 임시 파일**: Spring(내장 Tomcat)은 `file-size-threshold`보다 큰 파트를 `spring.servlet.multipart.location`(기본은 Tomcat 임시 폴더)에 임시 파일로 쓴다. `application.properties`에서 `spring.servlet.multipart.file-size-threshold=6MB`(요청 한도 이상)로 두어 파트를 메모리에만 둔다. 이 설정은 전역이라 프로필 이미지 업로드 파트도 메모리에 둔다(5MB 이하). multipart는 지연 해석(`resolve-lazily=true`)이라 이 threshold는 파트를 받는 핸들러(사진 번역, 프로필 이미지, 둘 다 로그인 필요)의 요청에만 적용되고, 로그인 없이 열린 경로로 보낸 multipart는 해석하지 않는다(위 "업로드 단계 메모리").
   - 검증: `PhotoTranslationNoStorageIT`가 실제 내장 Tomcat에 4MB 사진을 multipart로 보내, **처리 도중**(파트가 살아 있는 동안)과 요청 뒤에 임시 폴더가 비어 있음을 확인한다. 대조 테스트는 threshold를 0으로 둔 별도 서버에서 같은 측정으로 임시 파일이 잡힘을 확인한다. 임시 파일은 요청이 끝나면 지워지므로 요청 뒤만 보는 측정은 파일 생성을 놓친다.
 - **로그**: 사진 바이트, base64, 인식 글자, 번역문을 어떤 로그에도 남기지 않는다. 개수, 토큰 수, 걸린 시간, 오류 종류만 남긴다.
   - `GlobalExceptionHandler`: JSON 해석 실패(`HttpMessageNotReadableException`)와 `@Valid` 검증 실패는 로그를 남기지 않고, 업무 검증 실패(`BusinessException`)는 규칙 문구만 WARN으로 남긴다. `PhotoTranslationControllerTest`가 표식 글자로 이를 확인한다(`brokenJsonPart_errorLogHasNoRequestText`, `invalidRequest_warnLogHasNoParagraphText`).
@@ -227,7 +236,9 @@ Tripbler 서버가 통제하는 범위다. 사진과 글자는 요청을 처리�
 - 제공업체 정책은 공개 문서만 확인했다. 조직 콘솔의 보관 설정, 계약 내용, 안내 문구 결정은 남았다(Task 13).
 - 실기기에서 앱과 연결한 업로드, 좌표, 비저장(Task 15).
 - 요청 하나의 최악 처리 시간은 `/lines`와 같은 구성(Claude 최대 90초 + Google 대체 + 환율 대기 5초)이다. 앱 시간 제한(120초)과의 차이는 실측 뒤 다시 본다.
-- `request` 파트의 `Content-Type`이 JSON이 아닌 요청은 `PhotoTranslationControllerTest.nonJsonRequestPart_returns400_andLogHasNoBodyText`로 400을 확인했다. multipart 해석 자체가 실패하는 요청(경계 문자열이 깨진 본문 등)의 `MultipartException` 400 처리는 같은 핸들러에 넣었지만 실제 Tomcat으로는 재현·검증하지 않았다(미검증).
+- `request` 파트의 `Content-Type`이 JSON이 아닌 요청은 `PhotoTranslationControllerTest.nonJsonRequestPart_returns400_andLogHasNoBodyText`로 400을 확인했다. multipart 해석 자체가 실패하는 요청(닫는 경계가 없는 본문)은 `PhotoTranslationLimitsIT.brokenMultipart_returns400_afterInterceptor`가 실제 Tomcat에서 400 `INVALID_REQUEST`와 사용자·IP 한도 사용을 확인했다. 다른 종류의 깨진 본문(헤더 형식 오류 등)은 확인하지 않았다.
 - 동시 처리 상한(전체 4, 사용자별 1), `Retry-After` 3초는 임시값이다.
-- 업로드 단계 메모리 상한(약 2.2GB, 스레드 200 기준)은 코드 분석에 따른 추정이다. 부하 시험으로 실측하지 않았고, 업로드 단계 제한 설정(필터·Tomcat 스레드 수)은 적용하지 않았다(위 "업로드 단계 메모리").
+- 업로드 단계 메모리 상한(약 2.2GB, 스레드 200 기준, 로그인 사용자 요청만)은 코드 분석에 따른 추정이다. 부하 시험으로 실측하지 않았고, 업로드 단계 제한 설정(필터·Tomcat 스레드 수)은 적용하지 않았다(위 "업로드 단계 메모리").
+- 공개 경로의 multipart를 해석하지 않는다는 것은 `MultipartPublicPathIT`가 요청 래퍼로 파트·파라미터 접근이 없음을 관찰해 확인했다(로그인 경로, 없는 경로, 로그인하지 않은 사진 경로). 힙 사용량을 직접 측정하지는 않았다. 공개 경로에 multipart를 보내면 Tomcat이 2MB(`max-swallow-size`)까지 버리며 읽고 그보다 크면 연결을 끊는데, 이 동작도 실측하지 않았다.
+- 로그인 경로처럼 JSON 본문을 받는 공개 경로에 multipart를 보내면 `HttpMediaTypeNotSupportedException`이 사진 경로가 아니라는 이유로 `handleUnexpectedException`으로 넘어가 500과 ERROR 로그(스택 포함)가 남는다. 이번 수정 전후 같으며 해석과는 무관하다(남은 과제, 낮음).
 - 자리 부족 429 뒤 재시도로 한도를 소진하는 문제는 문서화만 했다. 앱의 429 재시도 동작은 위 권고대로 바꾸지 않았다.
