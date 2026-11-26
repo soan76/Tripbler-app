@@ -138,11 +138,15 @@ class PhotoTranslationResult {
     required this.sourceLanguageCode,
     required this.targetLanguageCode,
     required this.paragraphs,
+    this.simulated = false,
   });
 
   final String sourceLanguageCode;
   final String targetLanguageCode;
   final List<TranslatedParagraph> paragraphs;
+
+  /// 개발용 가짜 번역 결과인지(`fake_photo_translation.dart`). 서버 응답은 항상 false다.
+  final bool simulated;
 
   /// 요청에 없는 ID는 버리고, 같은 ID가 다시 나오면 처음 것만 쓴다.
   /// 형식이 맞지 않으면 [FormatException]을 던진다.

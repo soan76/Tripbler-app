@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../providers/translation/translation_provider.dart'
     show TranslationLanguage;
+import 'fake_translation_banner.dart';
 
 /// 사진 번역 촬영 화면: 미리보기가 화면 전체를 채우고(cover), 위에 언어 막대, 아래에 셔터·갤러리·플래시와
 /// 고정 안내를 둔다.
@@ -22,6 +23,7 @@ class PhotoCaptureView extends StatelessWidget {
     required this.onToggleFlash,
     required this.onCapture,
     required this.onPickFromGallery,
+    this.fakeMode = false,
   });
 
   /// 하단 고정 안내. 보관·삭제·학습 여부는 정책을 확인한 뒤 따로 정한다.
@@ -45,6 +47,9 @@ class PhotoCaptureView extends StatelessWidget {
   final VoidCallback onToggleFlash;
   final VoidCallback onCapture;
   final VoidCallback onPickFromGallery;
+
+  /// 개발용 가짜 번역 모드. 사진을 보내지 않으므로 전송 안내 대신 가짜 모드 안내를 보인다.
+  final bool fakeMode;
 
   // 촬영 화면은 미리보기 위에 그려 바탕이 늘 사진이라 앱 테마와 상관없이 어두운 테마로 그린다.
   static final ThemeData _theme = AppTheme.darkTheme;
@@ -152,13 +157,18 @@ class PhotoCaptureView extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              notice,
-              textAlign: TextAlign.center,
-              style: _theme.textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurface,
+            if (fakeMode)
+              const FakeTranslationBanner(
+                message: FakeTranslationBanner.captureMessage,
+              )
+            else
+              Text(
+                notice,
+                textAlign: TextAlign.center,
+                style: _theme.textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurface,
+                ),
               ),
-            ),
           ],
         ),
       ),

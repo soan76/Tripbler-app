@@ -9,6 +9,7 @@ import '../../../models/translation/photo_translation_result.dart';
 import '../../../providers/translation/photo_translation_state.dart';
 import '../../../services/photo_normalizer.dart';
 import '../translation_box_overlay.dart';
+import 'fake_translation_banner.dart';
 import 'paragraph_detail_sheet.dart';
 
 part 'photo_result_panels.dart';
@@ -135,7 +136,11 @@ class _PhotoResultViewState extends State<PhotoResultView> {
   void _openDetail(String id) {
     final paragraph = _translatedById[id];
     if (paragraph != null) {
-      showParagraphDetailSheet(context, paragraph);
+      showParagraphDetailSheet(
+        context,
+        paragraph,
+        simulated: widget.state.result?.simulated ?? false,
+      );
     }
   }
 
@@ -157,6 +162,10 @@ class _PhotoResultViewState extends State<PhotoResultView> {
               showingOriginal: completed ? state.showOriginal : null,
               onToggleOriginal: widget.onToggleOriginal,
             ),
+            if (state.result?.simulated ?? false)
+              const FakeTranslationBanner(
+                message: FakeTranslationBanner.resultMessage,
+              ),
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) => Stack(

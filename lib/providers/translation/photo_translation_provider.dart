@@ -9,6 +9,7 @@ import '../../core/network/api_exception.dart';
 import '../../domain/translation/photo_paragraphs.dart';
 import '../../models/translation/photo_translation_result.dart';
 import '../../repositories/auth/auth_exceptions.dart';
+import '../../services/fake_photo_translation.dart';
 import '../../services/photo_consent_store.dart';
 import '../../services/photo_normalizer.dart';
 import '../../services/photo_translation_api_service.dart';
@@ -40,6 +41,16 @@ final photoTranslationApiServiceProvider = Provider<PhotoTranslationApiService>(
     ref.onDispose(service.dispose);
     return service;
   },
+);
+
+/// 개발용 가짜 번역을 쓸지. 릴리스 빌드에서는 항상 false다([photoFakeTranslationEnabled]).
+final photoFakeTranslationProvider = Provider<bool>(
+  (ref) => photoFakeTranslationEnabled,
+);
+
+/// 가짜 번역이 끝나기까지 기다리는 시간. 전송 중 화면을 잠깐 보여 주려고 둔다.
+final photoFakeTranslationDelayProvider = Provider<Duration>(
+  (ref) => const Duration(milliseconds: 700),
 );
 
 // 사진 번역 화면 안내 문구.
@@ -321,6 +332,24 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
       clearErrorMessage: true,
       canRetry: false,
     );
+
+    if (ref.read(photoFakeTranslationProvider)) {
+      // 개발용: 아무것도 보내지 않고 로그인도 쓰지 않는다. 문단 ID에 가짜 번역을 붙인다.
+      await Future<void>.delayed(ref.read(photoFakeTranslationDelayProvider));
+      if (!_isCurrent(requestId)) {
+        return;
+      }
+      state = state.copyWith(
+        result: buildFakePhotoTranslation(
+          paragraphs: paragraphs,
+          sourceLanguageCode: source,
+          targetLanguageCode: target,
+        ),
+        showOriginal: false,
+        status: PhotoTranslationStatus.completed,
+      );
+      return;
+    }
 
     try {
       final service = ref.read(photoTranslationApiServiceProvider);

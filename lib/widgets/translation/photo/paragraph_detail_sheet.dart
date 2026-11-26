@@ -3,12 +3,14 @@ import 'package:intl/intl.dart';
 
 import '../../../core/theme/app_theme.dart';
 import '../../../models/translation/photo_translation_result.dart';
+import 'fake_translation_banner.dart';
 
 /// 문단 상세를 아래 시트로 띄운다.
 Future<void> showParagraphDetailSheet(
   BuildContext context,
-  TranslatedParagraph paragraph,
-) {
+  TranslatedParagraph paragraph, {
+  bool simulated = false,
+}) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
@@ -18,7 +20,8 @@ Future<void> showParagraphDetailSheet(
         top: Radius.circular(AppTheme.cornerRadius),
       ),
     ),
-    builder: (_) => ParagraphDetailSheet(paragraph: paragraph),
+    builder: (_) =>
+        ParagraphDetailSheet(paragraph: paragraph, simulated: simulated),
   );
 }
 
@@ -26,9 +29,16 @@ Future<void> showParagraphDetailSheet(
 ///
 /// 번역을 가장 크게 두고, 이유는 번역 바로 아래에 상자 표시와 같은 아이콘으로 붙인다.
 class ParagraphDetailSheet extends StatelessWidget {
-  const ParagraphDetailSheet({super.key, required this.paragraph});
+  const ParagraphDetailSheet({
+    super.key,
+    required this.paragraph,
+    this.simulated = false,
+  });
 
   final TranslatedParagraph paragraph;
+
+  /// 개발용 가짜 번역 결과면 맨 위에 그 사실을 알린다.
+  final bool simulated;
 
   static const String uncertainReason = '일부 글자를 확실히 읽지 못해 번역이 정확하지 않을 수 있어요.';
   static const String fallbackReason = '사진을 쓰지 못해 인식된 글자만으로 번역했어요.';
@@ -54,6 +64,11 @@ class ParagraphDetailSheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (simulated)
+                const FakeTranslationBanner(
+                  message: FakeTranslationBanner.detailMessage,
+                ),
+              if (simulated) const SizedBox(height: 8),
               _Section(
                 label: '번역',
                 child: Text(

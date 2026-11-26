@@ -320,6 +320,7 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
       onToggleFlash: () => unawaited(_toggleFlash()),
       onCapture: () => unawaited(_capture()),
       onPickFromGallery: () => unawaited(_pickFromGallery()),
+      fakeMode: ref.watch(photoFakeTranslationProvider),
     );
   }
 }
