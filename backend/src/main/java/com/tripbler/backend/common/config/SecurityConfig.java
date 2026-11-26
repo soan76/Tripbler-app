@@ -7,11 +7,15 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 
 import com.tripbler.backend.common.security.CustomAccessDeniedHandler;
 import com.tripbler.backend.common.security.CustomAuthenticationEntryPoint;
+import com.tripbler.backend.common.security.MultipartAllowlistFilter;
+
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @EnableWebSecurity
@@ -19,13 +23,16 @@ public class SecurityConfig {
 
     private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final CustomAccessDeniedHandler accessDeniedHandler;
+    private final ObjectMapper objectMapper;
 
     public SecurityConfig(
         CustomAuthenticationEntryPoint authenticationEntryPoint,
-        CustomAccessDeniedHandler accessDeniedHandler
+        CustomAccessDeniedHandler accessDeniedHandler,
+        ObjectMapper objectMapper
     ) {
         this.authenticationEntryPoint = authenticationEntryPoint;
         this.accessDeniedHandler = accessDeniedHandler;
+        this.objectMapper = objectMapper;
     }
 
     @Bean
@@ -35,6 +42,14 @@ public class SecurityConfig {
 
         http
             .csrf(csrf -> csrf.disable())
+
+            // multipart는 파트를 받는 두 핸들러(사진 번역, 프로필 이미지)로만 통과시키고 나머지는 본문을 읽지 않고
+            // 415로 거절한다. 방화벽(경로 정규화 검사) 뒤, 토큰 인증 앞이다. 빈으로 등록하지 않는다
+            // (빈이면 서블릿 필터로도 한 번 더 등록된다).
+            .addFilterBefore(
+                new MultipartAllowlistFilter(objectMapper),
+                BearerTokenAuthenticationFilter.class
+            )
 
             .sessionManagement(session ->
                 session.sessionCreationPolicy(

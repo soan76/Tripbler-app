@@ -40,6 +40,10 @@ import com.tripbler.backend.auth.service.FindIdVerificationService;
 import com.tripbler.backend.auth.service.PasswordResetService;
 import com.tripbler.backend.auth.service.PasswordResetVerificationService;
 import com.tripbler.backend.common.exception.GlobalExceptionHandler;
+import com.tripbler.backend.crypto.controller.CryptoController;
+import com.tripbler.backend.crypto.service.CryptoService;
+import com.tripbler.backend.exchange.controller.ExchangeController;
+import com.tripbler.backend.exchange.service.ExchangeService;
 import com.tripbler.backend.common.security.CustomAccessDeniedHandler;
 import com.tripbler.backend.common.security.CustomAuthenticationEntryPoint;
 import com.tripbler.backend.translation.controller.TranslationController;
@@ -103,21 +107,64 @@ class MultipartPublicPathIT {
         profileUploads.uploadedSizes.clear();
     }
 
+    // 허용 목록 밖으로 보낸 multipart는 본문을 읽지 않고 415로 거절한다(M1). 지연 해석만으로는
+    // @RequestParam 인자 해석(MultipartRequest.getFiles)이 GET 요청의 multipart도 해석했다.
+    // 해석하면 깨진 본문은 MultipartException(500, ERROR 로그)이 된다.
     @Test
-    void publicLoginPath_multipartWithoutLogin_isNotParsed() throws Exception {
-        HttpResponse<String> response = send("/api/v1/auth/login", null, validBody());
+    void multipartToNonAllowlistedPath_returns415_withoutParsing() throws Exception {
+        List<String[]> targets = List.of(
+            new String[] {"GET", "/api/v1/exchange/rates"},
+            new String[] {"GET", "/api/v1/exchange/history?startDate=2026-11-01&endDate=2026-11-20"},
+            new String[] {"GET", "/api/v1/crypto/price"},
+            new String[] {"GET", "/api/v1/crypto/history"},
+            new String[] {"GET", "/api/v1/users/check-login-id?loginId=testuser01"},
+            new String[] {"POST", "/api/v1/auth/login"},
+            new String[] {"POST", "/api/v1/translation"},
+            new String[] {"POST", "/api/v1/no-such-path"});
+        for (String[] target : targets) {
+            for (byte[] body : List.of(validBody(), brokenBody())) {
+                recorder.accesses.clear();
+                HttpResponse<String> response = send(target[0], target[1], null, body);
 
-        assertThat(response.statusCode()).isNotEqualTo(200);
-        assertThat(recorder.accesses).as("로그인 경로는 파트를 읽지 않는다").isEmpty();
+                String label = target[0] + " " + target[1];
+                assertThat(recorder.accesses).as(label).isEmpty();
+                assertThat(response.statusCode()).as(label).isEqualTo(415);
+                assertThat(response.body()).as(label).contains("\"code\":\"UNSUPPORTED_MEDIA_TYPE\"")
+                    .contains("\"status\":415").contains("\"path\":\"" + target[1].split("\\?")[0] + "\"");
+            }
+        }
     }
 
-    // 해석하면 깨진 본문이 MultipartException(500, ERROR 로그)이 된다. 해석하지 않으면 없는 경로 404.
+    // 허용 목록은 (메서드, 정확한 경로)로만 맞춘다. 로그인했어도 다른 메서드, 끝 '/', 대소문자가 다르면 415.
+    // 정규화되지 않은 경로(//, ;, 인코딩한 /)는 그보다 앞에서 거절된다(400). 어느 쪽이든 해석하지 않는다.
     @Test
-    void unknownPublicPath_brokenMultipart_returns404_withoutParsing() throws Exception {
-        HttpResponse<String> response = send("/api/v1/no-such-path", null, brokenBody());
+    void allowlist_matchesExactMethodAndPath_only() throws Exception {
+        List<String[]> rejected = List.of(
+            new String[] {"GET", "/api/v1/translation/photo"},
+            new String[] {"PUT", "/api/v1/translation/photo"},
+            new String[] {"POST", "/api/v1/translation/photo/"},
+            new String[] {"POST", "/api/v1/Translation/photo"},
+            new String[] {"POST", PROFILE_PATH},
+            new String[] {"PUT", PROFILE_PATH + "/"});
+        for (String[] target : rejected) {
+            recorder.accesses.clear();
+            HttpResponse<String> response = send(target[0], target[1], "it-token", validBody());
 
-        assertThat(response.statusCode()).isEqualTo(404);
-        assertThat(recorder.accesses).isEmpty();
+            assertThat(recorder.accesses).as(target[0] + " " + target[1]).isEmpty();
+            assertThat(response.statusCode()).as(target[0] + " " + target[1]).isEqualTo(415);
+        }
+        for (String path : List.of("//api/v1/translation/photo", "/api/v1/translation/photo;x=1",
+            "/api/v1/translation%2Fphoto")) {
+            recorder.accesses.clear();
+            HttpResponse<String> response = send("POST", path, "it-token", validBody());
+
+            assertThat(response.statusCode()).as(path).isEqualTo(400);
+            assertThat(recorder.accesses).as(path).isEmpty();
+        }
+        // 글자를 인코딩해도 MVC와 같은 경로로 맞춘다(같은 경로 해석 방식).
+        recorder.accesses.clear();
+        assertThat(send("POST", "/api/v1/translation/%70hoto", "it-token", validBody()).statusCode())
+            .isEqualTo(200);
     }
 
     // 보안 필터가 DispatcherServlet보다 앞이라 로그인하지 않은 사진 요청은 해석 전에 401로 끝난다.
@@ -264,6 +311,8 @@ class MultipartPublicPathIT {
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration(excludeName = "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration")
     @Import({
+        ExchangeController.class,
+        CryptoController.class,
         AuthController.class,
         UserController.class,
         TranslationController.class,
@@ -296,6 +345,16 @@ class MultipartPublicPathIT {
             when(service.translate(any(), any(), any(), any()))
                 .thenReturn(new PhotoTranslationResponse("en", "ko", List.of()));
             return service;
+        }
+
+        @Bean
+        ExchangeService exchangeService() {
+            return mock(ExchangeService.class);
+        }
+
+        @Bean
+        CryptoService cryptoService() {
+            return mock(CryptoService.class);
         }
 
         @Bean
