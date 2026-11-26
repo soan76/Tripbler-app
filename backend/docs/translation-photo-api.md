@@ -155,6 +155,7 @@ multipart는 지연 해석한다(`spring.servlet.multipart.resolve-lazily=true`)
 | `spring.servlet.multipart.file-size-threshold` | 6MB(파트를 메모리에만 둠, 사진 비저장) | `application.properties` |
 | `spring.servlet.multipart.resolve-lazily` | true — 핸들러 인자 해석 때 해석(핸들러 매핑 전에는 해석하지 않음) | `application.properties` |
 | multipart 허용 목록 | `POST /api/v1/translation/photo`, `PUT /api/v1/users/me/profile-image`만. 나머지 multipart는 415 | `MultipartAllowlistFilter`(`SecurityConfig`에서 등록) |
+| `spring.mvc.formcontent.filter.enabled` | false — Spring Boot 기본 `FormContentFilter`를 끈다(아래 "form 본문", 보안 점검 H1) | `application.properties` |
 | `server.tomcat.threads.max` | 200(기본) | 설정 없음 |
 | `server.tomcat.max-connections` / `accept-count` | 8192 / 100(기본) | 설정 없음 |
 | `server.tomcat.max-swallow-size` | 2MB(기본). 본문을 읽지 않고 거절한 요청(예: 415, 401)에서 Tomcat이 버리며 읽는 상한. 메모리에 쌓지 않는다 | 설정 없음 |
@@ -172,7 +173,11 @@ multipart는 지연 해석한다(`spring.servlet.multipart.resolve-lazily=true`)
   - 인증보다 앞이라 로그인이 필요한 경로라도 허용 목록 밖의 multipart는 401이 아니라 415다. 허용 경로로 로그인 없이 보낸 multipart는 그대로 401이다.
   - 오류 응답은 `GlobalExceptionHandler`를 거치지 않으므로 필터가 같은 `ErrorResponse` 형식을 직접 쓴다(`CustomAuthenticationEntryPoint`와 같은 방식). 로그는 DEBUG로 사유 종류만 남긴다(경로·본문 없음).
   - 부수 효과: 로그인처럼 JSON 본문을 받는 공개 경로에 multipart를 보내면 전에는 `HttpMediaTypeNotSupportedException`으로 500과 ERROR 로그(스택 포함)가 났는데, 이제 415다. 다른 엉뚱한 Content-Type(예: `text/plain`)의 500은 그대로다(아래 "미검증·남은 일").
-- 검증: `MultipartPublicPathIT`가 실제 내장 Tomcat에서 요청 래퍼로 파트·파라미터 접근(`getParts`, `getPart`, `getParameter*`)을 기록해, 실제 `ExchangeController`·`CryptoController`·`UserController`(서비스는 대역)로 보낸 `GET`+multipart, 공개 `POST`(로그인, 텍스트 번역), 없는 경로가 정상·깨진 본문 모두 해석 없이 415로 끝남을 확인한다. 필터를 빼면 `GET /api/v1/exchange/rates`에서 `getParts` 기록이 남아 실패한다. 메서드·끝 `/`·대소문자 변형은 로그인해도 415, `//`·`;`·`%2F`는 400, 모두 해석 없음도 확인한다.
+- 검증: `MultipartPublicPathIT`가 실제 내장 Tomcat에서 요청 래퍼로 파트·파라미터 접근(`getParts`, `getPart`, `getParameter*`)을 기록해, 실제 `ExchangeController`·`CryptoController`·`UserController`(서비스는 대역)로 보낸 `GET`+multipart, 공개 `POST`(로그인, 텍스트 번역), 없는 경로가 정상·깨진 본문 모두 해석 없이 415로 끝남을 확인한다. 필터를 빼면 `GET /api/v1/exchange/rates`에서 `getParts` 기록이 남아 실패한다. 메서드·끝 `/`·대소문자 변형은 로그인해도 415, `//`·`;`·`%2F`는 400, 모두 해석 없음도 확인한다. 로그인하지 않은 `PUT /api/v1/users/me/profile-image`와 글자를 인코딩한 `POST /api/v1/translation/%70hoto`도 해석 없이(읽은 바이트 0) 401이다(인코딩 경로가 `/translation/**` 공개 규칙으로 새지 않음). 판정 규칙(대소문자 무시, 앞 공백, `multipart/mixed`, JSON 요청 통과)은 `MultipartAllowlistFilterTest`가 본다.
+- **form 본문(보안 점검 H1)**: Spring Boot가 기본으로 등록하는 `FormContentFilter`(순서 -9900, Spring Security와 허용 목록 필터보다 앞)는 메서드가 `PUT`·`PATCH`·`DELETE`이고 Content-Type이 `application/x-www-form-urlencoded`이면 경로·로그인과 상관없이 본문 전체를 크기 제한 없이 문자열로 읽는다(`FormHttpMessageConverter.read`). Tomcat `maxPostSize`(2MB)는 Tomcat이 파라미터를 직접 해석할 때(`POST`)만 적용되므로 여기에는 걸리지 않는다. 이 앱에는 그 파라미터를 쓰는 핸들러가 없어(PATCH는 JSON, PUT은 multipart, DELETE는 본문 없음, 앱도 같음) `spring.mvc.formcontent.filter.enabled=false`로 껐다.
+  - 재현(2026-11-26, `FormBodyPublicPathIT`, 실제 내장 Tomcat): 로그인 없이 256KB urlencoded 본문을 `PUT`·`PATCH`·`DELETE`로 `/api/v1/auth/login`(공개, 405), `/api/v1/no-such-path`(404), `/api/v1/users/me/nickname`(로그인 필요, 401)에 보냈다. 끄기 전에는 9개 요청 모두 응답 전에 본문 262,144바이트를 모두 읽었고(로그인 필요 경로도 401 전에 읽음), 끈 뒤에는 응답 코드는 같고 읽은 바이트는 0이다. 설정을 다시 켜면 이 테스트가 실패한다. 대조로 로그인한 JSON `PATCH`(닉네임 200, 비밀번호 204)는 본문을 읽는 것이 기록되고, 본문 없는 `DELETE`(프로필 이미지, 회원 탈퇴)는 204다.
+  - 위험(추정, 재현하지 않음): 끄기 전에는 로그인하지 않은 사람이 아무 경로로 큰 urlencoded 본문(chunked 포함)을 보내면 요청마다 본문 전체가 힙에 문자열로 쌓였다(문자열·파라미터 맵 사본으로 본문 크기의 몇 배). 동시 요청 수 × 본문 크기만큼 힙이 차 메모리 부족이 날 수 있었다. 큰 본문과 메모리 부족은 시험하지 않았다(256KB만 보냄).
+  - form 파라미터가 필요한 엔드포인트를 새로 만들면 `POST`로 받는다(Tomcat이 2MB 한도로 해석). `PUT`·`PATCH`·`DELETE` form을 받아야 하면 이 필터를 다시 켜지 말고 크기 상한을 먼저 정한다.
 - 고치기 전(`resolve-lazily` 기본값 false)에는 `DispatcherServlet`이 핸들러를 찾기 전에 모든 경로의 multipart를 해석했고, 지연 해석만 넣은 뒤에도 위 `@RequestParam` 경로에서는 해석했다. 그래서 로그인하지 않은 사람이 이런 경로에 6MB multipart를 동시에 보내면 요청마다 약 6MB가 힙에 올라갔고 어떤 호출 한도에도 걸리지 않았다(스레드 200 × 6MB ≈ 1.2GB). 깨진 multipart는 500과 ERROR 로그를 냈다.
 
 동시 요청 수 × 요청당 바이트로 본 상한(추정):
@@ -249,6 +254,7 @@ Tripbler 서버가 통제하는 범위다. 사진과 글자는 요청을 처리�
 - `request` 파트의 `Content-Type`이 JSON이 아닌 요청은 `PhotoTranslationControllerTest.nonJsonRequestPart_returns400_andLogHasNoBodyText`로 400을 확인했다. multipart 해석 자체가 실패하는 요청(닫는 경계가 없는 본문)은 `PhotoTranslationLimitsIT.brokenMultipart_returns400_afterInterceptor`가 실제 Tomcat에서 400 `INVALID_REQUEST`와 사용자·IP 한도 사용을 확인했다. 다른 종류의 깨진 본문(헤더 형식 오류 등)은 확인하지 않았다.
 - 동시 처리 상한(전체 4, 사용자별 1), `Retry-After` 3초는 임시값이다.
 - 업로드 단계 메모리 상한(약 2.2GB, 스레드 200 기준, 로그인 사용자 요청만)은 코드 분석에 따른 추정이다. 부하 시험으로 실측하지 않았고, 업로드 단계 제한 설정(필터·Tomcat 스레드 수)은 적용하지 않았다(위 "업로드 단계 메모리").
+- 로그인하지 않은 urlencoded `PUT`·`PATCH`·`DELETE` 본문을 읽지 않는다는 것은 `FormBodyPublicPathIT`가 요청 래퍼로 본문 스트림 접근과 읽은 바이트 수(0)를 관찰해 확인했다. 힙 사용량과 큰 본문(수백 MB) 동작은 측정하지 않았다. 전체 앱 기동(`TripblerBackendApplicationTests`)은 PostgreSQL이 없어 확인하지 않았다.
 - 허용 목록 밖과 로그인하지 않은 multipart를 해석하지 않는다는 것은 `MultipartPublicPathIT`가 요청 래퍼로 파트·파라미터 접근이 없음을 관찰해 확인했다. 힙 사용량을 직접 측정하지는 않았다. 415·401로 끝난 요청의 본문을 Tomcat이 2MB(`max-swallow-size`)까지 버리며 읽고 그보다 크면 연결을 끊는 동작도 실측하지 않았다(테스트는 1MB 본문만 보낸다).
 - 허용 목록은 코드에 고정했다. multipart를 받는 엔드포인트를 새로 만들면 `MultipartAllowlistFilter.ALLOWED`에 넣어야 하며, 빠뜨리면 415로 막힌다(안전한 쪽으로 실패).
 - JSON 본문을 받는 공개 경로(로그인 등)에 multipart가 아닌 엉뚱한 Content-Type(예: `text/plain`)을 보내면 `HttpMediaTypeNotSupportedException`이 사진 경로가 아니라는 이유로 `handleUnexpectedException`으로 넘어가 500과 ERROR 로그(스택 포함)가 남는다. 본문을 해석하지는 않는다(남은 과제, 낮음). multipart를 보낸 경우는 허용 목록 필터가 먼저 415로 끝내므로 더는 500이 아니다.

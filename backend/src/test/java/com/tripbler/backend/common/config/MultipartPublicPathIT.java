@@ -13,10 +13,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.Collection;
-import java.util.Enumeration;
 import java.util.List;
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -59,10 +56,7 @@ import com.tripbler.backend.user.service.ProfileImageService;
 import com.tripbler.backend.user.service.UserService;
 
 import jakarta.servlet.Filter;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletRequestWrapper;
-import jakarta.servlet.http.Part;
 
 /**
  * 실제 내장 Tomcat에서 multipart 본문을 언제 해석하는지 확인한다(보안 지적 N1).
@@ -71,7 +65,7 @@ import jakarta.servlet.http.Part;
  * file-size-threshold(6MB) 아래에서 메모리에 쌓이고, 어떤 호출 한도에도 걸리지 않는다. 그래서
  * spring.servlet.multipart.resolve-lazily=true로 파트를 실제로 읽는 핸들러에서만 해석한다.
  *
- * <p>관찰: 가장 앞의 서블릿 필터가 요청을 감싸 파트·파라미터 접근(getParts, getPart, getParameter*)을 기록한다.
+ * <p>관찰: 가장 앞의 서블릿 필터가 요청을 감싸 파트·파라미터·본문 스트림 접근을 기록한다(BodyAccessRecorder).
  * Tomcat의 multipart 해석은 이 접근으로만 일어나므로, 기록이 없으면 해석하지 않은 것이다.
  * 대조로 파트를 받는 핸들러(사진 번역, 프로필 이미지)는 그대로 해석·응답하는지 본다.
  * multipart 설정은 application.properties 값을 그대로 쓴다. DB 없이 띄우고 서비스는 대역이다.
@@ -94,7 +88,7 @@ class MultipartPublicPathIT {
     int port;
 
     @Autowired
-    PartAccessRecorder recorder;
+    BodyAccessRecorder recorder;
 
     @Autowired
     ProfileUploads profileUploads;
@@ -103,7 +97,7 @@ class MultipartPublicPathIT {
 
     @BeforeEach
     void reset() {
-        recorder.accesses.clear();
+        recorder.clear();
         profileUploads.uploadedSizes.clear();
     }
 
@@ -123,7 +117,7 @@ class MultipartPublicPathIT {
             new String[] {"POST", "/api/v1/no-such-path"});
         for (String[] target : targets) {
             for (byte[] body : List.of(validBody(), brokenBody())) {
-                recorder.accesses.clear();
+                recorder.clear();
                 HttpResponse<String> response = send(target[0], target[1], null, body);
 
                 String label = target[0] + " " + target[1];
@@ -147,7 +141,7 @@ class MultipartPublicPathIT {
             new String[] {"POST", PROFILE_PATH},
             new String[] {"PUT", PROFILE_PATH + "/"});
         for (String[] target : rejected) {
-            recorder.accesses.clear();
+            recorder.clear();
             HttpResponse<String> response = send(target[0], target[1], "it-token", validBody());
 
             assertThat(recorder.accesses).as(target[0] + " " + target[1]).isEmpty();
@@ -155,14 +149,14 @@ class MultipartPublicPathIT {
         }
         for (String path : List.of("//api/v1/translation/photo", "/api/v1/translation/photo;x=1",
             "/api/v1/translation%2Fphoto")) {
-            recorder.accesses.clear();
+            recorder.clear();
             HttpResponse<String> response = send("POST", path, "it-token", validBody());
 
             assertThat(response.statusCode()).as(path).isEqualTo(400);
             assertThat(recorder.accesses).as(path).isEmpty();
         }
         // 글자를 인코딩해도 MVC와 같은 경로로 맞춘다(같은 경로 해석 방식).
-        recorder.accesses.clear();
+        recorder.clear();
         assertThat(send("POST", "/api/v1/translation/%70hoto", "it-token", validBody()).statusCode())
             .isEqualTo(200);
     }
@@ -174,6 +168,27 @@ class MultipartPublicPathIT {
 
         assertThat(response.statusCode()).isEqualTo(401);
         assertThat(recorder.accesses).isEmpty();
+    }
+
+    // 허용 목록의 다른 경로도 로그인하지 않으면 해석 전에 401이다.
+    @Test
+    void profileImageWithoutLogin_returns401_withoutParsing() throws Exception {
+        HttpResponse<String> response = send("PUT", PROFILE_PATH, null, profileBody(FILE_SIZE));
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(recorder.accesses).isEmpty();
+        assertThat(recorder.bytesRead).hasValue(0);
+        assertThat(profileUploads.uploadedSizes).isEmpty();
+    }
+
+    // 글자를 인코딩한 사진 경로도 보안 규칙이 같은 경로로 보므로 /translation/** permitAll로 새지 않는다.
+    @Test
+    void encodedPhotoPathWithoutLogin_returns401_withoutParsing() throws Exception {
+        HttpResponse<String> response = send("/api/v1/translation/%70hoto", null, validBody());
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(recorder.accesses).isEmpty();
+        assertThat(recorder.bytesRead).hasValue(0);
     }
 
     // 대조: 파트를 받는 사진 번역 핸들러는 해석한다(기록 방법이 해석을 잡는다는 증명).
@@ -257,51 +272,6 @@ class MultipartPublicPathIT {
             + "not finished").getBytes(StandardCharsets.UTF_8);
     }
 
-    /** 파트·파라미터 접근을 기록한다(본문 내용은 기록하지 않음). */
-    static class PartAccessRecorder {
-        final Queue<String> accesses = new ConcurrentLinkedQueue<>();
-
-        HttpServletRequest wrap(HttpServletRequest request) {
-            return new HttpServletRequestWrapper(request) {
-                @Override
-                public Collection<Part> getParts() throws IOException, ServletException {
-                    accesses.add("getParts " + request.getRequestURI());
-                    return super.getParts();
-                }
-
-                @Override
-                public Part getPart(String name) throws IOException, ServletException {
-                    accesses.add("getPart " + request.getRequestURI());
-                    return super.getPart(name);
-                }
-
-                @Override
-                public String getParameter(String name) {
-                    accesses.add("getParameter " + request.getRequestURI());
-                    return super.getParameter(name);
-                }
-
-                @Override
-                public Map<String, String[]> getParameterMap() {
-                    accesses.add("getParameterMap " + request.getRequestURI());
-                    return super.getParameterMap();
-                }
-
-                @Override
-                public Enumeration<String> getParameterNames() {
-                    accesses.add("getParameterNames " + request.getRequestURI());
-                    return super.getParameterNames();
-                }
-
-                @Override
-                public String[] getParameterValues(String name) {
-                    accesses.add("getParameterValues " + request.getRequestURI());
-                    return super.getParameterValues(name);
-                }
-            };
-        }
-    }
-
     /** 프로필 이미지 서비스 대역이 받은 파일 크기. */
     static class ProfileUploads {
         final Queue<Long> uploadedSizes = new ConcurrentLinkedQueue<>();
@@ -325,13 +295,13 @@ class MultipartPublicPathIT {
     static class App {
 
         @Bean
-        PartAccessRecorder partAccessRecorder() {
-            return new PartAccessRecorder();
+        BodyAccessRecorder bodyAccessRecorder() {
+            return new BodyAccessRecorder();
         }
 
         // 보안 필터보다 앞에서 감싸 이후의 모든 접근(보안 필터·DispatcherServlet·핸들러)을 본다.
         @Bean
-        FilterRegistrationBean<Filter> partAccessFilter(PartAccessRecorder recorder) {
+        FilterRegistrationBean<Filter> bodyAccessFilter(BodyAccessRecorder recorder) {
             Filter filter = (request, response, chain) ->
                 chain.doFilter(recorder.wrap((HttpServletRequest) request), response);
             FilterRegistrationBean<Filter> registration = new FilterRegistrationBean<>(filter);
