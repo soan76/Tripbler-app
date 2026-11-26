@@ -125,12 +125,39 @@ Tripbler 서버가 통제하는 범위다. 사진과 글자는 요청을 처리�
 
 ## AI 제공업체 쪽 보관(별개)
 
-위 항목은 Tripbler가 통제하는 범위만 다룬다. Anthropic 등 AI 제공업체가 사진과 글자를 얼마나 보관하는지, 학습에 쓰는지는 제공업체 정책과 계약(조직 설정 포함)으로 정해진다. 이는 **아직 확인하지 않았고** 계획 Task 13에서 따로 확인해 이 문서에 따로 적는다. 앱 안내 문구에 보관 정책을 넣을지는 둘 다 확인한 뒤 정한다.
+위 절은 Tripbler가 통제하는 범위만 다룬다. 제공업체가 사진과 글자를 얼마나 보관하고 학습에 쓰는지는 제공업체 정책과 계약(조직 설정 포함)이 정한다. 아래는 2026-11-26에 공개 문서만 읽고 정리한 내용이다. **조직 콘솔 설정과 계약 내용은 아직 확인하지 않았다.**
+
+### Anthropic(Claude API, 주 번역)
+
+- 전송 방식: 사진은 Files API를 쓰지 않고 요청 본문에 base64로 담아 보낸다(`ClaudePhotoTranslationClient`). 아래 기본 보관 규정이 적용된다.
+- 기본 보관: API 입력과 출력은 받거나 만든 뒤 30일 안에 백엔드에서 자동 삭제된다.
+  - 출처: [How long do you store my organization's data](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data) (문서 날짜 2026-07-01)
+- 학습: 상업 제품(API 포함)의 입력·출력은 기본적으로 모델 학습에 쓰지 않는다. 상업 약관도 고객 콘텐츠로 학습하지 않는다고 정한다.
+  - 출처: [Is my data used for model training](https://privacy.claude.com/en/articles/7996868-is-my-data-used-for-model-training) (2026-08-18), [Commercial Terms](https://www.anthropic.com/legal/commercial-terms)
+- 예외:
+  - 자동 안전 시스템이 사용 정책 위반으로 표시한 요청은 입력·출력을 최대 2년, 분류 점수를 최대 7년 보관한다. 법적 요구가 있을 때도 더 오래 보관할 수 있다.
+  - 피드백을 보내면 관련 데이터를 5년 보관하고 학습에 쓸 수 있다. Tripbler 서버는 피드백을 보내지 않는다.
+  - 2026-06-09부터 특정 "covered models"는 ZDR 조직에서도 30일 보관한다([Data retention practices for covered models](https://privacy.claude.com/en/articles/15425996-data-retention-practices-for-covered-models)). 쓰려는 모델이 여기에 해당하는지는 모델을 정할 때(Task 14) 확인한다.
+- ZDR(무보관): Anthropic 승인을 받은 조직만 쓸 수 있으며 영업팀에 신청한다. ZDR에서도 법 준수나 오용 방지를 위한 보관과 안전 분류 결과 보관은 남는다. 조직의 현재 보관 기간은 콘솔의 Settings > Privacy Controls > Data retention period에서 확인한다.
+  - 출처: [Zero data retention agreement](https://privacy.claude.com/en/articles/8956058-i-have-a-zero-data-retention-agreement-with-anthropic-what-products-does-it-apply-to) (2026-10-15)
+
+### Google Cloud Translation(대체 번역, 글자만 전송)
+
+- 사진은 보내지 않고 문단 글자만 보낸다.
+- 보관: 번역하는 동안 메모리에만 잠깐 둔다고만 적혀 있다. 요청 정보를 로그에 남기는지, 남긴다면 얼마나 두는지는 문서에 없다.
+- 학습: 보낸 콘텐츠를 Google 번역 기능의 학습·개선에 쓰지 않고, 서비스 제공 외의 목적으로 쓰지 않는다.
+- 출처: [Data usage](https://docs.cloud.google.com/translate/data-usage), [FAQ](https://docs.cloud.google.com/translate/faq) (두 문서 모두 날짜 표시 없음, 2026-11-26 확인)
+
+### 안내 문구에 미치는 영향
+
+- 지금 동의 문구는 "Tripbler 서버 및 AI 제공업체에 전송"만 말하고 보관 기간은 약속하지 않는다. 위 내용과 어긋나지 않는다.
+- "Tripbler는 사진을 저장하지 않습니다"는 위 비저장 범위로 뒷받침된다. 다만 제공업체가 최대 30일(예외 시 더 길게) 보관하므로, 이 문장만 따로 쓰면 전체가 저장되지 않는 것처럼 읽힐 수 있다.
+- 보관 기간을 안내에 넣을지, 넣으면 어떤 문장으로 넣을지는 사용자가 정한다. 문구를 바꾸면 `PhotoConsentStore.currentVersion`을 올린다.
 
 ## 미검증·남은 일
 
 - **실제 Claude 호출은 아직 하지 않았다.** 모든 테스트는 가짜 클라이언트(대역)를 쓴다. 번역·보정 품질, 구조화 출력 동작, 토큰 사용량, 시간 제한의 적정성은 키와 크레딧을 넣고 확인한다(계획 Task 14). 실제 Google 대체 경로 호출도 확인하지 않았다.
-- 제공업체 보관·학습 정책(Task 13).
+- 제공업체 정책은 공개 문서만 확인했다. 조직 콘솔의 보관 설정, 계약 내용, 안내 문구 결정은 남았다(Task 13).
 - 실기기에서 앱과 연결한 업로드, 좌표, 비저장(Task 15).
 - 요청 하나의 최악 처리 시간은 `/lines`와 같은 구성(Claude 최대 90초 + Google 대체 + 환율 대기 5초)이다. 앱 시간 제한(120초)과의 차이는 실측 뒤 다시 본다.
 - multipart 해석 자체가 실패하는 요청(경계 문자열이 깨진 본문 등)과 `request` 파트의 `Content-Type`이 JSON이 아닌 요청은 지금 전역 처리(500 또는 Spring 기본 응답)를 따른다. 로그에는 예외 종류와 경로만 남는다.
