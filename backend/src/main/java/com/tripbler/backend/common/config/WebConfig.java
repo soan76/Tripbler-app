@@ -13,6 +13,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import com.tripbler.backend.common.ratelimit.AuthRateLimitInterceptor;
 import com.tripbler.backend.common.ratelimit.AuthRateLimiter;
+import com.tripbler.backend.common.ratelimit.PhotoTranslationRateLimitInterceptor;
 
 // AuthRateLimiter는 컴포넌트 스캔 대신 여기서만 등록한다.
 // 그래서 WebConfig를 불러오는 곳(애플리케이션, @WebMvcTest 슬라이스)에는 항상 제한기와 인터셉터가 함께 붙고,
@@ -36,11 +37,15 @@ public class WebConfig implements WebMvcConfigurer {
                 .normalize();
     }
 
-    // 공개 인증·가입 경로의 IP별 요청 제한. 항상 등록한다(제한기를 구할 수 없으면 기동 실패).
+    // 공개 인증·가입 경로의 IP별 요청 제한과 사진 번역의 사용자별·IP별 요청 제한. 항상 등록한다
+    // (제한기를 구할 수 없으면 기동 실패). 두 인터셉터 모두 매칭된 경로 패턴으로 대상을 고른다.
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(
             new AuthRateLimitInterceptor(authRateLimiter)
+        );
+        registry.addInterceptor(
+            new PhotoTranslationRateLimitInterceptor(authRateLimiter)
         );
     }
 

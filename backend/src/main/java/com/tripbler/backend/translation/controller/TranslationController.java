@@ -75,6 +75,7 @@ public class TranslationController {
     }
 
     // 사진 번역. 사진(JPEG)과 기기에서 읽은 문단을 multipart로 받는다. /lines와 같이 로그인·호출 제한을 둔다.
+    // 사용자별·IP별 한도는 이 메서드의 인자 해석(@Valid 등) 전에 PhotoTranslationRateLimitInterceptor가 차감한다.
     // 사진은 메모리에서만 다룬다(multipart file-size-threshold를 요청 한도 이상으로 두어 임시 파일을 쓰지 않음).
     // JPEG 여부는 서비스가 바이트로 확인하므로, 클라이언트가 보낸 Content-Type은 믿지 않고 image/jpeg로 넘긴다.
     @PostMapping(
@@ -87,10 +88,9 @@ public class TranslationController {
         @RequestPart("image") MultipartFile image,
         @Valid
         @RequestPart("request")
-        PhotoTranslationRequest request,
-        HttpServletRequest httpRequest
+        PhotoTranslationRequest request
     ) throws IOException {
-        return photoTranslationService.translate(jwt.getSubject(), httpRequest.getRemoteAddr(), image.getBytes(),
-            MediaType.IMAGE_JPEG_VALUE, request);
+        return photoTranslationService.translate(jwt.getSubject(), image.getBytes(), MediaType.IMAGE_JPEG_VALUE,
+            request);
     }
 }

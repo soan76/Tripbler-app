@@ -11,17 +11,14 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Semaphore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.tripbler.backend.common.exception.BusinessException;
 import com.tripbler.backend.common.exception.ErrorCode;
-import com.tripbler.backend.common.exception.TooManyRequestsException;
 import com.tripbler.backend.common.exception.TranslationProviderException;
 import com.tripbler.backend.common.ratelimit.AuthRateLimiter;
 import com.tripbler.backend.common.ratelimit.RateLimitBucket;
@@ -35,9 +32,10 @@ import com.tripbler.backend.translation.dto.PhotoTranslationResponse.TranslatedP
 import com.tripbler.backend.translation.dto.PhotoTranslationResponse.TranslationSource;
 
 /**
- * 사진 번역. 사용자·IP 호출 제한 → 검증 → 동시 처리 자리 → 전체 호출 제한 → AI(Claude) 번역 순으로 처리하고, AI가 실패했거나 돌려주지 않은 문단은
+ * 사진 번역. 검증 → 동시 처리 자리(사용자별·전체) → 전체 호출 제한 → AI(Claude) 번역 순으로 처리하고, AI가 실패했거나 돌려주지 않은 문단은
  * 그 문단의 OCR 글자만 Google로 번역해 대신한다(translationSource OCR_TEXT, 발음 없음).
  * 가격은 AI가 확실하다고 한 것만 확정(confirmed)하고 원화로 바꾼다. 로그에는 개수와 시간만 남긴다.
+ * 사용자별·IP별 호출 제한은 컨트롤러 인자 해석 전에 PhotoTranslationRateLimitInterceptor가 차감한다.
  */
 @Service
 public class PhotoTranslationService {
@@ -46,25 +44,12 @@ public class PhotoTranslationService {
 
     private static final String GLOBAL_KEY = "*";
 
-    private static final List<RateLimitBucket> USER_LIMITS = List.of(
-        RateLimitBucket.TRANSLATION_PHOTO_USER_MINUTE,
-        RateLimitBucket.TRANSLATION_PHOTO_USER_DAY
-    );
-
-    private static final List<RateLimitBucket> IP_LIMITS = List.of(
-        RateLimitBucket.TRANSLATION_PHOTO_IP_MINUTE,
-        RateLimitBucket.TRANSLATION_PHOTO_IP_DAY
-    );
-
     private static final List<RateLimitBucket> GLOBAL_LIMITS = List.of(
         RateLimitBucket.TRANSLATION_PHOTO_GLOBAL_HOUR,
         RateLimitBucket.TRANSLATION_PHOTO_GLOBAL_DAY
     );
 
-    // 자리가 없어 거절할 때 알리는 재시도 대기 시간(초). 임시값.
-    private static final long BUSY_RETRY_AFTER_SECONDS = 3;
-
-    private final Semaphore concurrency;
+    private final PhotoTranslationSlots slots;
     private final PhotoImageInspector inspector;
     private final PhotoRequestValidator validator;
     private final PhotoTranslationClient client;
@@ -82,10 +67,9 @@ public class PhotoTranslationService {
         PriceExtractor priceExtractor,
         KrwPriceConverter priceConverter,
         AuthRateLimiter rateLimiter,
-        // 임시값: 실제 Claude 측정(작업 14) 뒤 확정
-        @Value("${translation.photo.max-concurrent:4}") int maxConcurrent
+        PhotoTranslationSlots slots
     ) {
-        this.concurrency = new Semaphore(Math.max(1, maxConcurrent));
+        this.slots = slots;
         this.inspector = inspector;
         this.validator = validator;
         this.client = client;
@@ -97,33 +81,23 @@ public class PhotoTranslationService {
 
     public PhotoTranslationResponse translate(
         String userId,
-        String clientIp,
         byte[] image,
         String mediaType,
         PhotoTranslationRequest request
     ) {
         long startedAt = System.nanoTime();
 
-        // 사용자별·IP별 한도는 검증 전에 차감한다. 잘못된 요청도 한도를 쓰므로 큰 사진을 담은
-        // 잘못된 요청을 한도 없이 반복할 수 없다. 전체 한도는 아래에서 검증을 통과한 뒤에만 차감한다.
-        rateLimiter.acquireKeys(userAndIpKeys(userId, clientIp));
-
+        // 사용자별·IP별 한도는 인터셉터가 이미 차감했다(검증 실패 요청도 쓴다).
         validator.validate(request, inspector.inspect(image));
 
-        // 사진 사본이 AI 호출·대체 번역 동안 메모리에 머무므로 동시 처리 수를 제한한다. 기다리지 않고 거절한다.
-        // 거절된 요청은 전체 한도를 쓰지 않는다. 자리는 어떤 경우에도 finally에서 돌려준다.
-        if (!concurrency.tryAcquire()) {
-            log.info("사진 번역 동시 처리 상한 도달");
-            throw new TooManyRequestsException(BUSY_RETRY_AFTER_SECONDS);
-        }
-
-        try {
+        // 사진 사본이 AI 호출·대체 번역 동안 메모리에 머무므로 사용자별·전체 동시 처리 수를 제한한다.
+        // 자리가 없으면 기다리지 않고 429로 거절하며, 거절된 요청은 전체 한도를 쓰지 않는다.
+        // 자리는 어떤 경우에도 try-with-resources로 돌려준다.
+        try (PhotoTranslationSlots.Permit ignored = slots.acquire(userId)) {
             // 번역 제공자 호출이 실패해도 한도는 되돌리지 않는다(/lines와 같다).
             rateLimiter.acquireKeys(globalKeys());
 
             return process(image, mediaType, request, startedAt);
-        } finally {
-            concurrency.release();
         }
     }
 
@@ -303,20 +277,6 @@ public class PhotoTranslationService {
 
     private static String firstNonNull(String first, String second, String otherwise) {
         return first != null ? first : second != null ? second : otherwise;
-    }
-
-    private static List<AuthRateLimiter.Key> userAndIpKeys(String userId, String clientIp) {
-        List<AuthRateLimiter.Key> keys = new ArrayList<>(USER_LIMITS.size() + IP_LIMITS.size());
-
-        for (RateLimitBucket bucket : USER_LIMITS) {
-            keys.add(new AuthRateLimiter.Key(bucket, userId));
-        }
-
-        for (RateLimitBucket bucket : IP_LIMITS) {
-            keys.add(new AuthRateLimiter.Key(bucket, clientIp));
-        }
-
-        return keys;
     }
 
     private static List<AuthRateLimiter.Key> globalKeys() {

@@ -192,7 +192,7 @@ class PhotoTranslationNoStorageIT {
             @Value("${spring.servlet.multipart.location}") String location
         ) {
             PhotoTranslationService service = mock(PhotoTranslationService.class);
-            when(service.translate(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
+            when(service.translate(any(), any(), any(), any())).thenAnswer(invocation -> {
                 probe.seen.set(listFiles(Path.of(location)));
                 return new PhotoTranslationResponse("en", "ko", List.of());
             });

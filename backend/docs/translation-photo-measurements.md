@@ -9,8 +9,8 @@
 - [ ] 사용자가 실제 사진 전송과 유료 호출을 승인했다(날짜: ).
 - [ ] 측정할 AI 제공업체와 모델 후보를 정했다. 제공업체 보관 정책 안내는 AI를 정한 뒤 확정한다(`translation-photo-api.md` "AI 제공업체 쪽 보관" 절).
 - [ ] 시료에 개인정보(얼굴, 이름, 전화번호, 카드·영수증 번호, 위치)가 없다.
-- [ ] 시료 폴더는 저장소 밖에 있다. 결과 폴더(`build/photo-live`)도 커밋하지 않는다.
-- [ ] 운영 설정과 같게 `ANTHROPIC_LOG`를 설정하지 않았다.
+- [ ] 시료 폴더는 저장소 밖에 있다. 결과 폴더(`build/photo-live`)도 커밋하지 않는다. 테스트가 확인한다: 시료·결과 경로가 저장소 안이면 `backend/build/` 아래가 아닐 때 실패한다.
+- [ ] 운영 설정과 같게 `ANTHROPIC_LOG`를 설정하지 않았다. 설정돼 있으면 테스트가 실행을 거부한다(SDK가 본문을 테스트 출력에 남기고 Gradle이 `build/test-results`에 저장하므로).
 
 ## 시료 준비
 
@@ -30,17 +30,21 @@
 ## 실행
 
 ```bash
-ANTHROPIC_LIVE_TEST=true \
-ANTHROPIC_API_KEY=... \
-PHOTO_LIVE_SAMPLES=/저장소/밖/시료폴더 \
-PHOTO_LIVE_MODEL=claude-sonnet-5-5 \
-./gradlew test --tests "*ClaudePhotoTranslationLiveIT"
+ANTHROPIC_LIVE_TEST=true ANTHROPIC_API_KEY=... PHOTO_LIVE_SAMPLES=/저장소/밖/시료폴더 PHOTO_LIVE_MODEL=claude-sonnet-5-5 PHOTO_LIVE_RUN=2048px-q85 ./gradlew liveTest
 ```
 
-- 테스트: `src/test/java/com/tripbler/backend/translation/client/ClaudePhotoTranslationLiveIT.java`. 스위치 환경 변수가 없으면 기본 빌드에서 건너뛴다.
-- 결과: `build/photo-live/<모델>/`에 시료별 `이름.result.json`(OCR 문단과 AI 결과를 나란히)과 `summary.csv`(지연, 입력·출력 토큰, 돌려받은 문단 수, uncertain 수, 오류 종류, p50/p90)를 쓴다.
-- 테스트는 응답 형식(요청에 없는 문단 ID가 없는지)만 확인한다. 품질 판정은 사람이 한다.
-- 모델 후보마다, 사진 크기마다 한 번씩 실행한다.
+- 테스트: `src/test/java/com/tripbler/backend/translation/client/ClaudePhotoTranslationLiveIT.java`(`@Tag("live")`). **일반 `./gradlew test`에서는 빠진다.** `./gradlew liveTest`로만 돌고, 그때도 `ANTHROPIC_LIVE_TEST=true`가 없으면 건너뛴다.
+- 결과 폴더 규칙(`PhotoLiveRunFiles`, 일반 test의 `PhotoLiveRunFilesTest`가 확인):
+  - `<결과 폴더>/<모델>/<실행 이름>/`. 결과 폴더는 `PHOTO_LIVE_OUT`(없으면 `build/photo-live`), 실행 이름은 `PHOTO_LIVE_RUN`(없으면 UTC 시각 `yyyyMMdd-HHmmss`).
+  - **이미 있는 실행 폴더에는 쓰지 않고 실패한다**(같은 모델로 크기를 바꿔 다시 돌려도 덮어쓰지 않음). 크기·품질마다 실행 이름을 다르게 준다.
+  - 모델·실행 이름은 영문·숫자·`. _ -`만 쓸 수 있다(`/`, `\`, `..` 불가).
+  - 시료·결과 경로가 저장소 안이면 `backend/build/` 아래만 허용한다.
+- 결과 파일:
+  - `이름.result.json`: OCR 문단과 AI 결과를 나란히.
+  - `samples.csv`: 시료마다 바로 덧붙인다(중간에 멈춰도 앞 시료 기록이 남음). 열: `sample, paragraphs, elapsedMs, inputTokens, outputTokens, returned, uncertain, unknownIds, error`. 시료 파일 읽기 실패는 `error=sample:<예외>`, 호출 실패는 예외 종류. 요청에 없는 문단 ID는 `unknownIds`에 `;`로 잇는다. 쉼표·따옴표가 든 값은 따옴표로 감싼다.
+  - `summary.csv`: `key,value` 형식(모델, 실행 이름, 시료 수, 측정 수, 실패 수, unknownIds 시료 수, p50Ms, p90Ms). 도중 예외가 나도 항상 쓴다.
+- 테스트는 모든 기록을 쓴 뒤 요청에 없는 문단 ID를 돌려준 시료가 있으면 실패한다. 품질 판정은 사람이 한다.
+- 모델 후보마다, 사진 크기마다 실행 이름을 바꿔 한 번씩 실행한다.
 
 ## 결과 기록
 

@@ -97,30 +97,84 @@
 | 400 | `INVALID_REQUEST` | 위 요청 규칙 위반(ID 형식·중복, 크기 불일치, 상자 범위, 한도 초과, JPEG 아님), `image`·`request` 파트 없음, `request` JSON이 깨졌거나 형식이 틀림, `request` 파트의 `Content-Type`이 JSON이 아님, multipart 해석 실패 |
 | 401 | - | 로그인하지 않음 |
 | 413 | `PAYLOAD_TOO_LARGE` | multipart 한도 초과(파일 5MB, 요청 6MB). 프로필 이미지 업로드는 기존대로 400 `INVALID_PROFILE_IMAGE` |
-| 429 | `TOO_MANY_REQUESTS` | 호출 제한, 또는 동시 처리 상한 도달(기다리지 않고 거절). `Retry-After`(초) 포함 |
+| 429 | `TOO_MANY_REQUESTS` | 호출 제한, 또는 동시 처리 상한(사용자별·전체) 도달(기다리지 않고 거절). `Retry-After`(초) 포함 |
 | 503 | `TRANSLATION_PROVIDER_UNAVAILABLE` | AI와 Google 대체 번역이 모두 실패 |
 
 - 오류 메시지에는 요청 글자를 넣지 않는다(JSON 해석 실패는 고정 문구, 검증 실패는 규칙 문구만). `request` 파트가 JSON이 아니거나 multipart 해석이 실패하면(`HttpMediaTypeNotSupportedException`, `MultipartException`) 고정 문구 400이며 이 경로에만 적용한다(다른 엔드포인트의 기존 응답은 그대로).
 
 ### 호출 제한
 
-`/lines`와 같은 값의 별도 버킷(`RateLimitBucket.TRANSLATION_PHOTO_*`, 임시값): 사용자별 1분 10회·하루 100회, IP별 1분 20회·하루 300회, 서버 전체 1시간 300회·하루 2000회. 모두 함께 판정하고 하나라도 넘으면 429이며 그때는 그 묶음의 어느 한도도 쓰지 않는다. IP는 접속 주소(`getRemoteAddr`)만 쓴다(`/lines`와 같은 이유).
+`/lines`와 같은 값의 별도 버킷(`RateLimitBucket.TRANSLATION_PHOTO_*`, 임시값): 사용자별 1분 10회·하루 100회, IP별 1분 20회·하루 300회, 서버 전체 1시간 300회·하루 2000회. 한 번에 판정하는 묶음(사용자·IP 묶음, 전체 묶음) 안에서 하나라도 넘으면 429이며 그때는 그 묶음의 어느 한도도 쓰지 않는다. IP는 접속 주소(`getRemoteAddr`)만 쓴다(`/lines`와 같은 이유).
 
-차감 순서(`PhotoTranslationService.translate`):
+요청이 지나가는 순서와 한도를 쓰는 위치:
 
-1. **사용자별·IP별 한도를 사진 검사·검증 전에 차감한다.** 큰 사진을 담은 잘못된 요청도 한도를 쓰므로 한도 없이 반복할 수 없다(검증 실패 400도 이 한도는 쓴다).
-2. 사진 검사·문단 검증. 실패하면 400이며 전체 한도와 동시 처리 자리는 쓰지 않는다.
-3. 동시 처리 자리를 잡는다(아래). 자리가 없으면 429이며 **전체 한도는 쓰지 않는다**(사용자별·IP별 한도는 1에서 이미 썼다).
-4. **전체(GLOBAL) 한도는 검증을 통과하고 자리를 잡은 뒤에만 차감한다.** 잘못된 요청이나 거절된 요청으로 전체 한도를 소진할 수 없다. 전체 한도에서 429가 나면 1의 사용자별·IP별 차감은 되돌리지 않는다(원자적이지 않음).
-5. 번역 제공자 호출이 실패해도 한도는 되돌리지 않는다.
+1. **multipart 해석**(DispatcherServlet, 인터셉터보다 먼저). 크기 초과 413이나 본문이 깨진 multipart는 여기서 끝나며 **어떤 한도도 쓰지 않는다.** 인터셉터보다 앞이라 막을 수 없다(아래 "업로드 단계 메모리"). 해석은 `resolve-lazily` 기본값(false)이라 이 단계에서 사진 파트를 끝까지 읽는다.
+2. 로그인 확인(`SecurityConfig`). 실패하면 401이며 한도를 쓰지 않는다.
+3. **사용자별·IP별 한도 차감**(`PhotoTranslationRateLimitInterceptor.preHandle`, 컨트롤러 인자 해석 전). 사용자 키는 JWT `sub`다. 그래서 그 뒤에 실패하는 요청 — `@Valid` 실패(문단 0개·51개 이상, 언어 코드 형식, 크기 범위 등), `request` JSON 해석 실패, `image`·`request` 파트 없음, `request` 파트가 JSON이 아님, 사진 검사·문단 검증 실패, 자리 부족 429 — 도 **모두 이 한도를 쓴다.** 큰 사진에 잘못된 `request`를 붙여 한도 없이 반복할 수 없다.
+4. 컨트롤러 인자 해석·`@Valid` → 서비스의 사진 검사·문단 검증. 실패하면 400이며 자리와 전체 한도는 쓰지 않는다.
+5. 동시 처리 자리(아래). 없으면 429이며 **전체 한도는 쓰지 않는다**(3의 사용자·IP 한도는 이미 썼고 되돌리지 않는다).
+6. **전체(GLOBAL) 한도 차감**(`PhotoTranslationService`, 검증을 통과하고 자리를 잡은 뒤). 잘못된 요청이나 거절된 요청으로 전체 한도를 소진할 수 없다. 여기서 429가 나도 3의 차감은 되돌리지 않는다.
+7. 번역 제공자 호출. 실패해도 한도는 되돌리지 않는다.
+
+검증: `PhotoTranslationLimitsIT`가 실제 내장 Tomcat에 multipart 요청을 보내 3·4 단계에서 실패하는 요청(`@Valid` 실패, JSON 해석 실패, 파트 없음, JSON이 아닌 `request` 파트, JPEG가 아닌 사진)이 모두 사용자·IP 한도를 한 번씩 쓰고 전체 한도는 쓰지 않음을, 크기 초과 413은 어떤 한도도 쓰지 않음(1이 인터셉터보다 먼저임)을 확인한다.
 
 ### 동시 처리 상한
 
-요청마다 사진 사본(최대 약 5MB와 base64 사본)이 AI 호출 시간 제한(최대 90초)과 대체 번역 동안 메모리에 머문다. 이 구간을 덮도록 `translation.photo.max-concurrent`(임시값 **4**, 실제 Claude 측정 뒤 확정) 개의 자리를 두고, 자리가 없으면 기다리지 않고 바로 **429 `TOO_MANY_REQUESTS` + `Retry-After: 3`**(임시값)으로 거절한다. 기존 429 처리(`TooManyRequestsException`)를 그대로 쓴다. 자리는 AI 실패·대체 번역 실패·예외 모두 `finally`에서 돌려준다. 업로드를 받는 시점(multipart 파싱, 사진 바이트 읽기)은 이 상한 앞이므로 덮지 못한다. 이 구간은 요청 크기 한도(6MB)와 1의 사용자·IP 한도로 줄인다.
+요청마다 사진 사본(최대 약 5MB와 base64 사본)이 AI 호출 시간 제한(최대 90초)과 대체 번역 동안 메모리에 머문다. 이 구간을 `PhotoTranslationSlots`가 두 가지 자리로 제한한다. 자리가 없으면 기다리지 않고 바로 **429 `TOO_MANY_REQUESTS` + `Retry-After: 3`**(임시값)으로 거절한다.
+
+| 속성 | 임시값 | 뜻 |
+| --- | --- | --- |
+| `translation.photo.max-concurrent` | 4 | 서버 전체 동시 처리 수 |
+| `translation.photo.max-concurrent-per-user` | 1 | 사용자(JWT `sub`) 한 명의 동시 처리 수. 계정 하나가 글자 많은 요청을 동시에 보내 전체 자리를 모두 차지하지 못하게 한다 |
+
+- 사용자 자리를 먼저 잡고 전체 자리를 잡는다. 전체 자리가 없으면 잡았던 사용자 자리를 돌려준다. 두 값 모두 1보다 작으면 1로 본다.
+- 자리는 AI 실패·대체 번역 실패·전체 한도 429·예외 모두 try-with-resources로 돌려준다. 사용자 항목은 처리 중인 요청이 0이 되면 지운다(사용자 수만큼 쌓이지 않음).
+- 검증: `PhotoTranslationSlotsTest`(속성 바인딩, 0 이하 보정, 사용자별 거절·항목 삭제), `PhotoTranslationLimitsTest`(순서: 검증 → 자리 → 전체 한도 → AI, 자리 2개 동시 처리), `PhotoTranslationLimitsIT`(HTTP에서 같은 사용자 두 번째 동시 요청 429·다른 사용자 수용·전체 자리 부족 429와 `Retry-After: 3`).
+
+**자리 부족 거절 때 한도를 되돌리지 않는다.** 되돌리면 자리 부족 429를 이용해 한도 없이 업로드를 반복할 수 있기 때문이다(3단계의 목적). 그 대신 다음 문제가 남는다.
+
+- 다른 사용자들이 전체 자리 4개를 차지하고 있는 동안(요청 하나 최대 약 90초) 재시도하는 사용자는 재시도마다 자기 사용자·IP 한도를 쓴다. 3초마다 다시 보내면 1분 안에 사용자 한도 10회를 다 써서, 자리가 난 뒤에도 최대 1분 동안 호출 제한 429를 받는다. 같은 IP(공용 와이파이 등)의 다른 사람도 IP 한도를 함께 쓴다.
+- 계정 여러 개로 전체 자리를 계속 차지하는 것은 사용자별 상한만으로는 막지 못한다(가입 인증이 없음, `/lines`와 같은 남은 과제).
+
+**앱 재시도 권고**(앱 코드는 아직 바꾸지 않았다): 429를 받으면 `Retry-After`만큼 기다린 뒤 **자동 재시도는 한 번까지만** 하고, 그래도 429면 "잠시 뒤 다시 시도" 안내와 수동 재시도 버튼으로 넘긴다. 같은 사진을 연속으로 자동 재시도하지 않는다(재시도마다 사용자 한도를 쓴다). 사용자가 다른 사진을 찍었으면 진행 중인 요청을 기다리거나 취소한 뒤 보낸다(사용자별 동시 처리 1).
+
+### 업로드 단계 메모리
+
+동시 처리 자리는 서비스 안에서 잡으므로 그 앞의 업로드 단계(multipart 해석, `image.getBytes()` 사본)는 덮지 못한다. 지금 설정(2026-11-26 확인):
+
+| 설정 | 값 | 출처 |
+| --- | --- | --- |
+| `spring.servlet.multipart.max-file-size` / `max-request-size` | 5MB / 6MB | `application.properties` |
+| `spring.servlet.multipart.file-size-threshold` | 6MB(파트를 메모리에만 둠) | `application.properties` |
+| `spring.servlet.multipart.resolve-lazily` | false(기본) — 인터셉터 전에 끝까지 해석 | Spring Boot 기본 |
+| `server.tomcat.threads.max` | 200(기본) | 설정 없음 |
+| `server.tomcat.max-connections` / `accept-count` | 8192 / 100(기본) | 설정 없음 |
+| `server.tomcat.max-swallow-size` | 2MB(기본). 본문을 읽지 않고 거절한 요청(예: 401)에서 Tomcat이 버리며 읽는 상한. 메모리에 쌓지 않는다 | 설정 없음 |
+
+요청 하나가 쓰는 메모리(추정, 실측 아님):
+
+- 업로드 단계: multipart 파트 버퍼 최대 약 6MB. 인터셉터를 통과해 컨트롤러까지 가면 `getBytes()` 사본 5MB가 더해져 약 11MB. 인터셉터에서 거절된 요청도 해석은 끝났으므로 약 6MB를 쓴다.
+- 처리 단계(자리를 잡은 뒤): 사진 5MB + base64 약 6.7MB + SDK 요청 본문 직렬화 약 7MB + 위 파트 버퍼 → 약 25MB.
+
+동시 요청 수 × 요청당 바이트로 본 상한(추정):
+
+- 처리 단계: 전체 자리 4 × 약 25MB ≈ **100MB**.
+- 업로드 단계: 동시에 해석 중인 요청 수는 Tomcat 작업 스레드 수(200)가 상한이다. 200 × 약 11MB ≈ **2.2GB**(최악). 연결은 8192개까지 받지만 본문은 스레드가 있어야 읽으므로 스레드 수가 상한이다.
+
+**이번에는 업로드 단계 제한 설정을 적용하지 않았다.** 이유:
+
+- 사진 경로 전체 동시 업로드 수를 제한하는 필터는 그 자체로 값싼 공격 수단이 된다. 로그인한 계정 몇 개가 사진을 아주 느리게 올려 그 자리를 잡고 있으면 모든 사용자의 사진 번역이 막힌다. 사용자별로 세려면 인증 뒤에 둬야 하고, 계정을 여러 개 만들면(가입 인증 없음) 효과가 없다.
+- `server.tomcat.threads.max`를 줄이면 모든 API에 영향을 준다. 알맞은 값은 배포 서버의 메모리를 정해야 알 수 있는데 아직 정하지 않았다.
+- 사용자·IP 한도를 인터셉터로 앞당겨, 같은 계정·IP가 1분에 보낼 수 있는 업로드 수가 줄었다(사용자 10회, IP 20회). 다만 한도는 해석이 끝난 뒤 판정하므로 동시에 몰려 온 요청의 해석 메모리는 막지 못한다.
+
+**운영 권장값**(배포 때 정한다):
+
+- JVM 힙: 업로드 상한(스레드 수 × 약 11MB) + 처리 상한(약 100MB) + 앱 기본 사용량 이상. 기본 스레드 200이면 `-Xmx` 3GB 이상. 힙을 1GB 안팎으로 두려면 `server.tomcat.threads.max=50`(업로드 상한 약 550MB)으로 줄이고, 다른 API 응답 시간에 문제가 없는지 확인한다.
+- 앞에 프록시(nginx 등)를 두면 IP별 동시 연결 수(`limit_conn`)와 본문 수신 시간 제한(`client_body_timeout`)을 둔다. 본문 버퍼링은 임시 파일을 쓸 수 있으므로 비저장 범위와 함께 다시 검증한다(아래 "프록시").
 
 ## 구현
 
-- `TranslationController.translatePhoto` → `PhotoTranslationService`(사용자·IP 호출 제한 → 검증 → 동시 처리 자리 → 전체 호출 제한 → AI → 문단별 대체 → 가격) → `ClaudePhotoTranslationClient` / `GoogleLineTranslationClient`.
+- `PhotoTranslationRateLimitInterceptor`(사용자·IP 호출 제한) → `TranslationController.translatePhoto`(인자 해석·`@Valid`) → `PhotoTranslationService`(검증 → `PhotoTranslationSlots` 동시 처리 자리 → 전체 호출 제한 → AI → 문단별 대체 → 가격) → `ClaudePhotoTranslationClient` / `GoogleLineTranslationClient`.
 - `ClaudePhotoTranslationClient`: 모델은 속성 `translation.photo.model`(기본 `claude-sonnet-5-5`, 이름만 정해 둔 값). 구조화 출력, 시간 제한 30초 + 글자당 12ms(최대 90초), `max_tokens` = min(16000, 4096 + 문단 수×32 + 글자 수×4). 사진 속 글자는 지시가 아니라고 시스템 프롬프트에서 정한다. 키는 `/lines`와 같은 `ANTHROPIC_API_KEY`이며, 없으면 모든 문단을 Google로 대체한다.
 
 ## Tripbler 쪽 비저장 범위
@@ -132,7 +186,8 @@ Tripbler 서버가 통제하는 범위다. 사진과 글자는 요청을 처리�
 - **로그**: 사진 바이트, base64, 인식 글자, 번역문을 어떤 로그에도 남기지 않는다. 개수, 토큰 수, 걸린 시간, 오류 종류만 남긴다.
   - `GlobalExceptionHandler`: JSON 해석 실패(`HttpMessageNotReadableException`)와 `@Valid` 검증 실패는 로그를 남기지 않고, 업무 검증 실패(`BusinessException`)는 규칙 문구만 WARN으로 남긴다. `PhotoTranslationControllerTest`가 표식 글자로 이를 확인한다(`brokenJsonPart_errorLogHasNoRequestText`, `invalidRequest_warnLogHasNoParagraphText`).
   - 서비스·클라이언트 로그는 개수·시간·토큰 수·예외 클래스 이름만 남긴다. SDK 예외는 메시지에 응답 원문이 담길 수 있어 cause로 넘기지 않는다.
-  - **운영에서는 `ANTHROPIC_LOG` 환경 변수를 설정하지 않는다.** SDK가 요청·응답 본문(사진 base64·글자)을 로그로 남길 수 있다.
+  - **운영에서는 `ANTHROPIC_LOG` 환경 변수를 설정하지 않는다.** SDK가 요청·응답 본문(사진 base64·글자)을 로그로 남길 수 있다. 실제 측정 테스트(`ClaudePhotoTranslationLiveIT`)도 이 변수가 설정돼 있으면 실행을 거부한다(테스트 출력이 `build/test-results`에 저장되기 때문).
+- **실제 측정 결과**: `./gradlew liveTest`로만 돌고, 결과·시료 경로가 저장소 안이면 빌드 폴더(git 제외) 아래만 허용한다(`translation-photo-measurements.md`).
 - **프록시**: 지금은 프록시 없는 단일 서버다. 앞으로 nginx 같은 프록시를 앞에 두면 요청 본문 버퍼링(예: `client_body_temp`, `client_body_buffer_size`)과 접근 로그 설정을 같은 기준으로 다시 검증한다.
 
 ## AI 제공업체 쪽 보관(별개)
@@ -173,4 +228,6 @@ Tripbler 서버가 통제하는 범위다. 사진과 글자는 요청을 처리�
 - 실기기에서 앱과 연결한 업로드, 좌표, 비저장(Task 15).
 - 요청 하나의 최악 처리 시간은 `/lines`와 같은 구성(Claude 최대 90초 + Google 대체 + 환율 대기 5초)이다. 앱 시간 제한(120초)과의 차이는 실측 뒤 다시 본다.
 - `request` 파트의 `Content-Type`이 JSON이 아닌 요청은 `PhotoTranslationControllerTest.nonJsonRequestPart_returns400_andLogHasNoBodyText`로 400을 확인했다. multipart 해석 자체가 실패하는 요청(경계 문자열이 깨진 본문 등)의 `MultipartException` 400 처리는 같은 핸들러에 넣었지만 실제 Tomcat으로는 재현·검증하지 않았다(미검증).
-- 동시 처리 상한 4, `Retry-After` 3초는 임시값이다.
+- 동시 처리 상한(전체 4, 사용자별 1), `Retry-After` 3초는 임시값이다.
+- 업로드 단계 메모리 상한(약 2.2GB, 스레드 200 기준)은 코드 분석에 따른 추정이다. 부하 시험으로 실측하지 않았고, 업로드 단계 제한 설정(필터·Tomcat 스레드 수)은 적용하지 않았다(위 "업로드 단계 메모리").
+- 자리 부족 429 뒤 재시도로 한도를 소진하는 문제는 문서화만 했다. 앱의 429 재시도 동작은 위 권고대로 바꾸지 않았다.

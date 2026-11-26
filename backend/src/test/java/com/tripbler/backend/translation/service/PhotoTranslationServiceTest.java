@@ -36,7 +36,6 @@ import com.tripbler.backend.translation.dto.PhotoTranslationResponse.Translation
 /** AI, Google, 환율, 사진 검사는 대역으로 대신한다. */
 class PhotoTranslationServiceTest {
 
-    private static final String IP = "203.0.113.7";
     private static final byte[] IMAGE = new byte[] {1, 2, 3};
     private static final LocalDateTime FETCHED_AT = LocalDateTime.of(2026, 11, 22, 9, 30);
 
@@ -86,7 +85,7 @@ class PhotoTranslationServiceTest {
         when(inspector.inspect(any())).thenReturn(new PhotoImageInspector.Dimensions(1000, 800));
         converter = new KrwPriceConverter(exchangeService, Duration.ofSeconds(2));
         service = new PhotoTranslationService(inspector, validator, ai, google, new PriceExtractor(), converter,
-            rateLimiter, 4);
+            rateLimiter, new PhotoTranslationSlots(4, 1));
     }
 
     @AfterEach
@@ -115,7 +114,7 @@ class PhotoTranslationServiceTest {
     }
 
     private PhotoTranslationResponse run(PhotoTranslationRequest request) {
-        return service.translate("user-1", IP, IMAGE, "image/jpeg", request);
+        return service.translate("user-1", IMAGE, "image/jpeg", request);
     }
 
     @Test
@@ -256,7 +255,7 @@ class PhotoTranslationServiceTest {
         LineTranslationClient shortGoogle = (lines, source, target) ->
             new LineTranslationClient.Result("ja", List.of(new LineTranslationClient.Line("하나", null)));
         service = new PhotoTranslationService(inspector, validator, ai, shortGoogle, new PriceExtractor(), converter,
-            rateLimiter, 4);
+            rateLimiter, new PhotoTranslationSlots(4, 1));
 
         BusinessException exception = assertThrows(BusinessException.class,
             () -> run(request(paragraph("p1", "a"), paragraph("p2", "b"))));
@@ -311,13 +310,14 @@ class PhotoTranslationServiceTest {
     }
 
     @Test
-    void validationFailure_consumesUserAndIpLimitsOnly() {
+    void validationFailure_consumesNoGlobalLimit() {
         doThrow(new BusinessException(ErrorCode.INVALID_REQUEST, "사진 크기가 요청한 크기와 다릅니다."))
             .when(validator).validate(any(), any());
 
         assertThrows(BusinessException.class, () -> run(request(paragraph("p1", "a"))));
 
-        verify(rateLimiter, times(1)).acquireKeys(anyList());
+        // 사용자·IP 한도는 인터셉터가 차감하고, 서비스는 검증을 통과한 뒤에만 전체 한도를 차감한다.
+        verifyNoInteractions(rateLimiter);
         assertEquals(0, ai.calls);
     }
 

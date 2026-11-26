@@ -32,6 +32,7 @@
 ./gradlew test --tests "com.tripbler.backend.common.cache.TimeoutFallbackCacheTest"
 ./gradlew test --tests "*RefreshTokenServiceTest.someMethod"
 ```
+- 실제 외부 API를 부르는 측정 테스트(`@Tag("live")`)는 `./gradlew test`에서 빠지고 `./gradlew liveTest`로만 돈다(유료 호출, 사용자 승인 뒤에만 실행).
 - `src/main/resources/application.properties`에는 DB, JWT, 메일, CoinGecko 설정이 있다. 실행에는 PostgreSQL이 필요하다.
 - Google 키는 이 파일에 없고 **환경 변수로 넣는다**. Spring 규칙에 따라 속성 이름이 다음 환경 변수에 대응한다.
 
@@ -58,4 +59,4 @@
 - `common/chart/HistoryDownsampler`: 기간별 시세 엔드포인트는 `maxPoints`(기본 300, 16~1000)를 받는다. 응답할 때만 샘플링하며 첫·마지막 점과 구간별 최저·최고점을 보존한다.
 - `common/exception`: `BusinessException` + `ErrorCode` → `GlobalExceptionHandler` → `ErrorResponse`. 외부 서비스 실패는 전용 예외(`ExchangeProviderException`, `PlacesProviderException`, `TranslationProviderException`)를 쓴다.
 - `common/config/SecurityConfig`: JWT 액세스 토큰을 쓰는 OAuth2 리소스 서버. 리프레시 토큰은 DB(`auth/RefreshToken`)에 저장하고, 인증 없이 열리는 엔드포인트는 여기서 지정한다.
-- 추가 API 설명: `docs/crypto-history-api.md`, `docs/places-api.md`(장소 API 계약, 호출 제한, 필드 마스크 비용 등급, 오류 기준), `docs/auth-logout-api.md`(로그아웃 계약: Refresh Token 본문, 일치하는 토큰만 폐기), `docs/auth-rate-limit-api.md`(공개 인증 API 요청 제한 429·`Retry-After`, 인증코드 5회 오답 폐기), `docs/translation-lines-api.md`(찍기 모드 줄별 번역·발음·가격 원화 계약, 호출 제한, Claude 연동), `docs/translation-photo-api.md`(사진 번역 계약, 한도·오류, 대체·가격 확정 규칙, Tripbler 쪽 비저장 범위와 제공업체 보관 구분).
+- 추가 API 설명: `docs/crypto-history-api.md`, `docs/places-api.md`(장소 API 계약, 호출 제한, 필드 마스크 비용 등급, 오류 기준), `docs/auth-logout-api.md`(로그아웃 계약: Refresh Token 본문, 일치하는 토큰만 폐기), `docs/auth-rate-limit-api.md`(공개 인증 API 요청 제한 429·`Retry-After`, 인증코드 5회 오답 폐기), `docs/translation-lines-api.md`(찍기 모드 줄별 번역·발음·가격 원화 계약, 호출 제한, Claude 연동), `docs/translation-photo-api.md`(사진 번역 계약, 한도·오류, 대체·가격 확정 규칙, Tripbler 쪽 비저장 범위와 제공업체 보관 구분), `docs/translation-photo-measurements.md`(사진 번역 실제 Claude 측정 실행 방법·결과 폴더 규칙·기록 양식).

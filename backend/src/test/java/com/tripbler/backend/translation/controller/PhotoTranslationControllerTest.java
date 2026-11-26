@@ -5,6 +5,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -42,6 +43,8 @@ import com.tripbler.backend.common.exception.BusinessException;
 import com.tripbler.backend.common.exception.ErrorCode;
 import com.tripbler.backend.common.exception.GlobalExceptionHandler;
 import com.tripbler.backend.common.exception.TooManyRequestsException;
+import com.tripbler.backend.common.ratelimit.AuthRateLimiter;
+import com.tripbler.backend.common.ratelimit.RateLimitBucket;
 import com.tripbler.backend.common.security.CustomAccessDeniedHandler;
 import com.tripbler.backend.common.security.CustomAuthenticationEntryPoint;
 import com.tripbler.backend.translation.dto.PhotoTranslationRequest;
@@ -85,6 +88,11 @@ class PhotoTranslationControllerTest {
     @MockitoBean
     private JwtDecoder jwtDecoder;
 
+    // 사용자별·IP별 한도(PhotoTranslationRateLimitInterceptor)는 대역으로 두어 이 클래스의 요청 수와 무관하게 한다.
+    // 한도가 적용되는 위치는 PhotoTranslationLimitsIT가 실제 제한기로 확인한다.
+    @MockitoBean
+    private AuthRateLimiter rateLimiter;
+
     private static byte[] jpeg(int width, int height) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ImageIO.write(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "jpg", out);
@@ -113,7 +121,7 @@ class PhotoTranslationControllerTest {
 
     @Test
     void returns200WithParagraphs() throws Exception {
-        when(photoTranslationService.translate(eq("user-1"), eq("203.0.113.7"), any(byte[].class),
+        when(photoTranslationService.translate(eq("user-1"), any(byte[].class),
             eq(MediaType.IMAGE_JPEG_VALUE), any(PhotoTranslationRequest.class)))
             .thenReturn(new PhotoTranslationResponse("ja", "ko", List.of(
                 new TranslatedParagraph("p1", "ラーメン ¥980", "라멘 980엔", false, TranslationSource.AI, "라멘",
@@ -141,6 +149,13 @@ class PhotoTranslationControllerTest {
             .andExpect(jsonPath("$.paragraphs[0].prices[0].krwAmount").value(9104))
             .andExpect(jsonPath("$.paragraphs[0].prices[0].rateFetchedAt").value("2026-11-26T09:00:00"))
             .andExpect(jsonPath("$.paragraphs[0].prices[0].rateStale").value(false));
+
+        // 사용자(JWT sub)·IP(접속 주소) 한도는 인터셉터가 차감한다.
+        verify(rateLimiter).acquireKeys(List.of(
+            new AuthRateLimiter.Key(RateLimitBucket.TRANSLATION_PHOTO_USER_MINUTE, "user-1"),
+            new AuthRateLimiter.Key(RateLimitBucket.TRANSLATION_PHOTO_USER_DAY, "user-1"),
+            new AuthRateLimiter.Key(RateLimitBucket.TRANSLATION_PHOTO_IP_MINUTE, "203.0.113.7"),
+            new AuthRateLimiter.Key(RateLimitBucket.TRANSLATION_PHOTO_IP_DAY, "203.0.113.7")));
     }
 
     @Test
@@ -148,7 +163,7 @@ class PhotoTranslationControllerTest {
         mockMvc.perform(validUpload())
             .andExpect(status().isUnauthorized());
 
-        verifyNoInteractions(photoTranslationService);
+        verifyNoInteractions(photoTranslationService, rateLimiter);
     }
 
     @Test
@@ -185,7 +200,7 @@ class PhotoTranslationControllerTest {
 
     @Test
     void returns429WithRetryAfter() throws Exception {
-        when(photoTranslationService.translate(any(), any(), any(), any(), any()))
+        when(photoTranslationService.translate(any(), any(), any(), any()))
             .thenThrow(new TooManyRequestsException(30));
 
         mockMvc.perform(validUpload().with(jwt()))
@@ -196,7 +211,7 @@ class PhotoTranslationControllerTest {
 
     @Test
     void returns503WhenProvidersFail() throws Exception {
-        when(photoTranslationService.translate(any(), any(), any(), any(), any()))
+        when(photoTranslationService.translate(any(), any(), any(), any()))
             .thenThrow(new BusinessException(ErrorCode.TRANSLATION_PROVIDER_UNAVAILABLE));
 
         mockMvc.perform(validUpload().with(jwt()))
@@ -242,8 +257,8 @@ class PhotoTranslationControllerTest {
         // 서비스 대역이 실제 검사기·검증기를 부른다(검증 실패는 BusinessException으로 WARN 로그가 남는다).
         PhotoImageInspector inspector = new PhotoImageInspector();
         PhotoRequestValidator validator = new PhotoRequestValidator();
-        when(photoTranslationService.translate(any(), any(), any(), any(), any())).thenAnswer(invocation -> {
-            validator.validate(invocation.getArgument(4), inspector.inspect(invocation.getArgument(2)));
+        when(photoTranslationService.translate(any(), any(), any(), any())).thenAnswer(invocation -> {
+            validator.validate(invocation.getArgument(3), inspector.inspect(invocation.getArgument(1)));
             throw new AssertionError("검증을 통과하면 안 된다");
         });
 

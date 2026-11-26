@@ -230,4 +230,23 @@ class TranslationControllerTest {
                     )
             );
     }
+
+    // 사진 번역 경로에만 400으로 바꾼 HttpMediaTypeNotSupportedException이 다른 경로에서는 기존처럼 500인지 확인한다.
+    @Test
+    void 사진번역이_아닌_경로의_지원하지않는_본문형식은_기존처럼_500을_반환한다()
+        throws Exception {
+
+        mockMvc.perform(
+                post("/api/v1/translation")
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .content("Hello")
+            )
+            .andExpect(
+                status().isInternalServerError()
+            )
+            .andExpect(
+                jsonPath("$.code")
+                    .value("INTERNAL_SERVER_ERROR")
+            );
+    }
 }
