@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tripbler — 하단 이동 메뉴 3단계 프로토타입</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,400,0..1,0&display=block" rel="stylesheet">
+<style>
+  :root { --p:#0061A4; --pc:#D1E4FF; --onpc:#001D36; --s:#F8F9FF; --on:#191C20; --sv:#43474E; --ov:#C3C7CF; --paper:#F3F0E9; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--paper); font-family:"Noto Sans KR",sans-serif; color:#1C1F23; }
+  .wrap { max-width:1100px; margin:0 auto; padding:32px 24px; display:flex; gap:40px; flex-wrap:wrap; justify-content:center; }
+  .ms { font-family:"Material Symbols Outlined"; font-size:24px; line-height:1; font-feature-settings:"liga"; display:inline-block; }
+  .phone { width:360px; background:#111; border-radius:44px; padding:10px; flex:none; transition:width .2s; }
+  .phone.small { width:340px; }
+  .screen { position:relative; height:740px; border-radius:34px; overflow:hidden; background:var(--s); color:var(--on); user-select:none; touch-action:none; }
+  .phone.small .screen { height:640px; }
+  .bar { height:56px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; }
+  .view { position:absolute; inset:56px 0 0 0; padding:16px; }
+  .row { display:flex; justify-content:space-between; padding:16px 4px; border-bottom:1px solid var(--ov); font-size:18px; }
+  .map { position:absolute; inset:0; background:#EEF0E6; }
+  .map i { position:absolute; background:#fff; }
+  .cam { position:absolute; inset:0; background:#3A322B; }
+  .menu-card { position:absolute; left:40px; right:40px; top:120px; height:240px; background:#F2E6CF; border-radius:4px; padding:44px 20px; font-size:16px; line-height:2; color:#2B2420; }
+  .menu-card b { position:absolute; left:0; right:0; top:0; height:34px; background:#9C2A1F; color:#fff; text-align:center; line-height:34px; }
+  .cam-hint { position:absolute; left:16px; right:16px; top:16px; text-align:center; color:#fff; font-size:13px; background:rgba(0,0,0,.45); border-radius:4px; padding:6px; transition:opacity .2s; }
+  .cam-side { position:absolute; bottom:28px; width:48px; height:48px; border-radius:50%; background:rgba(0,0,0,.45); color:#fff; display:grid; place-items:center; transition:opacity .2s; }
+  .ai { display:grid; place-items:center; height:70%; color:var(--sv); font-size:18px; }
+  .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .25s; }
+  .toast { position:absolute; left:50%; top:70px; transform:translateX(-50%); background:#2E3135; color:#fff; font-size:13px; padding:8px 12px; border-radius:4px; opacity:0; transition:opacity .2s; pointer-events:none; white-space:nowrap; }
+
+  /* 메뉴 */
+  #nav { position:absolute; left:0; right:0; bottom:0; height:0; }
+  /* 참고 이미지: 옅은 청회색 반투명 면, 가는 점선 테두리 */
+  #bg { position:absolute; left:50%; background:rgba(214,224,240,.72); border:1px dashed rgba(115,119,127,.5); }
+  #center { position:absolute; left:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--p); pointer-events:none; }
+  #center .ms { font-size:26px; }
+  #center .nm { font-size:12px; font-weight:700; margin-top:1px; }
+  #center .hint { font-size:10px; color:var(--sv); margin-top:1px; }
+  #hit { position:absolute; left:50%; transform:translateX(-50%); bottom:0; width:96px; height:96px; }
+  /* 참고 이미지: 반투명 회색 원 버튼, 이름은 원 아래 가장자리에 걸친 흰 꼬리표 */
+  .btn { position:absolute; left:50%; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:50%; background:rgba(224,226,236,.88); border:1.5px solid rgba(195,199,207,.95); color:var(--sv); font-size:12px; }
+  .btn .ms { font-size:26px; }
+  .btn .lb { position:absolute; left:50%; bottom:-9px; transform:translateX(-50%); background:var(--s); padding:0 4px; line-height:16px; white-space:nowrap; color:var(--sv); }
+  /* AI(가운데, 76)는 이름을 원 안에 쓴다 */
+  .btn.home .lb { position:static; transform:none; background:none; padding:0; font-weight:700; color:inherit; }
+  .btn.home .ms { font-size:28px; }
+  /* 현재 화면: 파란 원, 흰 아이콘 */
+  .btn.cur { background:#2196F3; color:#fff; border-color:#2196F3; }
+  .btn.cur .lb { font-weight:700; }
+  .btn.home.cur .lb { color:#fff; }
+  #outside { position:absolute; inset:0; display:none; }
+  .big .btn .lb, .big #center .nm { font-size:15px; }
+
+  .panel { width:380px; font-size:14px; line-height:1.6; }
+  .panel h1 { font-size:24px; margin:0 0 8px; }
+  .panel p { color:#4A4F57; margin:0 0 12px; }
+  .ctl { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  .ctl button, .ctl label { font:inherit; font-size:13px; padding:6px 10px; border:1px solid #9aa; border-radius:4px; background:#fff; cursor:pointer; }
+  .ctl button.on { background:var(--p); color:#fff; border-color:var(--p); }
+  .stat { font-family:monospace; font-size:13px; background:#fff; border:1px solid #ddd; border-radius:4px; padding:8px 10px; }
+  .panel ul { padding-left:18px; color:#4A4F57; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="phone" id="phone">
+    <div class="screen" id="screen">
+      <div class="bar" id="title">환율</div>
+      <div class="view" id="view"></div>
+      <div class="flash" id="flash"></div>
+      <div class="toast" id="toast"></div>
+      <div id="outside"></div>
+      <div id="nav">
+        <div id="bg"></div>
+        <div id="buttons"></div>
+        <div id="center"><span class="ms" id="cIcon">attach_money</span><span class="nm" id="cName">환율</span><span class="hint" id="cHint"></span></div>
+        <div id="hit" aria-label="메뉴 열기" role="button"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h1>하단 이동 메뉴 3단계</h1>
+    <p>구상안 프로토타입입니다. 아래 점을 눌러 현재 화면 아이콘을 띄우고, 아이콘을 위로 끌어 보세요. 끄는 만큼 원형 배경이 반원으로 바뀌고 버튼이 퍼집니다. 번역 화면에서는 아이콘을 누르면 촬영합니다.</p>
+    <div class="ctl">
+      <button data-go="0">환율</button><button data-go="1">지도</button><button data-go="2">번역(촬영)</button><button data-go="-1">AI 홈</button>
+    </div>
+    <div class="ctl">
+      <button id="tRm">애니메이션 줄이기</button><button id="tBig">큰 글자</button><button id="tSmall">작은 화면(320)</button>
+    </div>
+    <div class="stat" id="stat">상태: 점 · 진행률 0.00</div>
+    <ul>
+      <li>8px 넘게 움직이면 끌기로 보고, 끌기 뒤에는 촬영하지 않습니다.</li>
+      <li>120px = 완전히 펼침. 놓을 때 0.35 이상이거나 빠르게 올리면 펼치고, 아니면 원형으로 돌아옵니다.</li>
+      <li>펼침·복귀 도중에 다시 잡으면 그 자리에서 이어서 끕니다.</li>
+      <li>다른 화면 버튼은 이동하며 점으로, 현재 화면 재선택·바깥 누르기는 이동 없이 점으로 접힙니다.</li>
+      <li>자세한 규칙은 <code>bottom-nav.md</code>에 있습니다. 첨부 이미지를 받지 못해 크기·배치는 지금 앱 값을 썼습니다.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const TABS = [
+  // 참고 이미지와 같은 자리(하단 가운데 기준 버튼 중심)
+  { i: 0, name: '환율', icon: 'attach_money', pos: [-93, 72], size: 64 },
+  { i: 1, name: '지도', icon: 'map', pos: [0, 122], size: 64 },
+  { i: 2, name: '번역', icon: 'translate', pos: [93, 72], size: 64 },
+  { i: -1, name: 'AI', icon: 'auto_awesome', pos: [0, 42], size: 76 },
+];
+const $ = (id) => document.getElementById(id);
+const bg = $('bg'), center = $('center'), hit = $('hit'), outside = $('outside');
+let screenIdx = 0;          // 현재 화면
+let mode = 'dot';           // dot | icon | fan
+let dotT = 0;               // 점(0) ↔ 원형(1)
+let p = 0;                  // 원형(0) ↔ 반원(1)
+let anim = null, idleTimer = null;
+let reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// 버튼 만들기
+const btnEls = TABS.map((t) => {
+  const b = document.createElement('div');
+  b.className = t.i === -1 ? 'btn home' : 'btn';
+  b.innerHTML = `<span class="ms">${t.icon}</span><span class="lb">${t.name}</span>`;
+  $('buttons').appendChild(b);
+  return b;
+});
+
+function render() {
+  // 배경: 점(지름 10) → 원(64) → 반원(300×150)
+  const d = lerp(10, 64, dotT);
+  const w = lerp(d, 300, p), h = lerp(d, 150, p);
+  const topR = h * lerp(0.5, 1, p), botR = lerp(d / 2, 0, p);
+  const bottom = lerp(lerp(26, 12, dotT), 0, p);
+  bg.style.width = w + 'px'; bg.style.height = h + 'px'; bg.style.bottom = bottom + 'px';
+  bg.style.transform = 'translateX(-50%)';
+  bg.style.borderRadius = `${topR}px ${topR}px ${botR}px ${botR}px`;
+  bg.style.opacity = lerp(0.7, 1, dotT);
+  // 가운데 현재 화면 아이콘
+  center.style.width = '64px'; center.style.height = '64px';
+  center.style.bottom = lerp(12, 14, p) + 'px';
+  center.style.transform = `translateX(-50%) scale(${lerp(0.4, 1, dotT)})`;
+  center.style.opacity = dotT * (1 - clamp(p * 1.6, 0, 1));
+  // 부채꼴 버튼: 가운데에서 자리로
+  TABS.forEach((t, k) => {
+    const el = btnEls[k];
+    const x = lerp(0, t.pos[0], p), y = lerp(44, t.pos[1], p);
+    const s = t.size;
+    el.style.width = s + 'px'; el.style.height = s + 'px';
+    el.style.bottom = (y - s / 2) + 'px';
+    el.style.transform = `translateX(calc(-50% + ${x}px)) scale(${lerp(0.6, 1, p)})`;
+    el.style.opacity = clamp((p - 0.15) / 0.85, 0, 1);
+    el.style.pointerEvents = p > 0.9 ? 'auto' : 'none';
+    el.classList.toggle('cur', t.i === screenIdx);
+  });
+  // 촬영 화면의 갤러리·플래시·안내는 펼치는 동안 흐리게
+  document.querySelectorAll('.cam-side,.cam-hint').forEach((el) => { el.style.opacity = 1 - clamp(p * 1.5, 0, 1); el.style.pointerEvents = p > 0.05 ? 'none' : 'auto'; });
+  // 끌기 영역: 원형일 때 96×96, 펼쳤을 때 반원 크기(300×160)
+  hit.style.width = (p > 0.5 ? 300 : 96) + 'px';
+  hit.style.height = (p > 0.5 ? 160 : 96) + 'px';
+  outside.style.display = mode === 'fan' ? 'block' : 'none';
+  $('stat').textContent = `상태: ${{ dot: '점', icon: '현재 화면 아이콘', fan: '부채꼴' }[mode]} · 진행률 ${p.toFixed(2)}${reduced ? ' · 애니메이션 줄이기' : ''}`;
+}
+
+// 약한 스프링(감쇠비 약 0.9)으로 값 이동. 도중에 끊으면 그 자리에서 이어진다.
+function animate(key, target, v0 = 0, done) {
+  cancelAnimationFrame(anim);
+  if (reduced) { if (key === 'p') p = target; else dotT = target; render(); done && done(); return; }
+  const k = 260, c = 2 * 0.9 * Math.sqrt(k);
+  let x = key === 'p' ? p : dotT, v = v0, last = performance.now();
+  const step = (now) => {
+    const dt = Math.min(0.032, (now - last) / 1000); last = now;
+    v += (-k * (x - target) - c * v) * dt; x += v * dt;
+    if (Math.abs(x - target) < 0.002 && Math.abs(v) < 0.02) x = target;
+    if (key === 'p') p = clamp(x, 0, 1); else dotT = clamp(x, 0, 1);
+    render();
+    if (x !== target) anim = requestAnimationFrame(step); else done && done();
+  };
+  anim = requestAnimationFrame(step);
+}
+
+function toIcon() { mode = 'icon'; animate('dotT', 1); armIdle(); }
+function toDot() {
+  clearTimeout(idleTimer);
+  // 버튼이 모이고 배경이 원형으로 → 점으로
+  animate('p', 0, 0, () => { mode = 'dot'; animate('dotT', 0); });
+}
+function armIdle() { clearTimeout(idleTimer); idleTimer = setTimeout(() => { if (mode === 'icon') toDot(); }, 4000); }
+function choose(i) {
+  if (i !== screenIdx) setScreen(i);
+  toDot();
+}
+
+// 제스처: 8px 넘게 움직이면 끌기, 120px = 진행률 1
+let dragging = false, startY = 0, startP = 0, moved = false, lastY = 0, lastT = 0, vel = 0;
+hit.addEventListener('pointerdown', (e) => {
+  hit.setPointerCapture(e.pointerId);
+  startY = lastY = e.clientY; lastT = performance.now(); startP = p; moved = false; dragging = false;
+  if (mode !== 'dot') cancelAnimationFrame(anim);
+  clearTimeout(idleTimer);
+});
+hit.addEventListener('pointermove', (e) => {
+  if (!hit.hasPointerCapture(e.pointerId)) return;
+  const dy = startY - e.clientY;
+  if (!moved && Math.abs(dy) > 8) { moved = true; dragging = mode !== 'dot'; if (dragging) { mode = 'fan'; startY = e.clientY; startP = p; } }
+  if (dragging) {
+    p = clamp(startP + (startY - e.clientY) / 120, 0, 1);
+    const now = performance.now(); vel = (lastY - e.clientY) / Math.max(1, now - lastT); lastY = e.clientY; lastT = now;
+    render();
+  }
+});
+hit.addEventListener('pointerup', (e) => {
+  if (dragging) {
+    dragging = false;
+    const open = p >= 0.35 && vel > -0.5 || vel > 0.5;
+    mode = open ? 'fan' : 'icon';
+    animate('p', open ? 1 : 0, vel * 1000 / 120);
+    if (!open) armIdle();
+    return;
+  }
+  if (moved) return;               // 끌기로 판정된 뒤에는 누르기(촬영)로 보지 않음
+  if (mode === 'dot') { toIcon(); return; }   // 점을 누르면 촬영하지 않고 아이콘으로만
+  if (mode === 'icon' && screenIdx === 2) { capture(); armIdle(); return; }
+  if (mode === 'icon') { armIdle(); }
+  if (mode === 'fan' && p > 0.9) {
+    // 끌기 영역이 버튼 위에 있으므로 누른 자리로 버튼을 찾는다. 반원 안 빈자리는 그대로 둔다.
+    const k = btnEls.findIndex((el) => {
+      const r = el.getBoundingClientRect();
+      return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom + 8;
+    });
+    if (k >= 0) { choose(TABS[k].i); return; }
+    // 반원 바깥(끌기 영역의 모서리)을 누른 것은 메뉴 바깥으로 본다.
+    const r = $('screen').getBoundingClientRect();
+    const dx = e.clientX - (r.left + r.width / 2), dy = r.bottom - e.clientY;
+    if (Math.hypot(dx, dy) > 150) toDot();
+  }
+});
+// 부채꼴일 때만 바깥을 막고 누르면 접는다.
+outside.addEventListener('pointerup', () => { if (mode !== 'dot') toDot(); });
+// 아이콘 상태에서는 바깥을 막지 않는다(갤러리·플래시가 그대로 눌림). 바깥을 누르면 접기만 한다.
+$('screen').addEventListener('pointerdown', (e) => {
+  if (mode === 'icon' && !$('nav').contains(e.target)) toDot();
+}, true);
+
+function capture() {
+  const f = $('flash'); f.style.opacity = 0.8; setTimeout(() => (f.style.opacity = 0), 120);
+  toast('촬영했어요 · 번역 중');
+}
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(el._t); el._t = setTimeout(() => (el.style.opacity = 0), 1400); }
+
+function setScreen(i) {
+  screenIdx = i;
+  const t = TABS.find((x) => x.i === i);
+  $('title').textContent = i === 1 ? '맵' : i === -1 ? 'AI' : t.name;
+  $('cIcon').textContent = t.icon; $('cName').textContent = t.name;
+  $('cHint').textContent = i === 2 ? '눌러서 촬영' : '';
+  const v = $('view');
+  if (i === 0) v.innerHTML = ['KRW 100,000', 'JPY 10,812', 'USD 72.19', 'EUR 66.45'].map((r) => `<div class="row"><b>${r.split(' ')[0]}</b><span>${r.split(' ')[1]}</span></div>`).join('');
+  if (i === 1) v.innerHTML = '<div class="map"><i style="left:0;right:0;top:150px;height:10px"></i><i style="left:140px;top:0;bottom:0;width:10px"></i><i style="left:0;right:0;top:380px;height:8px"></i></div>';
+  if (i === 2) v.innerHTML = '<div class="cam"><div class="cam-hint">글자가 안에 들어오게 찍어 주세요 · 가운데 아이콘을 누르면 촬영</div><div class="menu-card"><b>お品書き</b>醤油ラーメン　980円<br>味噌ラーメン　1,080円<br>餃子（6個）　450円</div><div class="cam-side" style="left:20px"><span class="ms">flash_off</span></div><div class="cam-side" style="right:20px"><span class="ms">photo_library</span></div></div>';
+  if (i === -1) v.innerHTML = '<div class="ai">AI 홈 (자리만 있음)</div>';
+  document.querySelectorAll('[data-go]').forEach((b) => b.classList.toggle('on', +b.dataset.go === i));
+  render();
+}
+
+document.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { setScreen(+b.dataset.go); }));
+$('tRm').onclick = (e) => { reduced = !reduced; e.target.classList.toggle('on', reduced); render(); };
+$('tBig').onclick = (e) => { $('screen').classList.toggle('big'); e.target.classList.toggle('on'); };
+$('tSmall').onclick = (e) => { $('phone').classList.toggle('small'); e.target.classList.toggle('on'); };
+$('tRm').classList.toggle('on', reduced);
+setScreen(0);
+</script>
+</body>
+</html>
