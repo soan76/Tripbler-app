@@ -90,6 +90,33 @@ void main() {
     expect(api.calls, isEmpty);
   });
 
+  test('fakeMode_sameLanguage_keepsOriginal_notSimulated_noConsent', () async {
+    notifier()
+      ..changeSourceLanguage('ja')
+      ..changeTargetLanguage('ja');
+
+    await notifier().processPhoto('a.jpg');
+    await pumpEventQueue();
+
+    // 원문 언어와 번역 언어가 같으면 가짜 번역도 만들지 않고 원문을 그대로 보인다.
+    expect(state().status, PhotoTranslationStatus.completed);
+    final result = state().result!;
+    expect(result.simulated, isFalse);
+    expect(
+      result.paragraphs.map((p) => p.translated),
+      state().paragraphs.map((p) => p.text),
+    );
+    expect(
+      result.paragraphs.every(
+        (p) => !p.translated.startsWith(fakeTranslationPrefix),
+      ),
+      isTrue,
+    );
+    expect(consent.acceptCalls, 0);
+    expect(api.calls, isEmpty);
+    expect(runnerCalls, 0);
+  });
+
   test('fakeMode_retakeBeforeFakeResult_dropsLateResult', () async {
     container.dispose();
     container = ProviderContainer(

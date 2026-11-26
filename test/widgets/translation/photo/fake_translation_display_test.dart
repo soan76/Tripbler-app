@@ -94,6 +94,16 @@ void main() {
     expect(find.text(FakeTranslationBanner.detailMessage), findsOneWidget);
   });
 
+  testWidgets('simulatedResult_showOriginal_keepsFakeBanner', (tester) async {
+    final state = completed(simulated: true).copyWith(showOriginal: true);
+    await pumpResult(tester, state);
+
+    // 원문 보기로 상자를 숨겨도 가짜 결과라는 띠는 남는다.
+    expect(find.byType(TranslationBoxOverlay), findsNothing);
+    expect(find.text(FakeTranslationBanner.resultMessage), findsOneWidget);
+    expect(find.text(PhotoResultView.showTranslationLabel), findsOneWidget);
+  });
+
   testWidgets('serverResult_hasNoFakeBanner', (tester) async {
     await pumpResult(tester, completed(simulated: false));
 
