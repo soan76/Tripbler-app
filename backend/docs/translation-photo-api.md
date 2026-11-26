@@ -94,21 +94,33 @@
 
 | 상태 | `code` | 경우 |
 | --- | --- | --- |
-| 400 | `INVALID_REQUEST` | 위 요청 규칙 위반(ID 형식·중복, 크기 불일치, 상자 범위, 한도 초과, JPEG 아님), `image`·`request` 파트 없음, `request` JSON이 깨졌거나 형식이 틀림 |
+| 400 | `INVALID_REQUEST` | 위 요청 규칙 위반(ID 형식·중복, 크기 불일치, 상자 범위, 한도 초과, JPEG 아님), `image`·`request` 파트 없음, `request` JSON이 깨졌거나 형식이 틀림, `request` 파트의 `Content-Type`이 JSON이 아님, multipart 해석 실패 |
 | 401 | - | 로그인하지 않음 |
 | 413 | `PAYLOAD_TOO_LARGE` | multipart 한도 초과(파일 5MB, 요청 6MB). 프로필 이미지 업로드는 기존대로 400 `INVALID_PROFILE_IMAGE` |
-| 429 | `TOO_MANY_REQUESTS` | 호출 제한. `Retry-After`(초) 포함 |
+| 429 | `TOO_MANY_REQUESTS` | 호출 제한, 또는 동시 처리 상한 도달(기다리지 않고 거절). `Retry-After`(초) 포함 |
 | 503 | `TRANSLATION_PROVIDER_UNAVAILABLE` | AI와 Google 대체 번역이 모두 실패 |
 
-- 오류 메시지에는 요청 글자를 넣지 않는다(JSON 해석 실패는 고정 문구, 검증 실패는 규칙 문구만).
+- 오류 메시지에는 요청 글자를 넣지 않는다(JSON 해석 실패는 고정 문구, 검증 실패는 규칙 문구만). `request` 파트가 JSON이 아니거나 multipart 해석이 실패하면(`HttpMediaTypeNotSupportedException`, `MultipartException`) 고정 문구 400이며 이 경로에만 적용한다(다른 엔드포인트의 기존 응답은 그대로).
 
 ### 호출 제한
 
-`/lines`와 같은 값의 별도 버킷(`RateLimitBucket.TRANSLATION_PHOTO_*`, 임시값): 사용자별 1분 10회·하루 100회, IP별 1분 20회·하루 300회, 서버 전체 1시간 300회·하루 2000회. 모두 함께 판정하고 하나라도 넘으면 429이며 그때는 어느 한도도 쓰지 않는다. IP는 접속 주소(`getRemoteAddr`)만 쓴다(`/lines`와 같은 이유). 검증에 실패한 요청은 한도를 쓰지 않고, 검증을 통과한 뒤 번역 제공자 호출이 실패해도 한도는 쓴다.
+`/lines`와 같은 값의 별도 버킷(`RateLimitBucket.TRANSLATION_PHOTO_*`, 임시값): 사용자별 1분 10회·하루 100회, IP별 1분 20회·하루 300회, 서버 전체 1시간 300회·하루 2000회. 모두 함께 판정하고 하나라도 넘으면 429이며 그때는 그 묶음의 어느 한도도 쓰지 않는다. IP는 접속 주소(`getRemoteAddr`)만 쓴다(`/lines`와 같은 이유).
+
+차감 순서(`PhotoTranslationService.translate`):
+
+1. **사용자별·IP별 한도를 사진 검사·검증 전에 차감한다.** 큰 사진을 담은 잘못된 요청도 한도를 쓰므로 한도 없이 반복할 수 없다(검증 실패 400도 이 한도는 쓴다).
+2. 사진 검사·문단 검증. 실패하면 400이며 전체 한도와 동시 처리 자리는 쓰지 않는다.
+3. 동시 처리 자리를 잡는다(아래). 자리가 없으면 429이며 **전체 한도는 쓰지 않는다**(사용자별·IP별 한도는 1에서 이미 썼다).
+4. **전체(GLOBAL) 한도는 검증을 통과하고 자리를 잡은 뒤에만 차감한다.** 잘못된 요청이나 거절된 요청으로 전체 한도를 소진할 수 없다. 전체 한도에서 429가 나면 1의 사용자별·IP별 차감은 되돌리지 않는다(원자적이지 않음).
+5. 번역 제공자 호출이 실패해도 한도는 되돌리지 않는다.
+
+### 동시 처리 상한
+
+요청마다 사진 사본(최대 약 5MB와 base64 사본)이 AI 호출 시간 제한(최대 90초)과 대체 번역 동안 메모리에 머문다. 이 구간을 덮도록 `translation.photo.max-concurrent`(임시값 **4**, 실제 Claude 측정 뒤 확정) 개의 자리를 두고, 자리가 없으면 기다리지 않고 바로 **429 `TOO_MANY_REQUESTS` + `Retry-After: 3`**(임시값)으로 거절한다. 기존 429 처리(`TooManyRequestsException`)를 그대로 쓴다. 자리는 AI 실패·대체 번역 실패·예외 모두 `finally`에서 돌려준다. 업로드를 받는 시점(multipart 파싱, 사진 바이트 읽기)은 이 상한 앞이므로 덮지 못한다. 이 구간은 요청 크기 한도(6MB)와 1의 사용자·IP 한도로 줄인다.
 
 ## 구현
 
-- `TranslationController.translatePhoto` → `PhotoTranslationService`(검증 → 호출 제한 → AI → 문단별 대체 → 가격) → `ClaudePhotoTranslationClient` / `GoogleLineTranslationClient`.
+- `TranslationController.translatePhoto` → `PhotoTranslationService`(사용자·IP 호출 제한 → 검증 → 동시 처리 자리 → 전체 호출 제한 → AI → 문단별 대체 → 가격) → `ClaudePhotoTranslationClient` / `GoogleLineTranslationClient`.
 - `ClaudePhotoTranslationClient`: 모델은 속성 `translation.photo.model`(기본 `claude-sonnet-5-5`, 이름만 정해 둔 값). 구조화 출력, 시간 제한 30초 + 글자당 12ms(최대 90초), `max_tokens` = min(16000, 4096 + 문단 수×32 + 글자 수×4). 사진 속 글자는 지시가 아니라고 시스템 프롬프트에서 정한다. 키는 `/lines`와 같은 `ANTHROPIC_API_KEY`이며, 없으면 모든 문단을 Google로 대체한다.
 
 ## Tripbler 쪽 비저장 범위
@@ -125,7 +137,7 @@ Tripbler 서버가 통제하는 범위다. 사진과 글자는 요청을 처리�
 
 ## AI 제공업체 쪽 보관(별개)
 
-위 절은 Tripbler가 통제하는 범위만 다룬다. 제공업체가 사진과 글자를 얼마나 보관하고 학습에 쓰는지는 제공업체 정책과 계약(조직 설정 포함)이 정한다. 아래는 2026-11-26에 공개 문서만 읽고 정리한 내용이다. **조직 콘솔 설정과 계약 내용은 아직 확인하지 않았다.**
+위 절은 Tripbler가 통제하는 범위만 다룬다. 제공업체가 사진과 글자를 얼마나 보관하고 학습에 쓰는지는 제공업체 정책과 계약(조직 설정 포함)이 정한다. 아래는 2026-11-26에 공개 문서만 읽고 정리한 내용이다. **조직 콘솔 설정과 계약 내용은 아직 확인하지 않았다.** AI 제공업체와 모델을 아직 최종 선택하지 않았으므로(2026-11-26 사용자 결정), 이 절과 앱 안내에 넣을 보관 정책 문구는 AI를 정한 뒤 확정한다. 동의 기본 문구는 그대로 둔다.
 
 ### Anthropic(Claude API, 주 번역)
 
@@ -160,4 +172,5 @@ Tripbler 서버가 통제하는 범위다. 사진과 글자는 요청을 처리�
 - 제공업체 정책은 공개 문서만 확인했다. 조직 콘솔의 보관 설정, 계약 내용, 안내 문구 결정은 남았다(Task 13).
 - 실기기에서 앱과 연결한 업로드, 좌표, 비저장(Task 15).
 - 요청 하나의 최악 처리 시간은 `/lines`와 같은 구성(Claude 최대 90초 + Google 대체 + 환율 대기 5초)이다. 앱 시간 제한(120초)과의 차이는 실측 뒤 다시 본다.
-- multipart 해석 자체가 실패하는 요청(경계 문자열이 깨진 본문 등)과 `request` 파트의 `Content-Type`이 JSON이 아닌 요청은 지금 전역 처리(500 또는 Spring 기본 응답)를 따른다. 로그에는 예외 종류와 경로만 남는다.
+- `request` 파트의 `Content-Type`이 JSON이 아닌 요청은 `PhotoTranslationControllerTest.nonJsonRequestPart_returns400_andLogHasNoBodyText`로 400을 확인했다. multipart 해석 자체가 실패하는 요청(경계 문자열이 깨진 본문 등)의 `MultipartException` 400 처리는 같은 핸들러에 넣었지만 실제 Tomcat으로는 재현·검증하지 않았다(미검증).
+- 동시 처리 상한 4, `Retry-After` 3초는 임시값이다.

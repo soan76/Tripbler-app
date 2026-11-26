@@ -11,14 +11,17 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import com.tripbler.backend.common.exception.BusinessException;
 import com.tripbler.backend.common.exception.ErrorCode;
+import com.tripbler.backend.common.exception.TooManyRequestsException;
 import com.tripbler.backend.common.exception.TranslationProviderException;
 import com.tripbler.backend.common.ratelimit.AuthRateLimiter;
 import com.tripbler.backend.common.ratelimit.RateLimitBucket;
@@ -32,7 +35,7 @@ import com.tripbler.backend.translation.dto.PhotoTranslationResponse.TranslatedP
 import com.tripbler.backend.translation.dto.PhotoTranslationResponse.TranslationSource;
 
 /**
- * 사진 번역. 검증 → 호출 제한 → AI(Claude) 번역 순으로 처리하고, AI가 실패했거나 돌려주지 않은 문단은
+ * 사진 번역. 사용자·IP 호출 제한 → 검증 → 동시 처리 자리 → 전체 호출 제한 → AI(Claude) 번역 순으로 처리하고, AI가 실패했거나 돌려주지 않은 문단은
  * 그 문단의 OCR 글자만 Google로 번역해 대신한다(translationSource OCR_TEXT, 발음 없음).
  * 가격은 AI가 확실하다고 한 것만 확정(confirmed)하고 원화로 바꾼다. 로그에는 개수와 시간만 남긴다.
  */
@@ -58,6 +61,10 @@ public class PhotoTranslationService {
         RateLimitBucket.TRANSLATION_PHOTO_GLOBAL_DAY
     );
 
+    // 자리가 없어 거절할 때 알리는 재시도 대기 시간(초). 임시값.
+    private static final long BUSY_RETRY_AFTER_SECONDS = 3;
+
+    private final Semaphore concurrency;
     private final PhotoImageInspector inspector;
     private final PhotoRequestValidator validator;
     private final PhotoTranslationClient client;
@@ -74,8 +81,11 @@ public class PhotoTranslationService {
         @Qualifier("googleLineTranslationClient") LineTranslationClient fallbackClient,
         PriceExtractor priceExtractor,
         KrwPriceConverter priceConverter,
-        AuthRateLimiter rateLimiter
+        AuthRateLimiter rateLimiter,
+        // 임시값: 실제 Claude 측정(작업 14) 뒤 확정
+        @Value("${translation.photo.max-concurrent:4}") int maxConcurrent
     ) {
+        this.concurrency = new Semaphore(Math.max(1, maxConcurrent));
         this.inspector = inspector;
         this.validator = validator;
         this.client = client;
@@ -94,12 +104,35 @@ public class PhotoTranslationService {
     ) {
         long startedAt = System.nanoTime();
 
-        // 검증에 실패하면 한도를 쓰지 않는다.
+        // 사용자별·IP별 한도는 검증 전에 차감한다. 잘못된 요청도 한도를 쓰므로 큰 사진을 담은
+        // 잘못된 요청을 한도 없이 반복할 수 없다. 전체 한도는 아래에서 검증을 통과한 뒤에만 차감한다.
+        rateLimiter.acquireKeys(userAndIpKeys(userId, clientIp));
+
         validator.validate(request, inspector.inspect(image));
 
-        // 번역 제공자 호출이 실패해도 한도는 되돌리지 않는다(/lines와 같다).
-        rateLimiter.acquireKeys(limitsFor(userId, clientIp));
+        // 사진 사본이 AI 호출·대체 번역 동안 메모리에 머무므로 동시 처리 수를 제한한다. 기다리지 않고 거절한다.
+        // 거절된 요청은 전체 한도를 쓰지 않는다. 자리는 어떤 경우에도 finally에서 돌려준다.
+        if (!concurrency.tryAcquire()) {
+            log.info("사진 번역 동시 처리 상한 도달");
+            throw new TooManyRequestsException(BUSY_RETRY_AFTER_SECONDS);
+        }
 
+        try {
+            // 번역 제공자 호출이 실패해도 한도는 되돌리지 않는다(/lines와 같다).
+            rateLimiter.acquireKeys(globalKeys());
+
+            return process(image, mediaType, request, startedAt);
+        } finally {
+            concurrency.release();
+        }
+    }
+
+    private PhotoTranslationResponse process(
+        byte[] image,
+        String mediaType,
+        PhotoTranslationRequest request,
+        long startedAt
+    ) {
         String source = request.sourceLanguageCode().toLowerCase(Locale.ROOT);
         String target = request.targetLanguageCode().toLowerCase(Locale.ROOT);
         List<PhotoTranslationRequest.Paragraph> paragraphs = request.paragraphs();
@@ -272,9 +305,8 @@ public class PhotoTranslationService {
         return first != null ? first : second != null ? second : otherwise;
     }
 
-    private static List<AuthRateLimiter.Key> limitsFor(String userId, String clientIp) {
-        List<AuthRateLimiter.Key> keys =
-            new ArrayList<>(USER_LIMITS.size() + IP_LIMITS.size() + GLOBAL_LIMITS.size());
+    private static List<AuthRateLimiter.Key> userAndIpKeys(String userId, String clientIp) {
+        List<AuthRateLimiter.Key> keys = new ArrayList<>(USER_LIMITS.size() + IP_LIMITS.size());
 
         for (RateLimitBucket bucket : USER_LIMITS) {
             keys.add(new AuthRateLimiter.Key(bucket, userId));
@@ -283,6 +315,12 @@ public class PhotoTranslationService {
         for (RateLimitBucket bucket : IP_LIMITS) {
             keys.add(new AuthRateLimiter.Key(bucket, clientIp));
         }
+
+        return keys;
+    }
+
+    private static List<AuthRateLimiter.Key> globalKeys() {
+        List<AuthRateLimiter.Key> keys = new ArrayList<>(GLOBAL_LIMITS.size());
 
         for (RateLimitBucket bucket : GLOBAL_LIMITS) {
             keys.add(new AuthRateLimiter.Key(bucket, GLOBAL_KEY));

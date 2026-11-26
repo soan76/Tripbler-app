@@ -223,6 +223,21 @@ class PhotoTranslationControllerTest {
     }
 
     @Test
+    void nonJsonRequestPart_returns400_andLogHasNoBodyText(CapturedOutput output) throws Exception {
+        MockMultipartFile textPart = new MockMultipartFile("request", "", MediaType.TEXT_PLAIN_VALUE,
+            requestJson("p1", SECRET, 10).getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart(PATH).file(imagePart()).file(textPart).with(jwt()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+            .andExpect(jsonPath("$.path").value(PATH))
+            .andExpect(jsonPath("$.message").value(not(containsString(SECRET))));
+
+        verifyNoInteractions(photoTranslationService);
+        assertThat(output.getAll()).doesNotContain(SECRET);
+    }
+
+    @Test
     void invalidRequest_warnLogHasNoParagraphText(CapturedOutput output) throws Exception {
         // 서비스 대역이 실제 검사기·검증기를 부른다(검증 실패는 BusinessException으로 WARN 로그가 남는다).
         PhotoImageInspector inspector = new PhotoImageInspector();

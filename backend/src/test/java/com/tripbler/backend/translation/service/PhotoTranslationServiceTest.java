@@ -86,7 +86,7 @@ class PhotoTranslationServiceTest {
         when(inspector.inspect(any())).thenReturn(new PhotoImageInspector.Dimensions(1000, 800));
         converter = new KrwPriceConverter(exchangeService, Duration.ofSeconds(2));
         service = new PhotoTranslationService(inspector, validator, ai, google, new PriceExtractor(), converter,
-            rateLimiter);
+            rateLimiter, 4);
     }
 
     @AfterEach
@@ -256,7 +256,7 @@ class PhotoTranslationServiceTest {
         LineTranslationClient shortGoogle = (lines, source, target) ->
             new LineTranslationClient.Result("ja", List.of(new LineTranslationClient.Line("하나", null)));
         service = new PhotoTranslationService(inspector, validator, ai, shortGoogle, new PriceExtractor(), converter,
-            rateLimiter);
+            rateLimiter, 4);
 
         BusinessException exception = assertThrows(BusinessException.class,
             () -> run(request(paragraph("p1", "a"), paragraph("p2", "b"))));
@@ -311,13 +311,13 @@ class PhotoTranslationServiceTest {
     }
 
     @Test
-    void validationFailure_doesNotConsumeRateLimit() {
+    void validationFailure_consumesUserAndIpLimitsOnly() {
         doThrow(new BusinessException(ErrorCode.INVALID_REQUEST, "사진 크기가 요청한 크기와 다릅니다."))
             .when(validator).validate(any(), any());
 
         assertThrows(BusinessException.class, () -> run(request(paragraph("p1", "a"))));
 
-        verifyNoInteractions(rateLimiter);
+        verify(rateLimiter, times(1)).acquireKeys(anyList());
         assertEquals(0, ai.calls);
     }
 
