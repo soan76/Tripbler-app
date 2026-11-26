@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/tab_item.dart';
 import '../providers/auth/auth_provider.dart';
 import '../providers/tab_provider.dart';
+import '../services/fake_photo_translation.dart';
 import '../widgets/auth/session_restore_banner.dart';
 import '../widgets/bottom_tab_bar.dart';
 import '../widgets/navigation/app_drawer.dart';
@@ -12,7 +13,15 @@ import '../widgets/navigation/app_top_bar.dart';
 import 'ai_chat_screen.dart';
 import 'exchange_screen.dart';
 import 'map_screen.dart';
+import 'photo_translation_screen.dart';
 import 'translation_screen.dart';
+
+// 실기기 시험용 사진 번역 진입점. `--dart-define=TRIPBLER_PHOTO_TRANSLATION=true`로 빌드하거나 개발용 가짜
+// 번역(`TRIPBLER_PHOTO_FAKE_TRANSLATION`, 릴리스 빌드 제외)을 켤 때만 번역 탭이 사진 번역 화면을 보여 준다.
+// 사용자에게 보이는 스위치가 아니며, 번역 탭을 전환할 때(작업 16) 지운다.
+const bool _photoTranslationEnabled =
+    bool.fromEnvironment('TRIPBLER_PHOTO_TRANSLATION') ||
+    photoFakeTranslationEnabled;
 
 // 메인 화면을 구성하는 StatelessWidget
 class MainScreen extends ConsumerWidget {
@@ -93,7 +102,9 @@ class MainScreen extends ConsumerWidget {
                     children: const [
                       ExchangeScreen(),
                       MapScreen(),
-                      TranslationScreen(),
+                      _photoTranslationEnabled
+                          ? PhotoTranslationScreen()
+                          : TranslationScreen(),
                       AiChatScreen(),
                     ],
                   ),

@@ -20,6 +20,10 @@
 - 새 엔드포인트의 인증 필요 여부를 정하고 `SecurityConfig`에 반영한다. 인증 없이 열 때는 이유를 보고한다.
 - 응답 필드를 지우거나 이름·타입을 바꾸면 앱이 깨질 수 있다. 가능하면 필드 추가로 해결하고, 필요하면 앱의 변경 내용과 적용 순서를 함께 보고한다.
 
+## 코드 구조
+- 코드 파일 하나가 450줄을 넘지 않게 한다. 변경으로 450줄을 넘게 되면 같은 작업에서 책임 단위(검증, 업무 규칙, 외부 호출, 변환 등)로 클래스를 나눈다. 이미 450줄을 넘은 파일은 요청 범위 밖이면 바로 나누지 않고 분리를 제안한다. 분리할 때는 API 계약과 동작을 바꾸지 않고, 분리 전후 같은 테스트로 확인한다.
+- 줄 수만 맞추려는 분리는 하지 않는다. 함께 바뀌고 함께 읽히는 코드는 한 파일에 두고, 다른 곳에 넘기기만 하는 얇은 파일이나 클래스를 만들지 않는다. 450줄을 넘어도 책임이 하나뿐이고 나누면 더 읽기 어려워지면 나누지 않고, 그 이유를 보고한다.
+
 ## 명령어
 ```bash
 ./gradlew bootRun
@@ -28,6 +32,7 @@
 ./gradlew test --tests "com.tripbler.backend.common.cache.TimeoutFallbackCacheTest"
 ./gradlew test --tests "*RefreshTokenServiceTest.someMethod"
 ```
+- 실제 외부 API를 부르는 측정 테스트(`@Tag("live")`)는 `./gradlew test`에서 빠지고 `./gradlew liveTest`로만 돈다(유료 호출, 사용자 승인 뒤에만 실행).
 - `src/main/resources/application.properties`에는 DB, JWT, 메일, CoinGecko 설정이 있다. 실행에는 PostgreSQL이 필요하다.
 - Google 키는 이 파일에 없고 **환경 변수로 넣는다**. Spring 규칙에 따라 속성 이름이 다음 환경 변수에 대응한다.
 
@@ -46,6 +51,7 @@
 | 암호화폐 시세 + 기간별 시세 | `crypto` | CoinGecko |
 | 장소 검색·상세(로그인 필요, 사용자별 호출 제한) / 주변 장소(외부 접근 차단) | `place` | Google Places |
 | 텍스트 번역 / 찍기 모드 줄별 번역·한글 발음(로그인 필요, 사용자·IP별 호출 제한) | `translation` | Google Translation / Claude API |
+| 사진 번역: 사진+문단 multipart, 문단별 대체 번역, 가격 확정(로그인 필요, 호출 제한, 임시 파일·로그 비저장) | `translation` | Claude API / Google Translation |
 | 인증, 회원, 구글 계정 연동, 프로필 이미지 | `auth`, `user` | 인증 코드 메일은 Gmail SMTP |
 
 기능 패키지마다 `controller → service → client` 구조다. `*Client` 인터페이스와 외부 서비스별 구현체(예: `FrankfurterExchangeRateClient`)가 있고, `dto/`에 API 응답과 외부 응답 형식을 둔다. 외부 API 키는 서버에만 두며 앱으로 내려보내지 않는다. 공통 요소는 `common/`에 있다.
@@ -53,4 +59,4 @@
 - `common/chart/HistoryDownsampler`: 기간별 시세 엔드포인트는 `maxPoints`(기본 300, 16~1000)를 받는다. 응답할 때만 샘플링하며 첫·마지막 점과 구간별 최저·최고점을 보존한다.
 - `common/exception`: `BusinessException` + `ErrorCode` → `GlobalExceptionHandler` → `ErrorResponse`. 외부 서비스 실패는 전용 예외(`ExchangeProviderException`, `PlacesProviderException`, `TranslationProviderException`)를 쓴다.
 - `common/config/SecurityConfig`: JWT 액세스 토큰을 쓰는 OAuth2 리소스 서버. 리프레시 토큰은 DB(`auth/RefreshToken`)에 저장하고, 인증 없이 열리는 엔드포인트는 여기서 지정한다.
-- 추가 API 설명: `docs/crypto-history-api.md`, `docs/places-api.md`(장소 API 계약, 호출 제한, 필드 마스크 비용 등급, 오류 기준), `docs/auth-logout-api.md`(로그아웃 계약: Refresh Token 본문, 일치하는 토큰만 폐기), `docs/auth-rate-limit-api.md`(공개 인증 API 요청 제한 429·`Retry-After`, 인증코드 5회 오답 폐기), `docs/translation-lines-api.md`(찍기 모드 줄별 번역·발음·가격 원화 계약, 호출 제한, Claude 연동).
+- 추가 API 설명: `docs/crypto-history-api.md`, `docs/places-api.md`(장소 API 계약, 호출 제한, 필드 마스크 비용 등급, 오류 기준), `docs/auth-logout-api.md`(로그아웃 계약: Refresh Token 본문, 일치하는 토큰만 폐기), `docs/auth-rate-limit-api.md`(공개 인증 API 요청 제한 429·`Retry-After`, 인증코드 5회 오답 폐기), `docs/translation-lines-api.md`(찍기 모드 줄별 번역·발음·가격 원화 계약, 호출 제한, Claude 연동), `docs/translation-photo-api.md`(사진 번역 계약, 한도·오류, 대체·가격 확정 규칙, Tripbler 쪽 비저장 범위와 제공업체 보관 구분), `docs/translation-photo-measurements.md`(사진 번역 실제 Claude 측정 실행 방법·결과 폴더 규칙·기록 양식).

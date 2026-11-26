@@ -14,6 +14,7 @@ import com.tripbler.backend.translation.client.ClaudeLineTranslationClient;
 import com.tripbler.backend.translation.client.GoogleLineTranslationClient;
 import com.tripbler.backend.translation.client.GoogleTranslationClient;
 import com.tripbler.backend.translation.client.LineTranslationClient;
+import com.tripbler.backend.translation.service.KrwPriceConverter;
 import com.tripbler.backend.translation.service.LineTranslationService;
 import com.tripbler.backend.translation.service.PriceExtractor;
 
@@ -36,6 +37,7 @@ class TranslationLinesWiringTest {
                 ClaudeLineTranslationClient.class,
                 GoogleLineTranslationClient.class,
                 PriceExtractor.class,
+                KrwPriceConverter.class,
                 LineTranslationService.class
             );
             context.refresh();

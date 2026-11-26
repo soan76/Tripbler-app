@@ -14,9 +14,12 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -25,6 +28,8 @@ public class GlobalExceptionHandler {
 
     private static final Logger log =
         LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private static final String PHOTO_TRANSLATION_PATH = "/api/v1/translation/photo";
 
     // 요청 제한: 429와 함께 다시 시도할 수 있을 때까지 남은 초를 Retry-After로 알린다.
     @ExceptionHandler(TooManyRequestsException.class)
@@ -185,6 +190,49 @@ public class GlobalExceptionHandler {
             .body(response);
     }
 
+    // multipart 요청에 필수 파트(예: 사진 번역의 image)가 없으면 500 대신 400으로 응답한다.
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingRequestPartException(
+        MissingServletRequestPartException exception,
+        HttpServletRequest request
+    ) {
+        ErrorResponse response = ErrorResponse.of(
+            ErrorCode.INVALID_REQUEST,
+            "필수 요청 파트가 없습니다: "
+                + exception.getRequestPartName(),
+            request.getRequestURI()
+        );
+
+        return ResponseEntity
+            .badRequest()
+            .body(response);
+    }
+
+    // 사진 번역의 request 파트가 JSON이 아니거나(HttpMediaTypeNotSupportedException) multipart 해석이 실패하면
+    // (MultipartException) 400으로 응답한다. 다른 엔드포인트의 기존 처리(전역 500)는 바꾸지 않는다.
+    // 응답과 로그에는 예외 메시지와 요청 본문을 넣지 않는다.
+    @ExceptionHandler({HttpMediaTypeNotSupportedException.class, MultipartException.class})
+    public ResponseEntity<ErrorResponse> handlePhotoTranslationMalformedRequest(
+        Exception exception,
+        HttpServletRequest request
+    ) {
+        if (!PHOTO_TRANSLATION_PATH.equals(request.getRequestURI())) {
+            return handleUnexpectedException(exception, request);
+        }
+
+        log.debug("Malformed photo translation request: type={}", exception.getClass().getSimpleName());
+
+        ErrorResponse response = ErrorResponse.of(
+            ErrorCode.INVALID_REQUEST,
+            "요청 형식이 올바르지 않습니다.",
+            request.getRequestURI()
+        );
+
+        return ResponseEntity
+            .badRequest()
+            .body(response);
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
         IllegalArgumentException exception,
@@ -222,6 +270,19 @@ public class GlobalExceptionHandler {
             MaxUploadSizeExceededException exception,
             HttpServletRequest request
         ) {
+
+        // 사진 번역은 계약대로 413으로 알린다. 프로필 이미지 업로드는 기존 응답(400)을 유지한다.
+        if (PHOTO_TRANSLATION_PATH.equals(request.getRequestURI())) {
+            ErrorResponse response = ErrorResponse.of(
+                ErrorCode.PAYLOAD_TOO_LARGE,
+                "사진은 5MB 이하만 보낼 수 있습니다.",
+                request.getRequestURI()
+            );
+
+            return ResponseEntity
+                .status(ErrorCode.PAYLOAD_TOO_LARGE.getStatus())
+                .body(response);
+        }
 
         String message =
             "프로필 이미지는 5MB 이하만 업로드할 수 있습니다.";

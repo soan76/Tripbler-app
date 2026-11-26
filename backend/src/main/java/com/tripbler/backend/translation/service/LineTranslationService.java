@@ -1,26 +1,13 @@
 package com.tripbler.backend.translation.service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,7 +35,7 @@ import com.tripbler.backend.translation.dto.LineTranslationResponse.TranslatedLi
  * Claude를 쓸 수 없으면(키·크레딧 없음, 장애, 거절 등) Google 번역으로 대체한다. 이때 발음은 없다.
  *
  * <p>요청 하나의 최악 처리 시간(외부 호출 기준): Claude 최대 90초({@code ClaudeLineTranslationClient.MAX_TIMEOUT},
- * 재시도 없음) + Google 대체 연결 3초·읽기 5초 + 환율 조회 대기 최대 {@link #RATE_LOOKUP_BUDGET}(5초) = 약 103초.
+ * 재시도 없음) + Google 대체 연결 3초·읽기 5초 + 환율 조회 대기 최대 {@link KrwPriceConverter#RATE_LOOKUP_BUDGET}(5초) = 약 103초.
  * 앱의 요청 시간 제한({@code LineTranslationApiService.defaultTimeout}, 120초)은 이보다 길게 둔다.
  */
 @Service
@@ -60,18 +47,6 @@ public class LineTranslationService implements DisposableBean {
     static final int MAX_TOTAL_CHARACTERS = 5000;
 
     private static final String GLOBAL_KEY = "*";
-
-    /**
-     * 한 요청 안에서 환율 조회 전체를 기다리는 최대 시간. 통화마다 환율 조회는 Frankfurter(연결 3초·읽기 5초)가
-     * 일시 장애면 대체 출처(연결 2초·읽기 3초)까지 이어져 한 통화에 13초 넘게 걸릴 수 있고, 가격 통화는 최대
-     * 7종(JPY CNY USD EUR GBP THB VND)이다. 그래서 통화들을 동시에 묻고 모두 합쳐 이 시간까지만 기다린다.
-     * 늦은 통화는 원화 없이 돌려주고(번역은 그대로), 조회는 뒤에서 끝까지 진행돼 환율 캐시를 채운다.
-     */
-    static final Duration RATE_LOOKUP_BUDGET = Duration.ofSeconds(5);
-
-    // 환율 조회 스레드. 대부분 환율 캐시(5분)에서 바로 끝난다. 큐가 차면 그 통화는 원화 없이 돌려준다.
-    private static final int RATE_LOOKUP_THREADS = 8;
-    private static final int RATE_LOOKUP_QUEUE = 64;
 
     private static final List<RateLimitBucket> USER_LIMITS = List.of(
         RateLimitBucket.TRANSLATION_LINES_USER_MINUTE,
@@ -91,10 +66,9 @@ public class LineTranslationService implements DisposableBean {
     private final LineTranslationClient client;
     private final LineTranslationClient fallbackClient;
     private final PriceExtractor priceExtractor;
-    private final ExchangeService exchangeService;
+    private final KrwPriceConverter priceConverter;
     private final AuthRateLimiter rateLimiter;
-    private final ExecutorService rateExecutor;
-    private final Duration rateLookupBudget;
+    private final boolean ownsPriceConverter;
     private final TranslatedCurrencyFixer currencyFixer = new TranslatedCurrencyFixer();
 
     @Autowired
@@ -102,10 +76,37 @@ public class LineTranslationService implements DisposableBean {
         @Qualifier("claudeLineTranslationClient") LineTranslationClient client,
         @Qualifier("googleLineTranslationClient") LineTranslationClient fallbackClient,
         PriceExtractor priceExtractor,
+        KrwPriceConverter priceConverter,
+        AuthRateLimiter rateLimiter
+    ) {
+        this(client, fallbackClient, priceExtractor, priceConverter, rateLimiter, false);
+    }
+
+    private LineTranslationService(
+        LineTranslationClient client,
+        LineTranslationClient fallbackClient,
+        PriceExtractor priceExtractor,
+        KrwPriceConverter priceConverter,
+        AuthRateLimiter rateLimiter,
+        boolean ownsPriceConverter
+    ) {
+        this.ownsPriceConverter = ownsPriceConverter;
+        this.client = client;
+        this.fallbackClient = fallbackClient;
+        this.priceExtractor = priceExtractor;
+        this.priceConverter = priceConverter;
+        this.rateLimiter = rateLimiter;
+    }
+
+    /** 테스트에서 환율 서비스 대역을 바로 넘길 때 쓴다. */
+    LineTranslationService(
+        LineTranslationClient client,
+        LineTranslationClient fallbackClient,
+        PriceExtractor priceExtractor,
         ExchangeService exchangeService,
         AuthRateLimiter rateLimiter
     ) {
-        this(client, fallbackClient, priceExtractor, exchangeService, rateLimiter, RATE_LOOKUP_BUDGET);
+        this(client, fallbackClient, priceExtractor, new KrwPriceConverter(exchangeService), rateLimiter, true);
     }
 
     /** 테스트에서 환율 대기 시간을 줄일 때 쓴다. */
@@ -117,36 +118,16 @@ public class LineTranslationService implements DisposableBean {
         AuthRateLimiter rateLimiter,
         Duration rateLookupBudget
     ) {
-        this.client = client;
-        this.fallbackClient = fallbackClient;
-        this.priceExtractor = priceExtractor;
-        this.exchangeService = exchangeService;
-        this.rateLimiter = rateLimiter;
-        this.rateLookupBudget = rateLookupBudget;
-        this.rateExecutor = newRateExecutor();
+        this(client, fallbackClient, priceExtractor, new KrwPriceConverter(exchangeService, rateLookupBudget),
+            rateLimiter, true);
     }
 
-    private static ExecutorService newRateExecutor() {
-        AtomicInteger threadNumber = new AtomicInteger();
-        ThreadPoolExecutor executor = new ThreadPoolExecutor(
-            RATE_LOOKUP_THREADS,
-            RATE_LOOKUP_THREADS,
-            30,
-            TimeUnit.SECONDS,
-            new ArrayBlockingQueue<>(RATE_LOOKUP_QUEUE),
-            runnable -> {
-                Thread thread = new Thread(runnable, "line-translation-rate-" + threadNumber.incrementAndGet());
-                thread.setDaemon(true);
-                return thread;
-            }
-        );
-        executor.allowCoreThreadTimeOut(true);
-        return executor;
-    }
-
+    /** 테스트 생성자가 직접 만든 환율 조회기만 닫는다(Spring이 주입한 것은 컨테이너가 닫는다). */
     @Override
     public void destroy() {
-        rateExecutor.shutdownNow();
+        if (ownsPriceConverter) {
+            priceConverter.destroy();
+        }
     }
 
     /**
@@ -187,7 +168,7 @@ public class LineTranslationService implements DisposableBean {
             .filter(currency -> !"KRW".equals(currency))
             .ifPresent(currencies::add));
 
-        Map<String, Optional<ExchangeRateResponse>> ratesByCurrency = krwRatesFor(currencies);
+        Map<String, Optional<ExchangeRateResponse>> ratesByCurrency = priceConverter.ratesFor(currencies);
         List<TranslatedLine> translatedLines = new ArrayList<>(lines.size());
 
         for (int index = 0; index < lines.size(); index++) {
@@ -227,82 +208,10 @@ public class LineTranslationService implements DisposableBean {
             return new Price(found.text(), found.amount(), "KRW", null, null, null, false);
         }
 
-        Optional<ExchangeRateResponse> rates = ratesByCurrency.getOrDefault(found.currency(), Optional.empty());
-        Optional<BigDecimal> rate = rates
-            .map(ExchangeRateResponse::rates)
-            .map(byCurrency -> byCurrency.get("KRW"));
-
-        if (rate.isEmpty()) {
-            return new Price(found.text(), found.amount(), found.currency(), null, null, null, false);
-        }
-
-        ExchangeRateResponse response = rates.get();
-
-        return new Price(
-            found.text(),
-            found.amount(),
-            found.currency(),
-            found.amount().multiply(rate.get()).setScale(0, RoundingMode.HALF_UP),
-            rate.get(),
-            response.fetchedAt(),
-            response.stale()
-        );
-    }
-
-    /**
-     * 통화마다 한 번씩(환율 서비스 캐시도 있지만 요청 안에서 줄마다 다시 부르지 않게) 동시에 묻고, 모두 합쳐
-     * {@link #rateLookupBudget}까지만 기다린다. 늦거나 실패한 통화는 비어 있다(실패한 통화도 다시 묻지 않음).
-     */
-    private Map<String, Optional<ExchangeRateResponse>> krwRatesFor(Set<String> currencies) {
-        Map<String, Optional<ExchangeRateResponse>> rates = new HashMap<>();
-        Map<String, CompletableFuture<Optional<ExchangeRateResponse>>> pending = new LinkedHashMap<>();
-
-        for (String currency : currencies) {
-            try {
-                pending.put(currency, CompletableFuture.supplyAsync(() -> krwRates(currency), rateExecutor));
-            } catch (RejectedExecutionException exception) {
-                log.info("가격 원화 환산 생략: currency={} reason=busy", currency);
-                rates.put(currency, Optional.empty());
-            }
-        }
-
-        long deadline = System.nanoTime() + rateLookupBudget.toNanos();
-
-        for (Map.Entry<String, CompletableFuture<Optional<ExchangeRateResponse>>> entry : pending.entrySet()) {
-            String currency = entry.getKey();
-            long remaining = Math.max(0L, deadline - System.nanoTime());
-
-            try {
-                rates.put(currency, entry.getValue().get(remaining, TimeUnit.NANOSECONDS));
-            } catch (TimeoutException exception) {
-                // 아직 큐에서 기다리는 조회는 취소해 나중에 헛되이 실행되지 않게 한다(supplyAsync는 취소된
-                // 작업을 건너뛴다). 이미 시작한 조회는 끊지 않는다(false). 끝나면 환율 캐시에 남아 다음 요청이 쓴다.
-                entry.getValue().cancel(false);
-                log.info("가격 원화 환산 생략: currency={} reason=timeout", currency);
-                rates.put(currency, Optional.empty());
-            } catch (InterruptedException exception) {
-                Thread.currentThread().interrupt();
-                entry.getValue().cancel(false);
-                rates.put(currency, Optional.empty());
-            } catch (ExecutionException exception) {
-                Throwable cause = exception.getCause();
-                log.info("가격 원화 환산 생략: currency={} reason={}", currency,
-                    cause == null ? "-" : cause.getClass().getSimpleName());
-                rates.put(currency, Optional.empty());
-            }
-        }
-
-        return rates;
-    }
-
-    private Optional<ExchangeRateResponse> krwRates(String currency) {
-        try {
-            return Optional.of(exchangeService.getRates(currency, "KRW"));
-        } catch (RuntimeException exception) {
-            // 환율 제공자가 모르는 통화(예: VND)이거나 장애면 원화 없이 번역만 돌려준다.
-            log.info("가격 원화 환산 생략: currency={} reason={}", currency, exception.getClass().getSimpleName());
-            return Optional.empty();
-        }
+        return priceConverter.convert(found.amount(), found.currency(), ratesByCurrency)
+            .map(krw -> new Price(found.text(), found.amount(), found.currency(),
+                krw.krwAmount(), krw.krwRate(), krw.fetchedAt(), krw.stale()))
+            .orElseGet(() -> new Price(found.text(), found.amount(), found.currency(), null, null, null, false));
     }
 
     private static List<AuthRateLimiter.Key> limitsFor(String userId, String clientIp) {

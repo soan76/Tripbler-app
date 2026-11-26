@@ -19,6 +19,7 @@ import com.tripbler.backend.common.exception.GlobalExceptionHandler;
 import com.tripbler.backend.common.exception.TranslationProviderException;
 import com.tripbler.backend.translation.dto.TranslationResponse;
 import com.tripbler.backend.translation.service.LineTranslationService;
+import com.tripbler.backend.translation.service.PhotoTranslationService;
 import com.tripbler.backend.translation.service.TranslationService;
 
 @WebMvcTest(TranslationController.class)
@@ -34,6 +35,10 @@ class TranslationControllerTest {
     // 같은 컨트롤러의 줄별 번역이 쓰는 서비스. 이 테스트에서는 부르지 않는다.
     @MockitoBean
     private LineTranslationService lineTranslationService;
+
+    // 같은 컨트롤러의 사진 번역이 쓰는 서비스. 이 테스트에서는 부르지 않는다.
+    @MockitoBean
+    private PhotoTranslationService photoTranslationService;
 
     @Test
     void 정상_번역요청은_200을_반환한다()
@@ -223,6 +228,25 @@ class TranslationControllerTest {
                     .value(
                         "서버 내부 오류가 발생했습니다."
                     )
+            );
+    }
+
+    // 사진 번역 경로에만 400으로 바꾼 HttpMediaTypeNotSupportedException이 다른 경로에서는 기존처럼 500인지 확인한다.
+    @Test
+    void 사진번역이_아닌_경로의_지원하지않는_본문형식은_기존처럼_500을_반환한다()
+        throws Exception {
+
+        mockMvc.perform(
+                post("/api/v1/translation")
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .content("Hello")
+            )
+            .andExpect(
+                status().isInternalServerError()
+            )
+            .andExpect(
+                jsonPath("$.code")
+                    .value("INTERNAL_SERVER_ERROR")
             );
     }
 }

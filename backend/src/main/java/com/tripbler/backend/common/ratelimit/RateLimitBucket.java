@@ -45,7 +45,16 @@ public enum RateLimitBucket {
     TRANSLATION_LINES_IP_MINUTE(20, Duration.ofMinutes(1), Duration.ZERO),
     TRANSLATION_LINES_IP_DAY(300, Duration.ofHours(24), Duration.ZERO),
     TRANSLATION_LINES_GLOBAL_HOUR(300, Duration.ofMinutes(60), Duration.ZERO, true),
-    TRANSLATION_LINES_GLOBAL_DAY(2000, Duration.ofHours(24), Duration.ZERO, true);
+    TRANSLATION_LINES_GLOBAL_DAY(2000, Duration.ofHours(24), Duration.ZERO, true),
+
+    // 사진 번역(유료 Claude 호출). /lines와 같은 값이다.
+    // 임시값: 실제 Claude 측정(작업 14) 뒤 확정
+    TRANSLATION_PHOTO_USER_MINUTE(10, Duration.ofMinutes(1), Duration.ZERO),
+    TRANSLATION_PHOTO_USER_DAY(100, Duration.ofHours(24), Duration.ZERO),
+    TRANSLATION_PHOTO_IP_MINUTE(20, Duration.ofMinutes(1), Duration.ZERO),
+    TRANSLATION_PHOTO_IP_DAY(300, Duration.ofHours(24), Duration.ZERO),
+    TRANSLATION_PHOTO_GLOBAL_HOUR(300, Duration.ofMinutes(60), Duration.ZERO, true),
+    TRANSLATION_PHOTO_GLOBAL_DAY(2000, Duration.ofHours(24), Duration.ZERO, true);
 
     private final int maxRequests;
     private final Duration window;

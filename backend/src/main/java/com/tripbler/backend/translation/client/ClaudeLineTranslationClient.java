@@ -3,8 +3,6 @@ package com.tripbler.backend.translation.client;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -63,22 +61,6 @@ public class ClaudeLineTranslationClient implements LineTranslationClient {
 
     // 거절(refusal) 때 서버가 다른 모델로 다시 시도하게 하는 베타. translation.lines.fallbacks-enabled로 켠다.
     static final String FALLBACK_BETA = "server-side-fallback-2026-07-01";
-
-    // 줄 안의 제어 문자(C0·C1)와 줄·문단 구분 문자. 입력에서는 다른 줄로 보이지 않게, 출력에서는 화면이
-    // 깨지지 않게 공백으로 바꾼다.
-    private static final Pattern LINE_BREAKS = Pattern.compile("[\\p{Cc}\\p{Zl}\\p{Zp}]+");
-
-    // 글자 순서를 화면에서 뒤바꿀 수 있는 양방향 서식 문자(ALM, LRM/RLM, LRE~RLO, LRI~PDI). 출력에서 지운다.
-    private static final Pattern BIDI_CONTROLS =
-        Pattern.compile("[\\u061C\\u200E\\u200F\\u202A-\\u202E\\u2066-\\u2069]");
-
-    // 발음에 허용하는 문자: 한글, 숫자, 문장부호, 공백, 그리고 가격·수량에 흔한 + ~ %.
-    private static final Pattern HANGUL_READING =
-        Pattern.compile("[\\p{IsHangul}\\p{Nd}\\p{P}\\p{Zs}\\s+~%]+");
-
-    // 번역·발음 길이 상한: max(200, 원문 길이 × 4). 자연스러운 번역은 이보다 훨씬 짧다.
-    private static final int MIN_OUTPUT_LIMIT = 200;
-    private static final int OUTPUT_LENGTH_FACTOR = 4;
 
     static final String SYSTEM_PROMPT = """
         You translate text that a traveler photographed (menus, signs, notices) for a mobile travel app.
@@ -285,7 +267,7 @@ public class ClaudeLineTranslationClient implements LineTranslationClient {
             // 줄 안의 줄바꿈·제어 문자·줄 구분 문자(U+2028 등)는 다른 줄로 보이지 않게 공백으로 바꾼다.
             message.append(index)
                 .append(": ")
-                .append(LINE_BREAKS.matcher(lines.get(index)).replaceAll(" "))
+                .append(ClaudeOutputText.singleLine(lines.get(index)))
                 .append('\n');
         }
 
@@ -317,43 +299,21 @@ public class ClaudeLineTranslationClient implements LineTranslationClient {
 
         for (int index = 0; index < expectedLines; index++) {
             OutputLine line = ordered[index];
-            int limit = Math.max(MIN_OUTPUT_LIMIT, originals.get(index).length() * OUTPUT_LENGTH_FACTOR);
+            int limit = ClaudeOutputText.lengthLimit(originals.get(index).length());
 
-            String translated = clean(line.translated());
+            String translated = ClaudeOutputText.clean(line.translated());
 
             if (translated.length() > limit) {
                 log.warn("Claude 줄별 번역 출력이 너무 김: line={} length={} limit={}", index, translated.length(), limit);
                 throw new TranslationProviderException();
             }
 
-            lines.add(new Line(translated, pronunciationOrNull(clean(line.pronunciation()), limit)));
+            lines.add(new Line(
+                translated,
+                ClaudeOutputText.pronunciationOrNull(ClaudeOutputText.clean(line.pronunciation()), limit)
+            ));
         }
 
-        String detected = output.detectedLanguage() == null
-            ? ""
-            : output.detectedLanguage().trim().toLowerCase(Locale.ROOT);
-
-        return new Result(detected.matches("[a-z]{2,3}") ? detected : null, List.copyOf(lines));
-    }
-
-    private static String pronunciationOrNull(String pronunciation, int limit) {
-        if (pronunciation.isEmpty()
-            || pronunciation.length() > limit
-            || !HANGUL_READING.matcher(pronunciation).matches()) {
-            return null;
-        }
-
-        return pronunciation;
-    }
-
-    // 제어 문자·줄 구분은 공백으로, 양방향 서식 문자는 지우고 앞뒤 공백을 없앤다.
-    private static String clean(String text) {
-        if (text == null) {
-            return "";
-        }
-
-        String withoutBreaks = LINE_BREAKS.matcher(text).replaceAll(" ");
-
-        return BIDI_CONTROLS.matcher(withoutBreaks).replaceAll("").trim();
+        return new Result(ClaudeOutputText.languageCodeOrNull(output.detectedLanguage()), List.copyOf(lines));
     }
 }
