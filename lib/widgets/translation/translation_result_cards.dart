@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 // 처리중 카드, 메시지 카드
 // 번역 결과를 표시하는 카드 위젯들을 정의하는 파일
 class TranslationProcessingCard extends StatelessWidget {
@@ -23,7 +24,8 @@ class TranslationProcessingCard extends StatelessWidget {
           SizedBox(
             width: 22,
             height: 22,
-            child: CircularProgressIndicator(strokeWidth: 2.5,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.5,
               color: colorScheme.primary,
             ),
           ),
@@ -42,6 +44,7 @@ class TranslationProcessingCard extends StatelessWidget {
     );
   }
 }
+
 // 번역 결과를 표시하는 카드 위젯들을 정의하는 파일
 class TranslationMessageCard extends StatelessWidget {
   final String message;
@@ -68,10 +71,7 @@ class TranslationMessageCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon, 
-            color: colorScheme.tertiary,
-          ),
+          Icon(icon, color: colorScheme.tertiary),
           const SizedBox(width: 12),
           Expanded(
             child: Text(

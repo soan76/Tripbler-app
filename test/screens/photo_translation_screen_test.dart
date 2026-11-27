@@ -93,6 +93,7 @@ void main() {
   Future<({_FakePhotoNotifier notifier, FakeCameraPlatform camera})> pumpScreen(
     WidgetTester tester, {
     int tabIndex = _translationTab,
+    bool photoAi = false,
   }) async {
     tester.view.physicalSize = const Size(400, 800);
     tester.view.devicePixelRatio = 1;
@@ -118,6 +119,7 @@ void main() {
         overrides: [
           photoTranslationProvider.overrideWith(() => notifier),
           tabProvider.overrideWith(() => _TabAt(tabIndex)),
+          photoAiTranslationProvider.overrideWithValue(photoAi),
         ],
         child: const MaterialApp(
           home: Scaffold(body: PhotoTranslationScreen()),
@@ -133,13 +135,31 @@ void main() {
     await flush(tester);
   }
 
-  testWidgets('촬영 화면은 하단 고정 안내를 보이고 보관·삭제 문구는 없다', (tester) async {
+  // 촬영 화면의 안내 문구(촬영 안내·기기/전송 안내)는 2026-11-27 사용자 요청으로 없앴다.
+  // 사진 AI 번역의 사진 전송은 처음 촬영 때 동의 대화상자로 알린다.
+  void expectNoCaptureNotices() {
+    expect(find.textContaining('기기에서'), findsNothing);
+    expect(find.textContaining('전송'), findsNothing);
+    expect(find.textContaining('보내'), findsNothing);
+    expect(find.textContaining('촬영해요'), findsNothing);
+    expect(find.textContaining('보관'), findsNothing);
+    expect(find.textContaining('삭제'), findsNothing);
+  }
+
+  testWidgets('기본 방식(사진 안 보냄)은 촬영 화면에 안내 문구가 없다', (tester) async {
     await pumpScreen(tester);
 
     expect(find.byType(PhotoCaptureView), findsOneWidget);
-    expect(find.text('촬영한 사진은 AI 번역을 위해 전송됩니다'), findsOneWidget);
-    expect(find.textContaining('보관'), findsNothing);
-    expect(find.textContaining('삭제'), findsNothing);
+    expectNoCaptureNotices();
+
+    await unmount(tester);
+  });
+
+  testWidgets('사진 AI 번역 방식도 촬영 화면에 안내 문구가 없다', (tester) async {
+    await pumpScreen(tester, photoAi: true);
+
+    expect(find.byType(PhotoCaptureView), findsOneWidget);
+    expectNoCaptureNotices();
 
     await unmount(tester);
   });

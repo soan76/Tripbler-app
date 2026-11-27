@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tripbler — 번역 카메라 화면 목업</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --p:#0061A4; --s:#F8F9FF; --on:#191C20; --sv:#43474E; --ov:#C3C7CF; --paper:#F3F0E9; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); font-family:"Noto Sans KR",sans-serif; color:#1C1F23; }
+  .wrap { max-width:1100px; margin:0 auto; padding:32px 24px; display:flex; gap:40px; flex-wrap:wrap; justify-content:center; }
+  svg.i { width:24px; height:24px; fill:currentColor; flex:none; }
+  .phone { width:360px; background:#111; border-radius:44px; padding:10px; flex:none; }
+  .phone.small { width:340px; }
+  .screen { position:relative; height:740px; border-radius:34px; overflow:hidden; background:#2B2622; user-select:none; }
+  .phone.small .screen { height:640px; }
+  .btn { font:inherit; border:0; background:none; color:inherit; cursor:pointer; padding:0; }
+
+  /* 화면 전체가 카메라 영상. 위 제목 줄·가운데 흰 촬영 틀 없음 */
+  svg.scene { position:absolute; inset:0; width:100%; height:100%; }
+  .brand { position:absolute; left:0; right:0; top:22px; text-align:center; color:#fff; font-size:24px; font-weight:800; letter-spacing:.01em; text-shadow:0 1px 6px rgba(0,0,0,.55); pointer-events:none; }
+  /* 감지 언어 → 번역 언어 선택 바 */
+  .lang { position:absolute; left:50%; top:64px; transform:translateX(-50%); display:flex; align-items:center; height:48px; border-radius:24px; background:rgba(0,0,0,.5); color:#fff; font-size:14px; white-space:nowrap; overflow:hidden; }
+  .lang .side { display:flex; align-items:center; gap:4px; height:100%; padding:0 10px 0 16px; }
+  .lang .side:hover, .lang .sw:hover { background:rgba(255,255,255,.12); }
+  .lang .side small { font-size:11px; color:#B9D7FF; }
+  .lang .side svg.i { width:20px; height:20px; opacity:.85; }
+  .lang .sw { width:44px; height:100%; display:grid; place-items:center; border-left:1px solid rgba(255,255,255,.25); border-right:1px solid rgba(255,255,255,.25); }
+  .lang .sw svg.i { width:20px; height:20px; }
+  .hint { position:absolute; left:16px; right:16px; bottom:92px; text-align:center; color:#fff; font-size:12.5px; text-shadow:0 1px 4px rgba(0,0,0,.7); pointer-events:none; }
+  /* 하단: 가운데 메뉴 원(중심 = 아래에서 44)과 같은 높이의 양옆 */
+  .side-btn { position:absolute; bottom:20px; width:48px; height:48px; border-radius:50%; background:rgba(0,0,0,.45); color:#fff; display:grid; place-items:center; }
+  .side-btn.on { background:#FFD54F; color:#1C1F23; }
+  /* 가운데: 하단 이동 메뉴의 "현재 화면 아이콘" 상태(지름 64). 누르면 촬영 */
+  .center { position:absolute; left:50%; bottom:12px; width:64px; height:64px; margin-left:-32px; border-radius:50%; background:rgba(214,224,240,.72); border:1px dashed rgba(115,119,127,.5); color:var(--p); display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .center svg.i { width:26px; height:26px; }
+  .center .nm { font-size:12px; font-weight:700; margin-top:1px; }
+  .shot { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .25s; }
+  .toast { position:absolute; left:50%; top:128px; transform:translateX(-50%); background:#2E3135; color:#fff; font-size:13px; padding:8px 12px; border-radius:4px; opacity:0; transition:opacity .2s; pointer-events:none; white-space:nowrap; }
+  /* 언어 고르기(아래에서 올라오는 판) */
+  .scrim { position:absolute; inset:0; background:rgba(0,0,0,.4); }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:var(--s); color:var(--on); border-radius:4px 4px 0 0; padding:8px 0 16px; max-height:70%; overflow-y:auto; }
+  .sheet h4 { margin:8px 20px 8px; font-size:16px; }
+  .sheet .opt { display:flex; align-items:center; justify-content:space-between; width:100%; min-height:48px; padding:0 20px; font-size:15px; text-align:left; border-top:1px solid #ECEEF4; }
+  .sheet .opt.on { color:var(--p); font-weight:700; }
+
+  .panel { width:380px; font-size:14px; line-height:1.6; }
+  .panel h1 { font-size:24px; margin:0 0 8px; }
+  .panel p { color:#4A4F57; margin:0 0 12px; }
+  .panel table { border-collapse:collapse; width:100%; font-size:13px; margin:8px 0 12px; }
+  .panel td, .panel th { border:1px solid #D5D2CA; padding:6px 8px; text-align:left; vertical-align:top; }
+  .panel th { background:#ECE8DF; }
+  .ctl { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  .ctl label { font-size:13px; padding:6px 10px; border:1px solid #9aa; border-radius:4px; background:#fff; cursor:pointer; }
+  .panel ul { padding-left:18px; color:#4A4F57; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="phone" id="phone"><div class="screen" id="screen"></div></div>
+
+  <div class="panel">
+    <h1>번역 카메라 화면</h1>
+    <p>번역 탭을 열었을 때의 촬영 화면만 떼어 낸 목업입니다. 하단 이동 메뉴(점 → 아이콘 → 부채꼴)의 동작은 <code>bottom-nav.html</code>에 있고, 배치 설명은 <code>bottom-nav.md</code> 6절에 있습니다.</p>
+    <table>
+      <tr><th>자리</th><th>내용</th></tr>
+      <tr><td>화면 전체</td><td>카메라 영상. 위 "번역" 제목 줄과 가운데 흰 촬영 틀 없음</td></tr>
+      <tr><td>위 가운데</td><td>굵은 흰색 "Tripbler"</td></tr>
+      <tr><td>그 아래</td><td>감지 언어 → 번역 언어 바(높이 48). 양쪽을 누르면 언어 고르기, 가운데 ⇄는 바꾸기</td></tr>
+      <tr><td>하단 가운데</td><td>하단 메뉴의 현재 화면 아이콘(번역). 누르면 촬영, 위로 끌면 메뉴</td></tr>
+      <tr><td>하단 양옆</td><td>메뉴 원과 같은 높이(아래에서 44). 왼쪽 사진 고르기, 오른쪽 플래시</td></tr>
+      <tr><td>원 위</td><td>흰 안내 "가운데 버튼을 누르면 촬영해요"</td></tr>
+    </table>
+    <div class="ctl"><label><input type="checkbox" id="small"> 작은 화면(폭 320 · 높이 640)</label></div>
+    <ul>
+      <li>촬영·사진 고르기·플래시는 흉내만 냅니다(실제 카메라 없음).</li>
+      <li>정할 것: 흰 틀이 없어진 뒤 인식 범위를 어떻게 알릴지.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const P = {
+  translate: 'M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z',
+  gallery: 'M22 16V4c0-1.1-.9-2-2-2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2zm-11-4l2.03 2.71L16 11l4 5H8l3-4zM2 6v14c0 1.1.9 2 2 2h14v-2H4V6H2z',
+  flashOff: 'M3.27 3L2 4.27l5 5V13h3v9l3.58-6.14L17.73 20 19 18.73 3.27 3zM17 10h-4l4-8H7v2.18l8.46 8.46L17 10z',
+  flashOn: 'M7 2v11h3v9l7-12h-4l4-8z',
+  swap: 'M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z',
+  drop: 'M7 10l5 5 5-5z',
+  check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+};
+const ic = (k) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}"/></svg>`;
+const $ = (id) => document.getElementById(id);
+
+// 카메라에 비친 가게 앞(예시 장면)
+const SCENE = '<svg class="scene" viewBox="0 0 340 740" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' +
+  '<rect width="340" height="740" fill="#2B2622"/><rect width="340" height="150" fill="#1E1B19"/>' +
+  '<rect y="150" width="340" height="16" fill="#4A3B2E"/><rect x="24" y="166" width="292" height="120" fill="#6E1F18"/>' +
+  '<text x="170" y="245" text-anchor="middle" font-size="62" font-weight="700" fill="#F6E7C8" font-family="Noto Sans JP, Noto Sans KR, sans-serif">らーめん</text>' +
+  '<rect x="30" y="300" width="120" height="250" fill="#3B2F26"/><rect x="160" y="300" width="150" height="320" fill="#24201D"/>' +
+  '<g fill="#E9D8B8" font-family="Noto Sans JP, Noto Sans KR, sans-serif" font-size="15">' +
+  '<rect x="44" y="320" width="92" height="210" fill="#2A221C" stroke="#5B4A3B"/>' +
+  '<text x="90" y="350" text-anchor="middle" font-size="16" font-weight="700">本日の</text>' +
+  '<text x="90" y="372" text-anchor="middle" font-size="16" font-weight="700">おすすめ</text>' +
+  '<text x="56" y="410">醤油</text><text x="124" y="410" text-anchor="end">980</text>' +
+  '<text x="56" y="440">味噌</text><text x="124" y="440" text-anchor="end">1080</text>' +
+  '<text x="56" y="470">餃子</text><text x="124" y="470" text-anchor="end">450</text></g>' +
+  '<rect x="186" y="330" width="98" height="170" fill="#C9A86A" opacity=".18"/><rect y="620" width="340" height="120" fill="#1A1715"/></svg>';
+
+const SRC = ['자동 감지', '일본어', '중국어(간체)', '중국어(번체)', '영어', '한국어'];
+const DST = ['한국어', '영어', '일본어', '중국어(간체)'];
+const st = { src: '자동 감지', detected: '일본어', dst: '한국어', flash: false, pick: null };
+
+function srcLabel() { return st.src === '자동 감지' ? `${st.detected} <small>감지됨</small>` : st.src; }
+function render() {
+  const sheet = st.pick ? `<div class="scrim" data-act="close"></div><div class="sheet" role="dialog"><h4>${st.pick === 'src' ? '원문 언어' : '번역 언어'}</h4>${(st.pick === 'src' ? SRC : DST).map((l) => { const on = (st.pick === 'src' ? st.src : st.dst) === l; return `<button class="btn opt${on ? ' on' : ''}" data-act="set" data-l="${l}">${l}${on ? ic('check') : ''}</button>`; }).join('')}</div>` : '';
+  $('screen').innerHTML = SCENE +
+    '<div class="brand">Tripbler</div>' +
+    `<div class="lang"><button class="btn side" data-act="pick" data-k="src" aria-label="원문 언어 고르기">${srcLabel()}${ic('drop')}</button><button class="btn sw" data-act="swap" aria-label="언어 바꾸기">${ic('swap')}</button><button class="btn side" data-act="pick" data-k="dst" aria-label="번역 언어 고르기">${st.dst}${ic('drop')}</button></div>` +
+    '<div class="hint">가운데 버튼을 누르면 촬영해요</div>' +
+    `<button class="btn side-btn" style="left:28px" data-act="gallery" aria-label="사진 고르기">${ic('gallery')}</button>` +
+    `<button class="btn center" data-act="shoot" aria-label="촬영">${ic('translate')}<span class="nm">번역</span></button>` +
+    `<button class="btn side-btn${st.flash ? ' on' : ''}" style="right:28px" data-act="flash" aria-label="${st.flash ? '플래시 끄기' : '플래시 켜기'}">${ic(st.flash ? 'flashOn' : 'flashOff')}</button>` +
+    '<div class="shot" id="shot"></div><div class="toast" id="toast"></div>' + sheet;
+}
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.opacity = 1; clearTimeout(window._tt); window._tt = setTimeout(() => ($('toast').style.opacity = 0), 1400); }
+
+$('screen').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]'); if (!el) return;
+  const a = el.dataset.act;
+  if (a === 'shoot') { const s = $('shot'); s.style.transition = 'none'; s.style.opacity = .85; requestAnimationFrame(() => { s.style.transition = 'opacity .25s'; s.style.opacity = 0; }); toast('촬영했어요 · 결과 화면으로 이동(목업)'); }
+  if (a === 'gallery') toast('사진 고르기가 열려요(목업)');
+  if (a === 'flash') { st.flash = !st.flash; render(); toast(st.flash ? '플래시 켬' : '플래시 끔'); }
+  if (a === 'swap') { const from = st.src === '자동 감지' ? st.detected : st.src; if (from === st.dst) return; st.src = st.dst; st.dst = DST.includes(from) ? from : '한국어'; render(); }
+  if (a === 'pick') { st.pick = el.dataset.k; render(); }
+  if (a === 'close') { st.pick = null; render(); }
+  if (a === 'set') {
+    // 원문과 번역 언어가 같아지면 다른 쪽을 바꿔 겹치지 않게 한다
+    const prevFrom = st.src === '자동 감지' ? st.detected : st.src, prevDst = st.dst;
+    if (st.pick === 'src') st.src = el.dataset.l; else st.dst = el.dataset.l;
+    const from = st.src === '자동 감지' ? st.detected : st.src;
+    if (from === st.dst) { if (st.pick === 'src') st.dst = DST.includes(prevFrom) && prevFrom !== from ? prevFrom : (from === '한국어' ? '영어' : '한국어'); else st.src = SRC.includes(prevDst) && prevDst !== st.dst ? prevDst : '자동 감지'; }
+    st.pick = null; render();
+  }
+});
+$('small').onchange = () => $('phone').classList.toggle('small', $('small').checked);
+render();
+</script>
+</body>
+</html>

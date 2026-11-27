@@ -51,7 +51,11 @@ void main() {
       await pumpView(tester, themeMode: mode);
 
       expect(tester.takeException(), isNull);
-      expect(find.text(PhotoCaptureView.notice), findsOneWidget);
+      expect(find.text(PhotoCaptureView.brand), findsOneWidget);
+      expect(find.byTooltip(PhotoCaptureView.shutterTooltip), findsOneWidget);
+      // 촬영 안내·전송 안내 문구는 2026-11-27 사용자 요청으로 없앴다.
+      expect(find.textContaining('전송'), findsNothing);
+      expect(find.textContaining('촬영해요'), findsNothing);
     });
   }
 

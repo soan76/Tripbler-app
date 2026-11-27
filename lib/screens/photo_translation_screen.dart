@@ -10,6 +10,7 @@ import '../providers/tab_provider.dart';
 import '../providers/translation/photo_translation_provider.dart';
 import '../providers/translation/translation_provider.dart'
     show TranslationState, TranslationStatus;
+import '../widgets/navigation/navigation_capture_controller.dart';
 import '../widgets/translation/photo/photo_capture_view.dart';
 import '../widgets/translation/photo/photo_consent_dialog.dart';
 import '../widgets/translation/photo/photo_result_view.dart';
@@ -23,7 +24,8 @@ import '../widgets/translation/translation_state_views.dart';
 /// 취소·세션 변경) 번역 탭일 때만 다시 켠다. MainScreen의 IndexedStack은 다른 탭에서도 이 화면을
 /// 만들어 두므로, 탭 확인 없이 켜면 보이지 않는 카메라가 켜진다.
 class PhotoTranslationScreen extends ConsumerStatefulWidget {
-  const PhotoTranslationScreen({super.key});
+  const PhotoTranslationScreen({super.key, this.navigationCapture});
+  final NavigationCaptureController? navigationCapture;
 
   @override
   ConsumerState<PhotoTranslationScreen> createState() =>
@@ -182,17 +184,23 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
   }
 
   Future<void> _capture() async {
-    if (_isTakingPicture || !_camera.isReady || _camera.isCaptureInFlight) {
+    if (!_wantsCamera ||
+        _isTakingPicture ||
+        !_camera.isReady ||
+        _camera.isCaptureInFlight) {
       return;
     }
     setState(() => _isTakingPicture = true);
+    final flowId = _flowId;
     try {
       final shot = await _camera.takePicture();
-      if (mounted && _inCaptureMode) {
+      if (mounted && flowId == _flowId && _wantsCamera) {
         _startPhoto(shot.path);
       }
     } catch (error) {
       debugPrint('사진 촬영 실패: ${error.runtimeType}');
+      // 탭을 떠나 카메라를 멈추면 찍던 촬영이 오류로 끝난다. 사용자가 실패한 것이 아니므로 알리지 않는다.
+      if (!mounted || flowId != _flowId || !_wantsCamera) return;
       _showSnackBar('사진을 촬영하지 못했습니다.\n다시 시도해 주세요.');
     } finally {
       if (mounted) {
@@ -288,6 +296,34 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
     });
 
     final state = ref.watch(photoTranslationProvider);
+    final selected =
+        ref.watch(tabProvider).selectedIndex == _translationTabIndex;
+    final capturing = _isTakingPicture || _camera.isCaptureInFlight;
+    return NavigationCaptureBinding(
+      controller: widget.navigationCapture,
+      // build마다 새 클로저를 넘기면 메뉴가 매번 다시 그려지므로 메서드 tear-off를 넘긴다.
+      onCapture:
+          selected &&
+              state.status == PhotoTranslationStatus.idle &&
+              _cameraStatus == TranslationStatus.cameraReady &&
+              _camera.isReady &&
+              !capturing
+          ? _capture
+          : null,
+      busy:
+          selected && state.status == PhotoTranslationStatus.idle && capturing,
+      // 탭 선택과 상관없이 알린다. 메뉴가 탭을 고른 프레임에 바로 쓰도록 보이지 않는 동안에도 남긴다.
+      // 권한 확인·카메라 준비 중은 촬영 화면(흐린 카메라 버튼), 권한 안내·카메라를 쓸 수 없음은 아니다.
+      cameraScreen:
+          state.status == PhotoTranslationStatus.idle &&
+          (_cameraStatus == TranslationStatus.checkingPermission ||
+              _cameraStatus == TranslationStatus.initializingCamera ||
+              _cameraStatus == TranslationStatus.cameraReady),
+      child: _buildBody(state),
+    );
+  }
+
+  Widget _buildBody(PhotoTranslationState state) {
     if (state.status != PhotoTranslationStatus.idle) {
       return PhotoResultView(
         state: state,
@@ -308,6 +344,7 @@ class _PhotoTranslationScreenState extends ConsumerState<PhotoTranslationScreen>
     }
 
     return PhotoCaptureView(
+      navigationCapture: widget.navigationCapture,
       cameraController: _camera.controller,
       isCameraReady: _camera.isReady,
       isFlashOn: _camera.isFlashOn,

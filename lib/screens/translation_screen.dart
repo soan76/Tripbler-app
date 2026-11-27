@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
     show ConsumerState, ConsumerStatefulWidget;
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../providers/translation/translation_provider.dart';
+import '../widgets/navigation/navigation_capture_controller.dart';
 import '../widgets/translation/translation_camera.dart';
 import '../widgets/translation/translation_camera_view.dart';
 import '../widgets/translation/translation_result_view.dart';
 import '../widgets/translation/translation_state_views.dart';
+
+part 'translation_camera_permission_flow.dart';
 
 /// 카메라 권한 상태로 카메라를 쓸 수 없을 때 보여 줄 화면 상태. 허용이면 null.
 ///
@@ -32,30 +35,37 @@ TranslationStatus? blockedStatusFor(
       : TranslationStatus.permissionRequired;
 }
 
+/// 카메라 대기 화면이거나 곧 그렇게 되는 상태(권한 확인·카메라 준비 중)인지.
+/// 권한 안내와 카메라를 쓸 수 없음은 기다려도 촬영할 수 없으므로 false다.
+bool _awaitsCamera(TranslationStatus status) => switch (status) {
+  TranslationStatus.checkingPermission ||
+  TranslationStatus.initializingCamera ||
+  TranslationStatus.cameraReady ||
+  TranslationStatus.capturing => true,
+  _ => false,
+};
+
 // 번역 화면을 구성하는 StatefulWidget
 class TranslationScreen extends ConsumerStatefulWidget {
-  const TranslationScreen({super.key});
+  const TranslationScreen({
+    super.key,
+    this.navigationCapture,
+    this.active = true,
+  });
+  final NavigationCaptureController? navigationCapture;
+  final bool active;
 
   @override
   ConsumerState<TranslationScreen> createState() => _TranslationScreenState();
 }
 
 class _TranslationScreenState extends ConsumerState<TranslationScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, _CameraPermissionFlow {
   final ImagePicker _imagePicker = ImagePicker();
+  @override
   final TranslationCamera _camera = TranslationCamera();
 
-  bool _hasRequestedCameraPermission = false;
   bool _isTakingPicture = false;
-
-  /// 권한 확인·요청 흐름 번호. 새 흐름(들어올 때 확인, 요청, 다시 촬영)마다 올리고, 늦게 끝난 이전
-  /// 흐름은 결과를 반영하지 않는다(예: 거부 확인 뒤 설정에서 허용하고 돌아온 확인이 먼저 끝난 경우).
-  int _permissionFlowId = 0;
-
-  /// 권한 요청 대화상자가 떠 있는지. 대화상자는 앱을 inactive로 만들었다가 resumed로 돌려놓는데,
-  /// 이때의 권한 확인은 요청 결과와 경쟁하므로 건너뛰고 요청 결과로만 처리한다(요청 결과가 사용자의
-  /// 선택을 직접 담고 있어 더 정확하고, 카메라 준비도 한 번만 한다).
-  bool _isRequestingPermission = false;
 
   @override
   void initState() {
@@ -71,6 +81,20 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
 
       _checkCameraPermissionOnEntry();
     });
+  }
+
+  @override
+  void didUpdateWidget(TranslationScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.active == widget.active) return;
+    _permissionFlowId++;
+    if (!widget.active) {
+      _camera.suspend();
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _checkCameraPermissionOnEntry();
+      });
+    }
   }
 
   void _onCaptureInFlightChanged() {
@@ -93,6 +117,7 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
   /// (recognizing·translating·completed·failed)나 촬영 중 상태를 덮어 처리 중 버튼 비활성과
   /// 중복 처리 방지가 풀린다. 촬영 중(`capturing`)도 포함한다: 곧 결과 화면으로 넘어가거나 실패를
   /// 보여 주므로 카메라 대기 화면 상태로 되돌리면 안 된다. 카메라는 "다시 촬영" 때 다시 확인·준비한다.
+  @override
   bool get _isInPhotoFlow {
     final state = ref.read(translationProvider);
     return _isTakingPicture ||
@@ -123,131 +148,13 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
     }
   }
 
-  // 들어올 때(돌아올 때) 카메라 권한을 확인하고, 허용이면 카메라를 준비한다.
-  Future<void> _checkCameraPermissionOnEntry() async {
-    if (!mounted || _isInPhotoFlow) {
-      return;
-    }
-
-    final flowId = ++_permissionFlowId;
-    final provider = ref.read(translationProvider.notifier);
-    provider.setStatus(TranslationStatus.checkingPermission);
-
-    final permissionStatus = await Permission.camera.status;
-
-    if (!mounted || flowId != _permissionFlowId || _isInPhotoFlow) {
-      return;
-    }
-
-    await _applyPermissionStatus(permissionStatus, flowId);
-  }
-
-  // 카메라 권한을 요청하고, 허용이면 카메라를 준비한다.
-  Future<void> _requestCameraPermission() async {
-    if (!mounted) {
-      return;
-    }
-
-    _hasRequestedCameraPermission = true;
-
-    final flowId = ++_permissionFlowId;
-    final provider = ref.read(translationProvider.notifier);
-    provider.setStatus(TranslationStatus.checkingPermission);
-
-    final PermissionStatus permissionStatus;
-    _isRequestingPermission = true;
-    try {
-      permissionStatus = await Permission.camera.request();
-    } finally {
-      _isRequestingPermission = false;
-    }
-
-    if (!mounted || flowId != _permissionFlowId) {
-      return;
-    }
-
-    await _applyPermissionStatus(permissionStatus, flowId);
-  }
-
-  // 허용이면 카메라를 준비하고, 아니면 컨트롤러를 먼저 정리한 뒤 권한 안내 상태로 바꾼다.
-  // 정리하는 사이 새 권한 흐름이 시작됐거나 화면이 사라졌으면 상태를 바꾸지 않는다.
-  // 사진 흐름(갤러리·촬영 사진의 인식·번역·결과) 중이면 정리 전·후 모두 권한 안내로 덮지 않는다
-  // (허용 분기의 _initializeCamera와 같은 보호). 카메라는 "다시 촬영" 때 다시 확인한다.
-  Future<void> _applyPermissionStatus(
-    PermissionStatus permissionStatus,
-    int flowId,
-  ) async {
-    if (permissionStatus.isGranted) {
-      await _initializeCamera();
-      return;
-    }
-
-    if (_isInPhotoFlow) {
-      return;
-    }
-
-    final provider = ref.read(translationProvider.notifier);
-
-    await _camera.suspend();
-
-    if (!mounted || flowId != _permissionFlowId || _isInPhotoFlow) {
-      return;
-    }
-
-    provider.setStatus(
-      blockedStatusFor(
-        permissionStatus,
-        hasRequested: _hasRequestedCameraPermission,
-      )!,
-    );
-  }
-
-  // 카메라를 준비하고 결과에 맞게 화면 상태를 바꾼다.
-  // 준비 결과가 ignored(잠시 종료·화면 제거로 끊김)면 실패가 아니므로 상태를 바꾸지 않는다.
-  // 끊은 쪽(돌아왔을 때 확인, 다시 촬영)이 다시 준비한다.
-  Future<void> _initializeCamera() async {
-    if (!mounted || _isInPhotoFlow) {
-      return;
-    }
-
-    final provider = ref.read(translationProvider.notifier);
-    provider.setStatus(TranslationStatus.initializingCamera);
-
-    final result = await _camera.initialize();
-
-    if (!mounted ||
-        result == TranslationCameraInitResult.ignored ||
-        _isInPhotoFlow) {
-      return;
-    }
-
-    switch (result) {
-      case TranslationCameraInitResult.ignored:
-        return;
-      case TranslationCameraInitResult.ready:
-        provider.setStatus(TranslationStatus.cameraReady);
-      case TranslationCameraInitResult.noCamera:
-        provider.setError(
-          message: '카메라를 사용할 수 없습니다.\n기기의 카메라 상태를 확인해 주세요.',
-          status: TranslationStatus.cameraUnavailable,
-        );
-      case TranslationCameraInitResult.noBackCamera:
-        provider.setError(
-          message: '사용 가능한 후면 카메라가 없습니다.',
-          status: TranslationStatus.cameraUnavailable,
-        );
-      case TranslationCameraInitResult.failed:
-        provider.setError(
-          message: '카메라를 시작할 수 없습니다.\n카메라 상태를 확인한 뒤 다시 시도해 주세요.',
-          status: TranslationStatus.cameraUnavailable,
-        );
-    }
-  }
-
   // 사진을 찍어 글자 인식·번역을 시작한다. 처리가 끝날 때까지 다시 찍지 않는다.
   // 앞 촬영이 기기에서 아직 끝나지 않았으면(시간 제한 뒤 포함) 상태를 바꾸지 않고 무시한다.
   Future<void> _capturePhoto() async {
-    if (_isTakingPicture || !_camera.isReady || _camera.isCaptureInFlight) {
+    if (!widget.active ||
+        _isTakingPicture ||
+        !_camera.isReady ||
+        _camera.isCaptureInFlight) {
       return;
     }
 
@@ -256,20 +163,20 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
     final provider = ref.read(translationProvider.notifier);
     provider.setStatus(TranslationStatus.capturing);
 
+    final flowId = _permissionFlowId;
+    var abandoned = false;
     try {
       final shot = await _camera.takePicture();
 
-      if (!mounted) {
+      if (!mounted || !widget.active || flowId != _permissionFlowId) {
+        abandoned = true;
         return;
       }
 
       debugPrint('=== OCR 호출 직전 ===');
 
-      await provider.processImage(
-        shot.path,
-        fromCamera: true,
-        cameraPreviewAspect: shot.previewAspect,
-      );
+      // 촬영 화면에 프레임이 없으므로(목업) 갤러리 사진처럼 사진 전체의 글자를 읽는다.
+      await provider.processImage(shot.path);
     } catch (error, stackTrace) {
       debugPrint('=== takePicture catch 진입 ===');
       debugPrint('사진 촬영 실패: $error');
@@ -279,10 +186,30 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
         return;
       }
 
+      // 탭을 떠나 카메라를 멈추면 찍던 촬영이 오류로 끝난다. 사용자가 실패한 것이 아니므로 실패 화면 대신
+      // 버린 촬영으로 처리해, 돌아왔을 때 카메라를 다시 준비한다.
+      if (!widget.active || flowId != _permissionFlowId) {
+        abandoned = true;
+        return;
+      }
+
       provider.setError(message: '사진을 촬영하지 못했습니다.\n다시 시도해 주세요.');
     } finally {
       _isTakingPicture = false;
+      if (abandoned) _recoverAbandonedCapture();
     }
+  }
+
+  // 촬영 중 탭을 떠나 찍은 사진을 버렸으면 "촬영 중" 상태를 풀어 카메라를 다시 준비할 수 있게 한다.
+  // 이미 돌아와 있으면 촬영 중이라 건너뛴 권한 확인·카메라 준비를 지금 다시 한다.
+  void _recoverAbandonedCapture() {
+    if (!mounted) return;
+    if (ref.read(translationProvider).status == TranslationStatus.capturing) {
+      ref
+          .read(translationProvider.notifier)
+          .setStatus(TranslationStatus.checkingPermission);
+    }
+    if (widget.active) _checkCameraPermissionOnEntry();
   }
 
   // 갤러리에서 이미지를 골라 글자 인식·번역을 시작한다.
@@ -367,11 +294,29 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
 
     final state = ref.watch(translationProvider);
 
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      color: colorScheme.surface,
-      child: SafeArea(child: _buildBody(state)),
+    return NavigationCaptureBinding(
+      controller: widget.navigationCapture,
+      onCapture:
+          widget.active &&
+              state.status == TranslationStatus.cameraReady &&
+              _camera.isReady &&
+              !_isTakingPicture &&
+              !_camera.isCaptureInFlight
+          ? _capturePhoto
+          : null,
+      busy:
+          widget.active &&
+          !state.showsResult &&
+          (state.status == TranslationStatus.capturing ||
+              _camera.isCaptureInFlight),
+      // 탭 선택과 상관없이 알린다. 메뉴가 탭을 고른 프레임에 바로 쓰도록 보이지 않는 동안에도 남긴다.
+      cameraScreen: !state.showsResult && _awaitsCamera(state.status),
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        color: colorScheme.surface,
+        child: SafeArea(child: _buildBody(state)),
+      ),
     );
   }
 
@@ -386,6 +331,7 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
       final notifier = ref.read(translationProvider.notifier);
 
       return TranslationCameraView(
+        navigationCapture: widget.navigationCapture,
         state: state,
         cameraController: _camera.controller,
         isCameraReady: _camera.isReady,
@@ -397,7 +343,6 @@ class _TranslationScreenState extends ConsumerState<TranslationScreen>
         onToggleFlash: _toggleFlash,
         onCapture: _capturePhoto,
         onPickFromGallery: _pickImageFromGallery,
-        onRetry: _retryCamera,
       );
     }
 

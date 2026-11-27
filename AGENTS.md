@@ -46,7 +46,7 @@ flutter test --no-pub --plain-name "<테스트 이름>" <파일>       # 테스�
 
 ### 앱 구조
 - `main.dart`의 `buildAppScope`가 앱을 `ProviderScope`로 감싼다(자동 재시도 끔). 상태는 `NotifierProvider`와 불변 `XState`/`XNotifier`(예: `AuthNotifier`, `ExchangeNotifier`, `CryptoNotifier`)로 두고, 화면은 `ConsumerWidget`에서 `ref.watch`로 읽고 `ref.read(xProvider.notifier)`로 호출한다. 상태 간 의존은 `ref.listen`으로 잇고, Service는 provider로 주입해 테스트에서 override한다. `ExchangeDisplayNotifier`는 `ExchangeNotifier`(국가 통화)와 `CryptoNotifier`를 합쳐 하나의 통화 목록을 만들며, 화면은 `exchangeDisplayViewProvider`로 읽는다. `AuthGate`가 인증 화면과 `MainScreen` 중 무엇을 보여줄지 정한다.
-- 화면 이동: `TabNotifier`가 하단 탭 3개(환율 / 지도 / 번역)를 관리한다. 인덱스 `-1`은 홈(AI) 화면이고, 선택된 탭을 다시 누르면 홈으로 돌아간다.
+- 화면 이동: `TabNotifier`가 하단 탭 3개(환율 / 지도 / 번역)를 관리한다. 인덱스 `-1`은 홈(AI) 화면이다. 선택된 탭을 다시 누르면 화면을 유지하고 메뉴만 접으며, 홈 이동은 AI 버튼으로 한다.
 - 계층: 화면 → Notifier(상태) → Repository(인증) / Service(HTTP, 저장소, OCR). 환율 계산은 `lib/domain/exchange/`, 차트 데이터 변환은 `lib/presentation/charts/`에 있다.
 - `lib/crypto/`는 독립된 기능 모듈(models/providers/services/widgets)이다. 서버 계약과 저장 키(`crypto.selected.v1`, `crypto.catalog.v1`, `exchange.displayOrder.v1`)는 `docs/crypto-ui.md`에 있다. 지원 코인 목록은 서버에서 받으므로 코드에 하드코딩하지 않는다.
 - 시세 데이터는 저장값을 먼저 보여주고 다시 조회하는 방식(stale-while-revalidate)이다(`test/providers/exchange_swr_test.dart`, `test/crypto/market_swr_test.dart` 참고). `exchange_rate_cache_service.dart` / `market_snapshot_store.dart` / `chart_snapshot_store.dart`로 캐시하며, 서버의 `stale`/`fetchedAt`을 화면까지 유지해야 한다.

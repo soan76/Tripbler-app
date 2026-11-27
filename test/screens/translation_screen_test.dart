@@ -12,8 +12,9 @@ import 'package:tripbler/screens/translation_screen.dart';
 import 'package:tripbler/services/ocr_service.dart';
 import 'package:tripbler/services/translation_service.dart';
 import 'package:tripbler/widgets/translation/initial_camera_permission_view.dart';
-import 'package:tripbler/widgets/translation/translation_camera_preview_card.dart';
-import 'package:tripbler/widgets/translation/translation_header.dart';
+import 'package:tripbler/widgets/translation/photo/photo_capture_view.dart';
+import 'package:tripbler/widgets/translation/photo/photo_language_pill.dart';
+import 'package:tripbler/widgets/translation/translation_camera_view.dart';
 import 'package:tripbler/widgets/translation/translation_result_view.dart';
 
 import '../helpers/fake_auth_notifier.dart';
@@ -52,17 +53,15 @@ const String _noBackCameraMessage = '사용 가능한 후면 카메라가 없습
 const String _cameraStartFailedMessage =
     '카메라를 시작할 수 없습니다.\n카메라 상태를 확인한 뒤 다시 시도해 주세요.';
 const String _retryButton = '다시 시도';
-const String _privacyNote = '사진 속 글자는 기기에서 읽어요. 서버에는 읽은 글자만 보내고 사진은 보내지 않아요.';
 const String _captureFailedMessage = '사진을 촬영하지 못했습니다.\n다시 시도해 주세요.';
 const String _flashUnavailableMessage = '이 기기에서는 플래시를 사용할 수 없습니다.';
 const String _retakeButton = '다시 촬영';
 const String _repickButton = '다시 선택';
 
-// 카메라 미리보기 카드 버튼 툴팁
+// 카메라 대기 화면 버튼 툴팁(메뉴 없이 쓰면 가운데 아래에 셔터가 보인다)
 const String _flashOnTooltip = '플래시 켜기';
 const String _flashOffTooltip = '플래시 끄기';
 const String _galleryTooltip = '갤러리에서 사진 고르기';
-const String _cameraRetryTooltip = '카메라 다시 켜기';
 const String _shutterTooltip = '사진 찍기';
 
 /// 권한 채널 흉내. 상태 확인·요청 결과를 정하고 호출 횟수를 센다.
@@ -239,7 +238,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          // 로그아웃 상태: 카메라 촬영은 프레임 안 줄 인식 + 통번역을 쓴다.
+          // 로그아웃 상태: 카메라·갤러리 사진 모두 사진 전체 글자 인식 + 통번역을 쓴다.
           authProvider.overrideWith(
             () => FakeAuthNotifier(initiallySignedIn: false),
           ),
@@ -278,10 +277,15 @@ void main() {
   }
 
   void expectCameraReadyView() {
-    expect(find.byType(TranslationHeader), findsOneWidget);
-    expect(find.byType(TranslationCameraPreviewCard), findsOneWidget);
-    expect(find.text(TranslationCameraPreviewCard.guideText), findsOneWidget);
-    expect(find.text(_privacyNote), findsOneWidget);
+    expect(find.byType(TranslationCameraView), findsOneWidget);
+    expect(find.byType(PhotoLanguagePill), findsOneWidget);
+    expect(
+      find.byWidgetPredicate((w) => w is PhotoCaptureView && w.isCameraReady),
+      findsOneWidget,
+    );
+    // 촬영 안내·기기 처리 안내 문구는 2026-11-27 사용자 요청으로 없앴다.
+    expect(find.textContaining('촬영해요'), findsNothing);
+    expect(find.textContaining('기기에서 읽어요'), findsNothing);
     // 카메라가 준비되면 "카메라 준비 중" 표시가 없다.
     expect(find.bySemanticsLabel('카메라 준비 중'), findsNothing);
   }
@@ -462,9 +466,7 @@ void main() {
   });
 
   group('5. 카메라 대기 화면', () {
-    testWidgets('권한 허용 + 초기화 성공이면 언어 막대·미리보기 카드·안내 문구·버튼을 보여 준다', (
-      tester,
-    ) async {
+    testWidgets('권한 허용 + 초기화 성공이면 언어 막대·촬영 안내·안내 문구·버튼을 보여 준다', (tester) async {
       final h = await pumpScreen(tester, checkResult: _granted);
 
       expect(h.permissions.requestCount, 0);
@@ -484,29 +486,15 @@ void main() {
       expect(find.byTooltip(_flashOnTooltip), findsOneWidget);
       expect(find.byIcon(Icons.flash_off), findsOneWidget);
       expect(find.byTooltip(_galleryTooltip), findsOneWidget);
-      expect(find.byTooltip(_cameraRetryTooltip), findsOneWidget);
       expect(find.byTooltip(_shutterTooltip), findsOneWidget);
-
-      await unmount(tester);
-    });
-
-    testWidgets('카메라 다시 켜기 버튼은 권한을 다시 확인하고 카메라를 새로 만든다', (tester) async {
-      final h = await pumpScreen(tester, checkResult: _granted);
-      final firstId = h.camera.lastCameraId;
-
-      await tapAndFlush(tester, find.byTooltip(_cameraRetryTooltip));
-
-      expect(h.permissions.checkCount, 2);
-      expect(h.camera.disposedCameraIds, contains(firstId));
-      expect(h.camera.createdCameraIds, hasLength(2));
-      expectCameraReadyView();
 
       await unmount(tester);
     });
   });
 
   group('6. 촬영', () {
-    testWidgets('촬영하면 사진 경로·카메라 출처·미리보기 비율로 글자를 읽는다', (tester) async {
+    testWidgets('촬영하면 프레임 없이 사진 전체 글자를 읽는다', (tester) async {
+      // 미리보기 비율을 알아도 촬영 화면에 프레임이 없으므로 프레임 안 줄 인식을 쓰지 않는다.
       final camera = FakeCameraPlatform(previewSize: const Size(1920, 1080))
         ..picturePath = '/fake/camera/menu.jpg';
       final h = await pumpScreen(tester, checkResult: _granted, camera: camera);
@@ -514,13 +502,11 @@ void main() {
       await tapAndFlush(tester, find.byTooltip(_shutterTooltip));
 
       expect(h.camera.takePictureCameraIds, [h.camera.lastCameraId]);
-      // 카메라 촬영 + 미리보기 비율이 있으면 프레임 안 줄 인식을 쓴다.
-      final call = h.ocr.lineCalls.single;
+      // 로그아웃 + 프레임 없음이라 전체 글자 인식(recognizeText)만 쓴다.
+      expect(h.ocr.lineCalls, isEmpty);
+      final call = h.ocr.textCalls.single;
       expect(call.imagePath, '/fake/camera/menu.jpg');
       expect(call.sourceLanguageCode, 'auto');
-      expect(call.onlyInCaptureFrame, isTrue);
-      expect(call.cameraPreviewAspect, closeTo(1080 / 1920, 1e-9));
-      expect(h.ocr.textCalls, isEmpty);
       // 로그아웃 상태라 읽은 줄을 이어 통번역을 요청한다.
       expect(h.translator.calls.single.text, 'hello');
 

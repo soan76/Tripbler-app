@@ -116,7 +116,9 @@ void main() {
     expect(find.byType(FakeTranslationBanner), findsNothing);
   });
 
-  testWidgets('captureView_fakeMode_replacesUploadNotice', (tester) async {
+  testWidgets('captureView_fakeMode_showsOnlyFakeBanner_noUploadNotice', (
+    tester,
+  ) async {
     Future<void> pump({required bool fakeMode}) {
       return tester.pumpWidget(
         MaterialApp(
@@ -142,13 +144,14 @@ void main() {
       );
     }
 
+    // 촬영 화면의 전송 안내 문구는 2026-11-27 사용자 요청으로 없앴다. 가짜 모드 띠만 보인다.
     await pump(fakeMode: true);
     expect(find.text(FakeTranslationBanner.captureMessage), findsOneWidget);
-    expect(find.text(PhotoCaptureView.notice), findsNothing);
+    expect(find.textContaining('전송'), findsNothing);
 
     await pump(fakeMode: false);
     expect(find.byType(FakeTranslationBanner), findsNothing);
-    expect(find.text(PhotoCaptureView.notice), findsOneWidget);
+    expect(find.textContaining('전송'), findsNothing);
   });
 
   testWidgets('banner_smallScreenLargeText_noOverflow_inDarkAndLight', (

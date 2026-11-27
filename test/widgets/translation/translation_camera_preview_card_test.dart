@@ -5,6 +5,8 @@ import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/core/theme/app_theme.dart';
 import 'package:tripbler/domain/translation/capture_frame.dart';
+import 'package:tripbler/widgets/navigation/bottom_menu_capture_marks.dart';
+import 'package:tripbler/widgets/navigation/navigation_capture_controller.dart';
 import 'package:tripbler/widgets/translation/translation_camera_preview_card.dart';
 
 import '../../helpers/fake_camera_platform.dart';
@@ -20,8 +22,10 @@ void main() {
     double textScale = 1,
     VoidCallback? onRetry,
     CameraController? controller,
+    NavigationCaptureController? navigationCapture,
   }) async {
     final card = TranslationCameraPreviewCard(
+      navigationCapture: navigationCapture,
       cameraController: controller,
       isCameraReady: controller != null,
       isCapturing: isCapturing,
@@ -212,6 +216,45 @@ void main() {
     for (final rect in [gallery, shutter, retry]) {
       expect(rect.top, greaterThanOrEqualTo(frame.bottom));
       expect(rect.bottom, lessThanOrEqualTo(card.bottom));
+    }
+  });
+
+  testWidgets('메뉴로 촬영하면 셔터 없이 갤러리·다시 켜기가 가운데 메뉴 아이콘 자리와 겹치지 않는다', (
+    tester,
+  ) async {
+    final capture = NavigationCaptureController();
+    addTearDown(capture.dispose);
+    for (final (cardWidth, textScale) in [
+      (288.0, 1.0),
+      (320.0, 1.0),
+      (288.0, 2.0),
+    ]) {
+      await pumpCard(
+        tester,
+        width: cardWidth + 32,
+        cardWidth: cardWidth,
+        textScale: textScale,
+        navigationCapture: capture,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.byTooltip('사진 찍기'), findsNothing);
+
+      final card = cardRect(tester);
+      expect(card.width, cardWidth);
+      // 하단 메뉴 바깥 원은 화면 가운데에 오고 카드도 화면 가운데에 있다.
+      final menu = Rect.fromCenter(
+        center: Offset(card.center.dx, card.bottom),
+        width: BottomMenuMetrics.outerSize,
+        height: card.height,
+      );
+      final gallery = tester.getRect(find.byTooltip('갤러리에서 사진 고르기'));
+      final retry = tester.getRect(find.byTooltip('카메라 다시 켜기'));
+      expect(gallery.right, lessThanOrEqualTo(menu.left - 8));
+      expect(retry.left, greaterThanOrEqualTo(menu.right + 8));
+      expect(gallery.left, greaterThanOrEqualTo(card.left));
+      expect(retry.right, lessThanOrEqualTo(card.right));
+      // 줄이지 않은 원래 크기(아이콘 28 + 안쪽 여백 8씩) 그대로다.
+      expect(gallery.size, const Size(44, 44));
     }
   });
 

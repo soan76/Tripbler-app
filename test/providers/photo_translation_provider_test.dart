@@ -38,6 +38,8 @@ void main() {
         ocrServiceProvider.overrideWithValue(ocr),
         photoConsentStoreProvider.overrideWithValue(consent),
         photoTranslationApiServiceProvider.overrideWithValue(api),
+        // 이 파일은 사진을 보내는 사진 AI 번역 경로를 확인한다(기본은 기기 읽기 + 글자 번역).
+        photoAiTranslationProvider.overrideWithValue(true),
         authProvider.overrideWith(() => auth),
         authorizedRequestRunnerProvider.overrideWithValue(<T>(
           Future<T> Function(String) request,

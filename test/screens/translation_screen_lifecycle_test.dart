@@ -13,7 +13,8 @@ import 'package:tripbler/services/ocr_service.dart';
 import 'package:tripbler/services/translation_service.dart';
 import 'package:tripbler/widgets/translation/initial_camera_permission_view.dart';
 import 'package:tripbler/widgets/translation/translation_camera.dart';
-import 'package:tripbler/widgets/translation/translation_camera_preview_card.dart';
+import 'package:tripbler/widgets/translation/photo/photo_capture_view.dart';
+import 'package:tripbler/widgets/translation/translation_camera_view.dart';
 import 'package:tripbler/widgets/translation/translation_result_view.dart';
 
 import '../helpers/fake_auth_notifier.dart';
@@ -38,8 +39,8 @@ const String _cameraStartFailedMessage =
 const String _captureFailedMessage = '사진을 촬영하지 못했습니다.\n다시 시도해 주세요.';
 const String _preparingCameraMessage = '카메라를 준비하고 있습니다.';
 const String _translatingMessage = '번역하고 있습니다.';
-const String _emptyInFrameMessage =
-    '프레임 안에서 번역할 문자를 찾지 못했습니다.\n번역할 글자를 프레임 안에 맞춰 다시 촬영해 주세요.';
+const String _emptyInImageMessage =
+    '이미지에서 번역할 문자를 찾지 못했습니다.\n문자가 선명하게 보이도록 다시 촬영해 주세요.';
 const String _retakeButton = '다시 촬영';
 const String _repickButton = '다시 선택';
 const String _shutterTooltip = '사진 찍기';
@@ -84,6 +85,7 @@ class _PermissionChannelFake {
 class _FakeOcrService extends OcrService {
   int lineCallCount = 0;
   int textCallCount = 0;
+  String textResult = 'hello';
   CaptureFrameLines linesResult = (
     lines: const <String>['hello'],
     frameApplied: true,
@@ -106,7 +108,7 @@ class _FakeOcrService extends OcrService {
     required String sourceLanguageCode,
   }) async {
     textCallCount++;
-    return 'hello';
+    return textResult;
   }
 }
 
@@ -133,6 +135,9 @@ class _Harness {
   final _FakeOcrService ocr;
   final _FakeTranslationService translator;
   int pickCount = 0;
+
+  /// 번역 탭이 선택돼 보이는지(`TranslationScreen.active`).
+  final ValueNotifier<bool> active = ValueNotifier<bool>(true);
 
   /// 갤러리에서 고를 사진 경로. null이면 고르기를 취소한 것과 같다.
   String? pickedPath;
@@ -201,7 +206,14 @@ void main() {
           ocrServiceProvider.overrideWithValue(harness.ocr),
           translationServiceProvider.overrideWithValue(harness.translator),
         ],
-        child: const MaterialApp(home: Scaffold(body: TranslationScreen())),
+        child: MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: harness.active,
+              builder: (_, active, _) => TranslationScreen(active: active),
+            ),
+          ),
+        ),
       ),
     );
     await flush(tester);
@@ -245,7 +257,12 @@ void main() {
   }
 
   void expectCameraReadyView() {
-    expect(find.byType(TranslationCameraPreviewCard), findsOneWidget);
+    expect(find.byType(TranslationCameraView), findsOneWidget);
+    // 촬영 안내 문구는 없앴으므로 촬영 화면이 카메라 준비 상태인지로 확인한다.
+    expect(
+      find.byWidgetPredicate((w) => w is PhotoCaptureView && w.isCameraReady),
+      findsOneWidget,
+    );
     expect(find.bySemanticsLabel('카메라 준비 중'), findsNothing);
     expect(find.text(_cameraStartFailedMessage), findsNothing);
   }
@@ -371,8 +388,8 @@ void main() {
       await tapAndFlush(tester, find.text(_repickButton));
       expect(h.pickCount, 0);
       await notifierOf(tester).processImage('/other.jpg');
-      expect(h.ocr.lineCallCount, 1);
-      expect(h.ocr.textCallCount, 0);
+      expect(h.ocr.textCallCount, 1);
+      expect(h.ocr.lineCallCount, 0);
 
       h.translator.calls.single.complete('안녕');
       await flush(tester);
@@ -409,15 +426,15 @@ void main() {
       tester,
     ) async {
       final h = await pumpScreen(tester);
-      h.ocr.linesResult = (lines: const <String>[], frameApplied: true);
+      h.ocr.textResult = '';
       await tapAndFlush(tester, find.byTooltip(_shutterTooltip));
-      expect(find.text(_emptyInFrameMessage), findsOneWidget);
+      expect(find.text(_emptyInImageMessage), findsOneWidget);
 
       await inactiveThenResumed(tester);
 
       expect(h.permissions.checkCount, 1);
       expect(find.byType(TranslationResultView), findsOneWidget);
-      expect(find.text(_emptyInFrameMessage), findsOneWidget);
+      expect(find.text(_emptyInImageMessage), findsOneWidget);
 
       await unmount(tester);
     });
@@ -537,7 +554,7 @@ void main() {
         expect(newId, isNot(oldId));
         final semantics = tester.ensureSemantics();
         expect(
-          tester.getSemantics(find.bySemanticsLabel('사진 찍기')),
+          tester.getSemantics(find.byTooltip(_shutterTooltip)),
           isSemantics(isButton: true, hasEnabledState: true, isEnabled: true),
         );
 
@@ -545,34 +562,92 @@ void main() {
         camera.takePictureGate = newGate;
         await tapAndFlush(tester, find.byTooltip(_shutterTooltip));
         expect(camera.takePictureCameraIds, [oldId, newId]);
+        // 촬영 중: 같은 셔터가 진행 표시를 보이며 비활성이다.
         expect(
-          tester.getSemantics(find.bySemanticsLabel('사진 찍는 중')),
+          tester.getSemantics(find.byTooltip(_shutterTooltip)),
           isSemantics(isButton: true, hasEnabledState: true, isEnabled: false),
         );
+        expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
         // 이전 촬영이 늦게 끝나도 새 촬영은 계속 진행 중이고, 이전 결과는 쓰지 않는다.
         oldGate.complete();
         await flush(tester);
         expect(
-          tester.getSemantics(find.bySemanticsLabel('사진 찍는 중')),
+          tester.getSemantics(find.byTooltip(_shutterTooltip)),
           isSemantics(isButton: true, hasEnabledState: true, isEnabled: false),
         );
         expect(find.byType(TranslationResultView), findsNothing);
         expect(find.text(_captureFailedMessage), findsNothing);
-        expect(h.ocr.lineCallCount, 0);
+        expect(h.ocr.textCallCount, 0);
         semantics.dispose();
 
         // 새 촬영이 끝나야 인식·번역으로 넘어간다.
         camera.takePictureGate = null;
         newGate.complete();
         await flush(tester);
-        expect(h.ocr.lineCallCount, 1);
+        expect(h.ocr.textCallCount, 1);
         expect(h.translator.calls, hasLength(1));
         expect(find.byType(TranslationResultView), findsOneWidget);
 
         await unmount(tester);
       },
     );
+  });
+
+  group('A2. 촬영 중 탭 이동', () {
+    // 버그 수정: 촬영 중 다른 탭으로 가면 찍힌 사진을 버리면서 "촬영 중" 상태를 그대로 남겨, 돌아와도
+    // 카메라를 다시 준비하지 않았다. 이제 상태를 풀고 돌아오면 카메라를 다시 준비한다.
+    testWidgets('떠난 사이 촬영이 끝나면 버리고, 돌아오면 카메라를 다시 준비한다', (tester) async {
+      final gate = Completer<void>();
+      final camera = FakeCameraPlatform()..takePictureGate = gate;
+      final h = await pumpScreen(tester, camera: camera);
+
+      await tapAndFlush(tester, find.byTooltip(_shutterTooltip));
+      h.active.value = false;
+      await flush(tester);
+      gate.complete();
+      await flush(tester);
+
+      expect(h.ocr.lineCallCount + h.ocr.textCallCount, 0);
+      expect(
+        ProviderScope.containerOf(
+          tester.element(find.byType(TranslationScreen)),
+        ).read(translationProvider).status,
+        isNot(TranslationStatus.capturing),
+      );
+
+      final created = camera.createdCameraIds.length;
+      h.active.value = true;
+      await flush(tester);
+      expect(camera.createdCameraIds.length, greaterThan(created));
+      expectCameraReadyView();
+      expect(find.byType(TranslationResultView), findsNothing);
+
+      await unmount(tester);
+    });
+
+    testWidgets('떠났다 돌아온 뒤 촬영이 끝나도 카메라를 다시 준비한다', (tester) async {
+      final gate = Completer<void>();
+      final camera = FakeCameraPlatform()..takePictureGate = gate;
+      final h = await pumpScreen(tester, camera: camera);
+
+      await tapAndFlush(tester, find.byTooltip(_shutterTooltip));
+      h.active.value = false;
+      await flush(tester);
+      h.active.value = true;
+      await flush(tester);
+      // 촬영 중이라 돌아왔을 때의 카메라 준비는 건너뛴다.
+      final created = camera.createdCameraIds.length;
+
+      gate.complete();
+      await flush(tester);
+
+      expect(h.ocr.lineCallCount + h.ocr.textCallCount, 0);
+      expect(camera.createdCameraIds.length, greaterThan(created));
+      expectCameraReadyView();
+
+      await unmount(tester);
+    });
   });
 
   group('B. 늦게 온 권한 거부 응답', () {
@@ -594,8 +669,12 @@ void main() {
       expect(h.permissions.checkCount, 2);
 
       h.pickedPath = '/fake/gallery/menu.jpg';
-      await tapAndFlush(tester, find.byTooltip('갤러리에서 사진 고르기'));
-      expect(h.ocr.textCallCount, 1);
+      await tapAndFlush(
+        tester,
+        find.byTooltip(PhotoCaptureView.galleryTooltip),
+      );
+      // 카메라 사진 1번 + 갤러리 사진 1번 모두 사진 전체를 읽는다.
+      expect(h.ocr.textCallCount, 2);
       expect(h.translator.calls, hasLength(2));
       return (h, checkGate);
     }
