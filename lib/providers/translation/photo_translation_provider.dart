@@ -1,57 +1,28 @@
 import 'dart:async';
-import 'dart:io' show Directory;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'
-    show Notifier, NotifierProvider, Provider;
+    show Notifier, NotifierProvider;
 
 import '../../core/network/api_exception.dart';
 import '../../domain/translation/photo_paragraphs.dart';
+import '../../domain/translation/photo_text_translation.dart';
 import '../../models/translation/photo_translation_result.dart';
 import '../../repositories/auth/auth_exceptions.dart';
 import '../../services/fake_photo_translation.dart';
-import '../../services/photo_consent_store.dart';
 import '../../services/photo_normalizer.dart';
-import '../../services/photo_translation_api_service.dart';
+import '../../services/translation_service.dart' show TranslationApiException;
 import '../auth/auth_provider.dart';
+import 'photo_translation_dependencies.dart';
 import 'photo_translation_state.dart';
-import 'translation_provider.dart' show ocrServiceProvider;
+import 'translation_provider.dart'
+    show
+        lineTranslationApiServiceProvider,
+        ocrServiceProvider,
+        translationServiceProvider;
 
+export 'photo_translation_dependencies.dart';
 export 'photo_translation_state.dart';
-
-/// 선택한 사진을 기준 사진으로 정리한다.
-final photoNormalizerProvider = Provider<PhotoNormalizer>(
-  (ref) => PhotoNormalizer(),
-);
-
-/// 기준 사진을 임시로 저장할 폴더. 사진은 번역이 끝나거나 화면을 떠나면 지운다.
-final photoOutputDirectoryProvider = Provider<String>(
-  (ref) => Directory.systemTemp.path,
-);
-
-/// 사진 전송 동의 저장소.
-final photoConsentStoreProvider = Provider<PhotoConsentStore>(
-  (ref) => PhotoConsentStore(),
-);
-
-/// 사진 번역 API를 호출하는 서비스(로그인 필요).
-final photoTranslationApiServiceProvider = Provider<PhotoTranslationApiService>(
-  (ref) {
-    final service = PhotoTranslationApiService();
-    ref.onDispose(service.dispose);
-    return service;
-  },
-);
-
-/// 개발용 가짜 번역을 쓸지. 릴리스 빌드에서는 항상 false다([photoFakeTranslationEnabled]).
-final photoFakeTranslationProvider = Provider<bool>(
-  (ref) => photoFakeTranslationEnabled,
-);
-
-/// 가짜 번역이 끝나기까지 기다리는 시간. 전송 중 화면을 잠깐 보여 주려고 둔다.
-final photoFakeTranslationDelayProvider = Provider<Duration>(
-  (ref) => const Duration(milliseconds: 700),
-);
 
 // 사진 번역 화면 안내 문구.
 const String _noTextMessage =
@@ -195,6 +166,12 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
       return;
     }
 
+    if (_sendsTextOnly) {
+      // 사진을 보내지 않으므로 사진 전송 동의를 묻지 않는다.
+      await _upload(requestId);
+      return;
+    }
+
     final bool consented;
     try {
       consented = await ref.read(photoConsentStoreProvider).hasValidConsent();
@@ -301,6 +278,49 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
       state.sourceLanguageCode != 'auto' &&
       state.sourceLanguageCode == state.targetLanguageCode;
 
+  /// 기본 방식의 번역: 로그인했으면 줄별 번역(발음·가격 포함), 아니면 통번역으로 문단마다 번역한다.
+  Future<PhotoTranslationResult> _translateText(
+    List<OcrParagraph> paragraphs,
+    String source,
+    String target,
+  ) {
+    final lineService = ref.read(lineTranslationApiServiceProvider);
+    final textService = ref.read(translationServiceProvider);
+    final runner = ref.read(authorizedRequestRunnerProvider);
+    return translateParagraphText(
+      paragraphs: paragraphs,
+      sourceLanguageCode: source,
+      targetLanguageCode: target,
+      signedIn: ref.read(authProvider).isAuthenticated,
+      translateLines: (lines) => runner(
+        (authorizationHeader) => lineService.translateLines(
+          lines: lines,
+          sourceLanguageCode: source,
+          targetLanguageCode: target,
+          authorizationHeader: authorizationHeader,
+        ),
+      ),
+      translateText: (text) async {
+        try {
+          return await textService.translate(
+            text: text,
+            sourceLanguageCode: source,
+            targetLanguageCode: target,
+          );
+        } on TranslationApiException catch (error) {
+          // 통번역 오류에는 상태 코드가 없어 다시 보내도 같을 오류(입력 오류 등)를 가려낼 수 없다.
+          // 서비스 문구는 그대로 보이고, 연결 실패처럼 다시 시도할 수 있게 statusCode 없이 바꾼다.
+          throw ApiException(message: error.message);
+        }
+      },
+    );
+  }
+
+  /// 기본 방식: 사진은 보내지 않고 기기에서 읽은 글자만 번역한다(가짜·사진 AI 번역이 아닐 때).
+  bool get _sendsTextOnly =>
+      !ref.read(photoFakeTranslationProvider) &&
+      !ref.read(photoAiTranslationProvider);
+
   PhotoTranslationResult _originalResult() {
     return PhotoTranslationResult(
       sourceLanguageCode: state.sourceLanguageCode,
@@ -352,16 +372,21 @@ class PhotoTranslationNotifier extends Notifier<PhotoTranslationState> {
     }
 
     try {
-      final service = ref.read(photoTranslationApiServiceProvider);
-      final result = await ref.read(authorizedRequestRunnerProvider)(
-        (authorizationHeader) => service.translate(
-          photo: photo,
-          paragraphs: paragraphs,
-          sourceLanguageCode: source,
-          targetLanguageCode: target,
-          authorizationHeader: authorizationHeader,
-        ),
-      );
+      final PhotoTranslationResult result;
+      if (_sendsTextOnly) {
+        result = await _translateText(paragraphs, source, target);
+      } else {
+        final service = ref.read(photoTranslationApiServiceProvider);
+        result = await ref.read(authorizedRequestRunnerProvider)(
+          (authorizationHeader) => service.translate(
+            photo: photo,
+            paragraphs: paragraphs,
+            sourceLanguageCode: source,
+            targetLanguageCode: target,
+            authorizationHeader: authorizationHeader,
+          ),
+        );
+      }
 
       if (!_isCurrent(requestId)) {
         return;

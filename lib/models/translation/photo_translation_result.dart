@@ -9,7 +9,10 @@ enum PhotoTranslationSource {
   ocrText,
 
   /// 원문과 번역 언어가 같아 서버에 보내지 않았다. 앱에서만 쓰며 서버 값이 아니다.
-  original;
+  original,
+
+  /// 사진은 보내지 않고 기기에서 읽은 글자만 번역했다(기본 방식). 앱에서만 쓰며 서버 값이 아니다.
+  deviceText;
 
   /// 서버 값(`AI`·`OCR_TEXT`)만 받는다. 그 밖의 값은 [FormatException]이다.
   static PhotoTranslationSource fromServer(Object? value) {
