@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../domain/translation/capture_frame.dart';
+import '../navigation/bottom_menu_capture_marks.dart';
+import '../navigation/navigation_capture_controller.dart';
 
 // 카메라 미리보기, 플래시, 촬영, 갤러리, 새로고침 버튼
 // 번역 화면에서 카메라 프리뷰를 표시하는 카드 위젯
@@ -11,6 +13,7 @@ import '../../domain/translation/capture_frame.dart';
 // 바탕이 늘 사진이다. 그래서 바탕·어둡게 덮는 막은 검정, 글자·프레임·촬영 버튼은
 // 흰색으로 고정해 어떤 장면에서도 대비를 유지한다. 버튼 아이콘색은 테마를 따른다.
 class TranslationCameraPreviewCard extends StatelessWidget {
+  final NavigationCaptureController? navigationCapture;
   final CameraController? cameraController;
   final bool isCameraReady;
   final bool isCapturing;
@@ -22,6 +25,7 @@ class TranslationCameraPreviewCard extends StatelessWidget {
 
   const TranslationCameraPreviewCard({
     super.key,
+    this.navigationCapture,
     required this.cameraController,
     required this.isCameraReady,
     required this.isCapturing,
@@ -93,7 +97,10 @@ class TranslationCameraPreviewCard extends StatelessWidget {
                     left: 0,
                     right: 0,
                     height: frameRect.top,
-                    child: _buildTopBar(context),
+                    child: NavigationCaptureControls(
+                      controller: navigationCapture,
+                      child: _buildTopBar(context),
+                    ),
                   ),
                   // 아래쪽: 갤러리 · 촬영 · 다시 시도. 프레임 아래 공간 안에만 둔다.
                   Positioned(
@@ -101,7 +108,10 @@ class TranslationCameraPreviewCard extends StatelessWidget {
                     right: 0,
                     bottom: 0,
                     height: size.height - frameRect.bottom,
-                    child: _buildBottomBar(context),
+                    child: NavigationCaptureControls(
+                      controller: navigationCapture,
+                      child: _buildBottomBar(context),
+                    ),
                   ),
                 ],
               );
@@ -172,8 +182,8 @@ class TranslationCameraPreviewCard extends StatelessWidget {
         final width = constraints.maxWidth < _bottomBarMinWidth
             ? _bottomBarMinWidth
             : constraints.maxWidth;
-        final height = constraints.maxHeight < _shutterSize
-            ? _shutterSize
+        final height = constraints.maxHeight < _bottomBarMinHeight
+            ? _bottomBarMinHeight
             : constraints.maxHeight;
 
         return FittedBox(
@@ -188,23 +198,34 @@ class TranslationCameraPreviewCard extends StatelessWidget {
     );
   }
 
-  // 아래 버튼 줄이 넘치지 않는 최소 폭: 버튼(48 + 촬영 버튼 + 48)과 사이 여백.
-  static const double _bottomBarMinWidth = 48 + _shutterSize + 48 + 4 * 8;
+  // 셔터는 메뉴로 촬영하지 않을 때(navigationCapture 없음)만 있다.
+  bool get _hasShutter => navigationCapture == null;
+
+  // 셔터가 없을 때 가운데에 비워 두는 폭. 하단 메뉴의 바깥 원과 양옆 여백 8씩.
+  static const double _menuGap = BottomMenuMetrics.outerSize + 2 * 8;
+
+  // 아래 버튼 줄이 넘치지 않는 최소 크기. 폭은 버튼(48 + 촬영 버튼 + 48)과 사이 여백 4칸,
+  // 셔터가 없으면 양 끝 여백 + 버튼 둘 + 가운데 빈 폭. 높이는 셔터가 있으면 셔터, 없으면 버튼(48).
+  double get _bottomBarMinWidth => _hasShutter
+      ? 48 + _shutterSize + 48 + 4 * 8
+      : 2 * _inset + 48 + _menuGap + 48;
+  double get _bottomBarMinHeight => _hasShutter ? _shutterSize : 48;
 
   Widget _buildBottomButtons() {
+    // 셔터가 없으면 메뉴 아이콘이 가운데에 오므로 사진 화면처럼 버튼을 양 끝에 둔다.
+    if (!_hasShutter) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: _inset),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [_galleryButton(), _retryButton()],
+        ),
+      );
+    }
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        IconButton.filled(
-          tooltip: '갤러리에서 사진 고르기',
-          onPressed: isCameraReady
-              ? () {
-                  onPickFromGallery();
-                }
-              : null,
-          iconSize: 28,
-          icon: const Icon(Icons.photo_library_outlined),
-        ),
+        _galleryButton(),
         _ShutterButton(
           size: _shutterSize,
           isCapturing: isCapturing,
@@ -214,17 +235,30 @@ class TranslationCameraPreviewCard extends StatelessWidget {
                 }
               : null,
         ),
-        IconButton.filled(
-          tooltip: '카메라 다시 켜기',
-          onPressed: () {
-            onRetry();
-          },
-          iconSize: 28,
-          icon: const Icon(Icons.refresh),
-        ),
+        _retryButton(),
       ],
     );
   }
+
+  Widget _galleryButton() => IconButton.filled(
+    tooltip: '갤러리에서 사진 고르기',
+    onPressed: isCameraReady
+        ? () {
+            onPickFromGallery();
+          }
+        : null,
+    iconSize: 28,
+    icon: const Icon(Icons.photo_library_outlined),
+  );
+
+  Widget _retryButton() => IconButton.filled(
+    tooltip: '카메라 다시 켜기',
+    onPressed: () {
+      onRetry();
+    },
+    iconSize: 28,
+    icon: const Icon(Icons.refresh),
+  );
 
   // 카메라 프리뷰를 구성하는 위젯을 반환하는 메서드
   Widget _buildCameraPreview() {

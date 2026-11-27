@@ -7,7 +7,8 @@ class TabState {
 
   static const int homeIndex = -1; // 홈 탭의 인덱스.
   static const int firstTabIndex = 0; // 첫 번째 탭의 인덱스.
-  static const int tabCount = 3; // 총 탭의 개수.
+  /// 총 탭의 개수: 환율 0·지도 1·번역 2·일정 3·면세 4(bottom-nav.md 10-5절).
+  static const int tabCount = 5;
 
   /// 선택된 탭의 인덱스. 홈이면 [homeIndex].
   final int selectedIndex;
@@ -35,14 +36,13 @@ class TabNotifier extends Notifier<TabState> {
   @override
   TabState build() => const TabState();
 
-  /// 유효한 인덱스만 받는다. 이미 선택된 탭을 다시 고르면 홈으로 돌아간다.
+  /// 유효한 인덱스만 받는다. 이미 선택된 탭은 그대로 유지한다.
   void selectTab(int index) {
     if (!TabState.isValidTabIndex(index)) {
       return;
     }
 
-    final nextIndex = state.selectedIndex == index ? TabState.homeIndex : index;
-    _select(nextIndex);
+    _select(index);
   }
 
   /// AI/Home 화면으로 직접 이동한다.

@@ -4,10 +4,15 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../providers/translation/translation_provider.dart'
     show TranslationLanguage;
+import '../../navigation/bottom_menu_capture_marks.dart';
+import '../../navigation/navigation_capture_controller.dart';
 import 'fake_translation_banner.dart';
+import 'photo_language_pill.dart';
 
-/// 사진 번역 촬영 화면: 미리보기가 화면 전체를 채우고(cover), 위에 언어 막대, 아래에 셔터·갤러리·플래시와
-/// 고정 안내를 둔다.
+/// 번역 촬영 화면(목업 docs/mockups/translation-camera.html). 사진 번역 화면과 기존 번역 화면이 함께 쓴다.
+///
+/// 미리보기가 화면 전체를 채우고(cover), 위 가운데에 "Tripbler"와 언어 막대,
+/// 하단 메뉴 원 양옆에 사진 고르기·플래시를 둔다. 촬영은 하단 메뉴의 현재 화면 버튼이 맡는다.
 class PhotoCaptureView extends StatelessWidget {
   const PhotoCaptureView({
     super.key,
@@ -24,20 +29,22 @@ class PhotoCaptureView extends StatelessWidget {
     required this.onCapture,
     required this.onPickFromGallery,
     this.fakeMode = false,
+    this.navigationCapture,
+    this.onSwapLanguages,
   });
 
-  /// 하단 고정 안내. 보관·삭제·학습 여부는 정책을 확인한 뒤 따로 정한다.
-  static const String notice = '촬영한 사진은 AI 번역을 위해 전송됩니다';
+  static const String brand = 'Tripbler';
   static const String shutterTooltip = '사진 찍기';
   static const String galleryTooltip = '갤러리에서 사진 고르기';
   static const String flashOnTooltip = '플래시 켜기';
   static const String flashOffTooltip = '플래시 끄기';
 
+  final NavigationCaptureController? navigationCapture;
   final CameraController? cameraController;
   final bool isCameraReady;
   final bool isFlashOn;
 
-  /// 촬영 중(앞 촬영이 기기에서 끝나지 않은 경우 포함)이면 셔터를 막는다.
+  /// 촬영 중(앞 촬영이 기기에서 끝나지 않은 경우 포함)이면 셔터와 사진 고르기를 막는다.
   final bool isCapturing;
   final String sourceLanguageCode;
   final String targetLanguageCode;
@@ -48,18 +55,41 @@ class PhotoCaptureView extends StatelessWidget {
   final VoidCallback onCapture;
   final VoidCallback onPickFromGallery;
 
-  /// 개발용 가짜 번역 모드. 사진을 보내지 않으므로 전송 안내 대신 가짜 모드 안내를 보인다.
+  /// 개발용 가짜 번역 모드. 가짜 결과임을 알리는 띠를 하단 메뉴 위에 보인다.
   final bool fakeMode;
+
+  /// 언어 바꾸기. 없으면 막대가 두 언어 변경 콜백으로 바꾼다.
+  final VoidCallback? onSwapLanguages;
 
   // 촬영 화면은 미리보기 위에 그려 바탕이 늘 사진이라 앱 테마와 상관없이 어두운 테마로 그린다.
   static final ThemeData _theme = AppTheme.darkTheme;
 
-  // 셔터 지름. 엄지로 바로 누를 수 있게 터치 영역 48dp보다 넉넉하게 둔다.
+  // 메뉴 없이 쓸 때(navigationCapture 없음)만 보이는 셔터 지름.
   static const double _shutterIconSize = 64;
+
+  // 양옆 버튼 지름과 화면 가장자리에서 띄운 거리.
+  static const double _sideSize = 48;
+  static const double _sideInset = 28;
+
+  // 사진 위에서도 글자가 읽히게 하는 그림자.
+  static const List<Shadow> _textShadow = [
+    Shadow(color: Color(0xB3000000), blurRadius: 4, offset: Offset(0, 1)),
+  ];
+
+  bool get _hasMenu => navigationCapture != null;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = _theme.colorScheme;
+    final text = _theme.textTheme;
+    // 양옆 버튼은 하단 메뉴 원과 같은 높이(중심)에 둔다.
+    final sideBottom = _hasMenu
+        ? BottomMenuMetrics.iconCenter.dy - _sideSize / 2
+        : 12 + (_shutterIconSize + 16 - _sideSize) / 2;
+    // 가짜 모드 띠는 하단 메뉴 원 위에 둔다(촬영 안내 문구는 2026-11-27 사용자 요청으로 뺐다).
+    final bannerBottom = _hasMenu
+        ? BottomMenuMetrics.contentClearance
+        : 12 + _shutterIconSize + 16 + 12;
     return Theme(
       data: _theme,
       child: Material(
@@ -68,24 +98,83 @@ class PhotoCaptureView extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             if (isCameraReady) _buildPreview(),
+            // "Tripbler"와 언어 막대를 한 줄기로 쌓아, 글자 배율이 커져 제목이 높아지면 막대도 함께 내려가게 한다.
             Positioned(
-              top: 8,
-              left: 8,
-              right: 8,
-              child: _LanguageBar(
-                sourceLanguageCode: sourceLanguageCode,
-                targetLanguageCode: targetLanguageCode,
-                languages: languages,
-                onSourceLanguageChanged: onSourceLanguageChanged,
-                onTargetLanguageChanged: onTargetLanguageChanged,
+              top: 22,
+              left: 16,
+              right: 16,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    brand,
+                    textAlign: TextAlign.center,
+                    style: text.headlineSmall?.copyWith(
+                      color: colorScheme.onSurface,
+                      fontWeight: FontWeight.w800,
+                      shadows: _textShadow,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // 언어 이름이 길거나 화면이 좁아도 막대가 넘치지 않게 줄여 맞춘다.
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: PhotoLanguagePill(
+                      sourceLanguageCode: sourceLanguageCode,
+                      targetLanguageCode: targetLanguageCode,
+                      languages: languages,
+                      onSourceLanguageChanged: onSourceLanguageChanged,
+                      onTargetLanguageChanged: onTargetLanguageChanged,
+                      onSwapLanguages: onSwapLanguages,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (fakeMode)
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: bannerBottom,
+                child: NavigationCaptureControls(
+                  controller: navigationCapture,
+                  child: const FakeTranslationBanner(
+                    message: FakeTranslationBanner.captureMessage,
+                  ),
+                ),
+              ),
+            Positioned(
+              left: _sideInset,
+              bottom: sideBottom,
+              child: NavigationCaptureControls(
+                controller: navigationCapture,
+                child: _SideButton(
+                  tooltip: galleryTooltip,
+                  icon: Icons.photo_library_outlined,
+                  onPressed: isCapturing ? null : onPickFromGallery,
+                ),
               ),
             ),
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: _buildControls(colorScheme),
+              right: _sideInset,
+              bottom: sideBottom,
+              child: NavigationCaptureControls(
+                controller: navigationCapture,
+                child: _SideButton(
+                  tooltip: isFlashOn ? flashOffTooltip : flashOnTooltip,
+                  icon: isFlashOn ? Icons.flash_on : Icons.flash_off,
+                  selected: isFlashOn,
+                  onPressed: isCameraReady ? onToggleFlash : null,
+                ),
+              ),
             ),
+            if (!_hasMenu)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 12,
+                child: Center(child: _buildShutter(colorScheme)),
+              ),
           ],
         ),
       ),
@@ -112,169 +201,63 @@ class PhotoCaptureView extends StatelessWidget {
     );
   }
 
-  // 아래 막대: 갤러리 · 셔터 · 플래시, 그 아래 전송 안내. 사진 위에서도 읽히게 단색으로 어둡게 덮는다.
-  Widget _buildControls(ColorScheme colorScheme) {
+  Widget _buildShutter(ColorScheme colorScheme) {
     final shutterEnabled = isCameraReady && !isCapturing;
-    return ColoredBox(
-      color: colorScheme.scrim.withValues(alpha: 0.6),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                IconButton.filledTonal(
-                  tooltip: galleryTooltip,
-                  onPressed: isCapturing ? null : onPickFromGallery,
-                  icon: const Icon(Icons.photo_library_outlined),
-                ),
-                // 촬영 중에는 셔터 자리에 진행 표시를 두어 눌렸음을 알린다.
-                IconButton(
-                  tooltip: shutterTooltip,
-                  iconSize: _shutterIconSize,
-                  color: colorScheme.onSurface,
-                  disabledColor: colorScheme.onSurface.withValues(alpha: 0.38),
-                  onPressed: shutterEnabled ? onCapture : null,
-                  icon: isCapturing
-                      ? const SizedBox.square(
-                          dimension: _shutterIconSize,
-                          child: Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(strokeWidth: 3),
-                          ),
-                        )
-                      : const Icon(Icons.radio_button_checked),
-                ),
-                IconButton.filledTonal(
-                  tooltip: isFlashOn ? flashOffTooltip : flashOnTooltip,
-                  isSelected: isFlashOn,
-                  onPressed: isCameraReady ? onToggleFlash : null,
-                  icon: const Icon(Icons.flash_off),
-                  selectedIcon: const Icon(Icons.flash_on),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (fakeMode)
-              const FakeTranslationBanner(
-                message: FakeTranslationBanner.captureMessage,
-              )
-            else
-              Text(
-                notice,
-                textAlign: TextAlign.center,
-                style: _theme.textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurface,
-                ),
+    // 촬영 중에는 셔터 자리에 진행 표시를 두어 눌렸음을 알린다.
+    return IconButton(
+      tooltip: shutterTooltip,
+      iconSize: _shutterIconSize,
+      color: colorScheme.onSurface,
+      disabledColor: colorScheme.onSurface.withValues(alpha: 0.38),
+      onPressed: shutterEnabled ? onCapture : null,
+      icon: isCapturing
+          ? const SizedBox.square(
+              dimension: _shutterIconSize,
+              child: Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(strokeWidth: 3),
               ),
-          ],
-        ),
-      ),
+            )
+          : const Icon(Icons.radio_button_checked),
     );
   }
 }
 
-class _LanguageBar extends StatelessWidget {
-  const _LanguageBar({
-    required this.sourceLanguageCode,
-    required this.targetLanguageCode,
-    required this.languages,
-    required this.onSourceLanguageChanged,
-    required this.onTargetLanguageChanged,
+/// 하단 메뉴 원 양옆의 반투명 원 버튼(48). 켜진 플래시는 노란 바탕으로 보인다.
+class _SideButton extends StatelessWidget {
+  const _SideButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+    this.selected = false,
   });
 
-  static const String sourceLabel = '원문 언어';
-  static const String targetLabel = '번역 언어';
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final bool selected;
 
-  final String sourceLanguageCode;
-  final String targetLanguageCode;
-  final List<TranslationLanguage> languages;
-  final ValueChanged<String> onSourceLanguageChanged;
-  final ValueChanged<String> onTargetLanguageChanged;
+  // 켜진 플래시는 카메라 앱에서 흔히 쓰는 노랑(목업 값)으로 보인다. 테마에 맞는 노랑이 없어 여기서 정한다.
+  static const Color _selectedColor = Color(0xFFFFD54F);
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final targets = languages.where((language) => language.code != 'auto');
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: theme.colorScheme.scrim.withValues(alpha: 0.6),
-        borderRadius: BorderRadius.circular(AppTheme.cornerRadius),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: _dropdown(
-                theme,
-                sourceLabel,
-                sourceLanguageCode,
-                languages,
-                onSourceLanguageChanged,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Icon(
-                Icons.arrow_forward,
-                color: theme.colorScheme.onSurfaceVariant,
-                size: 20,
-              ),
-            ),
-            Expanded(
-              child: _dropdown(
-                theme,
-                targetLabel,
-                targetLanguageCode,
-                targets.toList(),
-                onTargetLanguageChanged,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _dropdown(
-    ThemeData theme,
-    String label,
-    String value,
-    List<TranslationLanguage> options,
-    ValueChanged<String> onChanged,
-  ) {
-    final safeValue = options.any((language) => language.code == value)
-        ? value
-        : options.first.code;
-    // 낭독기가 어느 쪽 언어인지 알 수 있게 이름을 붙인다.
-    return Semantics(
-      label: label,
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: safeValue,
-          isExpanded: true,
-          borderRadius: BorderRadius.circular(AppTheme.cornerRadius),
-          dropdownColor: theme.colorScheme.surfaceContainerHigh,
-          iconEnabledColor: theme.colorScheme.onSurface,
-          style: theme.textTheme.titleSmall?.copyWith(
-            color: theme.colorScheme.onSurface,
-          ),
-          items: [
-            for (final language in options)
-              DropdownMenuItem(
-                value: language.code,
-                child: Text(language.label, overflow: TextOverflow.ellipsis),
-              ),
-          ],
-          onChanged: (selected) {
-            if (selected != null) {
-              onChanged(selected);
-            }
-          },
-        ),
+    // 촬영 화면의 어두운 테마: onSurface는 흰색에 가깝고 surface·scrim은 검정에 가깝다.
+    final colorScheme = Theme.of(context).colorScheme;
+    final foreground = colorScheme.onSurface;
+    return IconButton(
+      tooltip: tooltip,
+      isSelected: selected,
+      onPressed: onPressed,
+      icon: Icon(icon),
+      style: IconButton.styleFrom(
+        fixedSize: const Size.square(PhotoCaptureView._sideSize),
+        backgroundColor: selected
+            ? _selectedColor
+            : colorScheme.scrim.withValues(alpha: .45),
+        foregroundColor: selected ? colorScheme.surface : foreground,
+        disabledBackgroundColor: colorScheme.scrim.withValues(alpha: .3),
+        disabledForegroundColor: foreground.withValues(alpha: .38),
       ),
     );
   }
