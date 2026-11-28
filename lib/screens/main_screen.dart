@@ -11,7 +11,7 @@ import '../widgets/navigation/app_top_bar.dart';
 import '../widgets/navigation/navigation_capture_controller.dart';
 
 import 'ai_chat_screen.dart';
-import 'coming_soon_screen.dart';
+import 'duty_free_screen.dart';
 import 'exchange_screen.dart';
 import 'map_screen.dart';
 import 'photo_translation_screen.dart';
@@ -156,7 +156,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                       // 사진 AI 번역, 개발용 가짜)은 photoAiTranslationProvider·photoFakeTranslationProvider가 정한다.
                       PhotoTranslationScreen(navigationCapture: _capture),
                       const ScheduleScreen(),
-                      const ComingSoonScreen(title: '면세'),
+                      const DutyFreeScreen(),
                       const AiChatScreen(),
                     ],
                   ),

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tripbler — 면세 화면 목업</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --p:#0061A4; --pc:#D1E4FF; --onpc:#001D36; --s:#F8F9FF; --on:#191C20; --sv:#43474E; --sc:#ECEEF4; --o:#73777F; --ov:#C3C7CF; --err:#BA1A1A; --errc:#FFDAD6; --warn:#8A4B00; --warnc:#FFDDB8; --ok:#1E6B32; --paper:#F3F0E9; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); font-family:"Noto Sans KR",system-ui,sans-serif; color:#1C1F23; }
+  .wrap { max-width:1100px; margin:0 auto; padding:28px 24px; display:flex; gap:40px; flex-wrap:wrap; justify-content:center; }
+  svg.i { width:24px; height:24px; fill:currentColor; flex:none; }
+  .phone { width:360px; background:#111; border-radius:44px; padding:10px; flex:none; }
+  .phone.small { width:340px; }
+  .screen { position:relative; height:740px; border-radius:34px; overflow:hidden; background:var(--s); color:var(--on); }
+  .phone.small .screen { height:640px; }
+  .btn { font:inherit; border:0; cursor:pointer; background:none; color:inherit; padding:0; }
+  .btn[disabled] { cursor:default; opacity:.45; }
+  .bar { height:56px; display:flex; align-items:center; gap:4px; padding:0 4px; border-bottom:1px solid var(--sc); }
+  .bar .ic { width:48px; height:48px; display:grid; place-items:center; border-radius:4px; flex:none; }
+  .bar .ttl { flex:1; min-width:0; padding-left:12px; font-size:18px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar .ic + .ttl { padding-left:0; }
+  .content { position:absolute; top:56px; left:0; right:0; bottom:80px; overflow-y:auto; }
+  .foot { position:absolute; left:0; right:0; bottom:0; display:flex; gap:8px; padding:16px; border-top:1px solid var(--ov); background:var(--s); }
+  .foot .btn { flex:1; height:48px; border-radius:4px; font-size:15px; font-weight:500; border:1px solid var(--o); color:var(--p); }
+  .foot .btn.fill { background:var(--p); border-color:var(--p); color:#fff; }
+  .foot .btn.fill[disabled] { background:var(--sc); border-color:var(--sc); color:var(--o); opacity:1; }
+
+  /* 기준 줄 */
+  .basis { display:flex; align-items:center; gap:8px; padding:4px 4px 4px 20px; min-height:52px; font-size:13.5px; color:var(--sv); border-bottom:1px solid var(--sc); }
+  .basis b { color:var(--on); }
+  .basis .t { flex:1; min-width:0; }
+  .basis .btn { height:48px; padding:0 12px; color:var(--p); font-weight:500; border-radius:4px; }
+  /* 일반 물품 한도 */
+  .sec { padding:16px 20px; border-bottom:1px solid var(--sc); }
+  .sec h3 { margin:0 0 8px; font-size:13px; color:var(--sv); font-weight:500; display:flex; justify-content:space-between; gap:8px; }
+  .big { font-size:28px; font-weight:700; letter-spacing:-.01em; }
+  .big.over { color:var(--err); }
+  .sub { font-size:13px; color:var(--sv); margin-top:2px; }
+  .meter { height:8px; border-radius:4px; background:var(--sc); margin:12px 0 6px; overflow:hidden; }
+  .meter i { display:block; height:100%; background:var(--p); border-radius:4px; transition:width .3s; }
+  .meter.near i { background:var(--warn); }
+  .meter.over i { background:var(--err); }
+  .mrow { display:flex; justify-content:space-between; font-size:12.5px; color:var(--sv); font-variant-numeric:tabular-nums; }
+  /* 별도 기준 */
+  .lim { display:flex; align-items:center; gap:10px; padding:8px 0; border-top:1px solid var(--sc); }
+  .lim:first-of-type { border-top:0; }
+  .lim .n { width:44px; font-weight:700; font-size:14px; flex:none; }
+  .lim .v { flex:1; min-width:0; font-size:13px; color:var(--sv); font-variant-numeric:tabular-nums; }
+  .lim .v b { color:var(--on); }
+  .st { font-size:12px; padding:2px 8px; border-radius:4px; flex:none; }
+  .st.ok { background:var(--sc); color:var(--sv); }
+  .st.over { background:var(--errc); color:#410002; font-weight:700; }
+  .st.none { color:var(--o); }
+  /* 신고 안내 */
+  .declare { margin:0; padding:14px 20px; background:var(--errc); color:#410002; font-size:14px; line-height:1.6; border-bottom:1px solid var(--sc); }
+  .declare b { display:block; font-size:15px; }
+  .declare .links { display:flex; gap:4px; margin-top:6px; flex-wrap:wrap; }
+  .declare .links .btn { height:40px; padding:0 10px; border-radius:4px; color:var(--err); font-weight:700; text-decoration:underline; }
+  .tax { margin-top:8px; padding-top:8px; border-top:1px solid rgba(65,0,2,.2); font-size:13px; }
+  .tax div { display:flex; justify-content:space-between; gap:8px; font-variant-numeric:tabular-nums; }
+  .notice { padding:12px 20px; font-size:13.5px; line-height:1.5; border-bottom:1px solid var(--sc); }
+  .notice.warn { background:var(--warnc); color:#2C1600; }
+  .notice.err { background:var(--errc); color:#410002; }
+  .notice .btn { color:inherit; font-weight:700; text-decoration:underline; height:32px; }
+  /* 목록 */
+  .lh { display:flex; justify-content:space-between; align-items:center; padding:14px 20px 6px; font-size:13px; color:var(--sv); }
+  .lh .btn { height:40px; padding:0 8px; color:var(--p); font-weight:500; border-radius:4px; }
+  .item { display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:10px 20px; min-height:64px; border-bottom:1px solid var(--sc); }
+  .item:hover { background:var(--sc); }
+  .item .l { flex:1; min-width:0; }
+  .item .nm { font-size:15px; font-weight:700; overflow-wrap:anywhere; }
+  .item .mt { font-size:12.5px; color:var(--sv); margin-top:2px; }
+  .item .r { text-align:right; flex:none; font-variant-numeric:tabular-nums; }
+  .item .amt { font-size:15px; font-weight:700; }
+  .item .usd { font-size:12.5px; color:var(--sv); }
+  .cat { font-size:11.5px; padding:1px 6px; border-radius:4px; background:var(--sc); color:var(--sv); margin-left:6px; vertical-align:2px; font-weight:500; }
+  .cat.chk { background:var(--warnc); color:#2C1600; }
+  .empty { padding:40px 32px; text-align:center; color:var(--sv); font-size:15px; line-height:1.6; }
+
+  /* 입력 카드 */
+  .scrim { position:absolute; inset:0; background:rgba(0,0,0,.32); z-index:10; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; max-height:92%; background:var(--s); border-radius:4px 4px 0 0; z-index:11; display:flex; flex-direction:column; animation:up .2s ease-out; }
+  @keyframes up { from { transform:translateY(30px); opacity:.5; } to { transform:none; opacity:1; } }
+  .sh-h { display:flex; align-items:center; gap:4px; min-height:56px; padding:4px 20px 4px 4px; font-size:18px; font-weight:700; }
+  .sh-h.plain { padding-left:20px; }
+  .sh-h .back { width:48px; height:48px; display:grid; place-items:center; border-radius:4px; }
+  .sh-b { overflow-y:auto; flex:1; }
+  .fr { padding:10px 20px; border-top:1px solid var(--ov); }
+  .fr label, .fr .lb { display:block; font-size:12px; color:var(--sv); margin-bottom:4px; }
+  .fr input, .fr select { width:100%; font:inherit; font-size:16px; color:var(--on); border:0; border-bottom:1px solid var(--o); background:transparent; padding:8px 0; outline:none; border-radius:0; }
+  .fr input:focus, .fr select:focus { border-bottom:2px solid var(--p); }
+  .fr .two { display:flex; gap:12px; }
+  .fr .two > * { flex:1; min-width:0; }
+  .fr .hint { font-size:12.5px; color:var(--sv); margin-top:4px; }
+  .fr .err { font-size:12.5px; color:var(--err); margin-top:4px; }
+  .seg { display:flex; border:1px solid var(--o); border-radius:4px; overflow:hidden; }
+  .seg .btn { flex:1; height:44px; font-size:14px; }
+  .seg .btn + .btn { border-left:1px solid var(--o); }
+  .seg .btn.on { background:var(--pc); color:var(--onpc); font-weight:700; }
+  .sh-f { display:flex; gap:8px; padding:12px 16px 16px; border-top:1px solid var(--ov); }
+  .sh-f .btn { flex:1; height:48px; border-radius:4px; font-size:15px; font-weight:500; border:1px solid var(--o); color:var(--p); }
+  .sh-f .btn.fill { background:var(--p); border-color:var(--p); color:#fff; }
+  .sh-f .btn.del { border-color:var(--err); color:var(--err); }
+
+  /* 영수증 촬영·검토 */
+  .cam { position:absolute; inset:0; background:#23201D; color:#fff; }
+  .cam svg.scene { position:absolute; inset:0; width:100%; height:100%; }
+  .cam .top { position:absolute; left:0; right:0; top:0; height:56px; display:flex; align-items:center; padding:0 4px; }
+  .cam .top .btn { width:48px; height:48px; display:grid; place-items:center; }
+  .cam .hint { position:absolute; left:16px; right:16px; bottom:112px; text-align:center; font-size:13px; text-shadow:0 1px 4px rgba(0,0,0,.7); }
+  .cam .shot { position:absolute; left:50%; bottom:28px; width:72px; height:72px; margin-left:-36px; border-radius:50%; border:4px solid #fff; background:rgba(255,255,255,.25); }
+  .rv-head { padding:12px 20px; font-size:13.5px; color:var(--sv); line-height:1.6; border-bottom:1px solid var(--sc); }
+  .rv-head b { color:var(--on); font-size:15px; }
+  .rv-mode { padding:12px 16px; border-bottom:1px solid var(--sc); }
+  .rv-mode .hint { font-size:12.5px; color:var(--sv); margin-top:6px; line-height:1.5; }
+  .rl { display:flex; align-items:center; gap:10px; padding:8px 16px 8px 12px; min-height:60px; border-bottom:1px solid var(--sc); }
+  .rl .ck { width:48px; height:48px; display:grid; place-items:center; flex:none; }
+  .box { width:22px; height:22px; border-radius:4px; border:2px solid var(--o); display:grid; place-items:center; color:#fff; }
+  .box svg.i { width:18px; height:18px; visibility:hidden; }
+  .rl.on .box { background:var(--p); border-color:var(--p); }
+  .rl.on .box svg.i { visibility:visible; }
+  .rl .l { flex:1; min-width:0; }
+  .rl .nm { font-size:14.5px; font-weight:500; overflow-wrap:anywhere; }
+  .rl .mt { font-size:12px; color:var(--sv); }
+  .rl input { width:84px; font:inherit; font-size:15px; text-align:right; border:0; border-bottom:1px solid var(--o); background:transparent; padding:6px 0; outline:none; font-variant-numeric:tabular-nums; }
+  .rl.unsure input { border-bottom:2px solid var(--warn); }
+  .rl.off .l, .rl.off input { opacity:.5; }
+  .dup { padding:12px 20px; background:var(--warnc); color:#2C1600; font-size:13.5px; line-height:1.5; }
+
+  .dlg-scrim { position:absolute; inset:0; background:rgba(0,0,0,.4); z-index:20; }
+  .dlg { position:absolute; left:24px; right:24px; top:30%; background:var(--s); border-radius:4px; padding:20px; z-index:21; }
+  .dlg h4 { margin:0 0 10px; font-size:17px; overflow-wrap:anywhere; }
+  .dlg ul { margin:0 0 16px; padding-left:18px; font-size:14px; color:var(--sv); line-height:1.6; }
+  .dlg .acts { display:flex; justify-content:flex-end; gap:8px; }
+  .dlg .acts .btn { height:44px; padding:0 14px; border-radius:4px; color:var(--p); font-weight:500; }
+  .dlg .acts .btn.danger { color:var(--err); }
+  .toast { position:absolute; left:50%; bottom:96px; transform:translateX(-50%); background:#2E3135; color:#fff; font-size:13px; padding:10px 14px; border-radius:4px; z-index:30; white-space:nowrap; opacity:0; transition:opacity .2s; pointer-events:none; }
+
+  .panel { width:380px; font-size:14px; line-height:1.6; }
+  .panel h1 { font-size:24px; margin:0 0 6px; }
+  .panel p { color:#4A4F57; margin:0 0 12px; }
+  .scen { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0; }
+  .scen button, .panel select { font:inherit; font-size:13px; padding:6px 10px; border:1px solid #9aa; border-radius:4px; background:#fff; cursor:pointer; }
+  .scen button.on { border-color:var(--p); background:var(--pc); }
+  .panel label { font-size:13px; display:block; margin:6px 0; }
+  .panel ul { padding-left:18px; color:#4A4F57; }
+  .warnbox { background:#FFF4E5; border:1px solid #E7C08A; border-radius:4px; padding:8px 10px; font-size:13px; color:#5A3A00; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="phone" id="phone"><div class="screen" id="screen"></div></div>
+  <div class="panel">
+    <h1>면세 화면 목업</h1>
+    <p class="warnbox">면세 기준·환율·세율은 모두 <b>예시</b>입니다. 실제 기준은 나라마다 다르고 바뀌므로, 구현할 때 관세청 공식 기준을 확인해야 합니다.</p>
+    <p>샘플 상태를 고르면 바로 바뀝니다. 입력·삭제·영수증 추가는 이 페이지 안에서만 동작합니다(실제 저장 없음). 설계는 <code>duty-free.md</code>에 있습니다.</p>
+    <div class="scen" id="scen"></div>
+    <label>촬영할 영수증 <select id="rcpt"><option value="dq">돈키호테(주류·불확실한 줄 포함)</option><option value="dfs">출국 면세점 영수증</option></select></label>
+    <label><input type="checkbox" id="small"> 작은 화면(폭 320 · 높이 640)</label>
+    <ul>
+      <li>일반 물품 한도와 별도 기준(주류·담배·향수)을 나눠 계산합니다.</li>
+      <li>같은 영수증을 다시 찍으면 중복 경고가 뜹니다(가게·날짜·합계가 같을 때).</li>
+      <li>영수증은 "항목별로" 또는 "합계 한 줄로" 중 하나만 넣어 이중 합산을 막습니다.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const P = {
+  back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
+  close: 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
+  check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+};
+const ic = (k) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}"/></svg>`;
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const W = ['일', '월', '화', '수', '목', '금', '토'];
+const dayAdd = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
+const md = (d) => `${d.getMonth() + 1}/${d.getDate()}`;
+const usd = (n) => '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+// ---------- 예시 기준(실제 기준 아님) ----------
+const RULES = { country: '한국', basisDate: '2026-11-01', general: 800, liquor: { bottles: 2, liters: 2, usd: 400 }, tobacco: { packs: 10 }, perfume: { ml: 100 }, taxRate: 0.2, selfReportCut: 0.3, krwPerUsd: 1390 };
+const RATES = { JPY: 0.0067, USD: 1, EUR: 1.08, KRW: 1 / 1390 };
+const SYM = { JPY: '¥', USD: '$', EUR: '€', KRW: '₩' };
+const CATS = { general: '일반', liquor: '주류', tobacco: '담배', perfume: '향수' };
+const WHERE = { local: '현지 상점', dfs: '출국 면세점', inflight: '기내 면세' };
+const money = (x) => `${SYM[x.cur]}${Math.round(x.amount).toLocaleString('en-US')} ${x.cur}`;
+const toUsd = (x) => x.amount * RATES[x.cur];
+
+// ---------- 샘플 상태 ----------
+let seq = 0;
+const I = (cat, name, amount, cur, where, d, extra) => ({ id: 'i' + ++seq, cat, name, qty: 1, vol: 0, amount, cur, where, date: dayAdd(d), ...extra });
+const base = () => [I('general', '가죽 가방', 38000, 'JPY', 'local', -2), I('general', '선크림 세트', 120, 'USD', 'dfs', -5)];
+const SCEN = {
+  none: { name: '구매 없음', items: () => [] },
+  within: { name: '한도 이내', items: base },
+  near: { name: '한도 근접', items: () => [...base(), I('general', '손목시계', 55000, 'JPY', 'local', -1)] },
+  over: { name: '한도 초과', items: () => [...base(), I('general', '손목시계', 71000, 'JPY', 'local', -1)] },
+  sep: { name: '별도 제한 초과', items: () => [...base(), I('liquor', '위스키 700mL', 6800, 'JPY', 'local', -1, { qty: 3, vol: 0.7 }), I('perfume', '향수 50mL', 89, 'EUR', 'inflight', 0, { vol: 50 })] },
+  stale: { name: '환율 오래됨', items: base, stale: true },
+  nobasis: { name: '계산 불가', items: base, nobasis: true },
+};
+let st;
+function load(k) {
+  st = { k, items: SCEN[k].items(), stale: !!SCEN[k].stale, nobasis: !!SCEN[k].nobasis, adult: true, sheet: null, dialog: null, view: 'main', receipt: null, receipts: new Set(), showTax: false };
+  $('scen').innerHTML = Object.entries(SCEN).map(([key, v]) => `<button class="${key === k ? 'on' : ''}" data-k="${key}">${v.name}</button>`).join('');
+  render();
+}
+
+// ---------- 계산 ----------
+function calc() {
+  const g = st.items.filter((x) => x.cat === 'general').reduce((s, x) => s + toUsd(x), 0);
+  const lq = st.items.filter((x) => x.cat === 'liquor');
+  const liquor = { bottles: lq.reduce((s, x) => s + x.qty, 0), liters: lq.reduce((s, x) => s + x.qty * x.vol, 0), usd: lq.reduce((s, x) => s + toUsd(x), 0) };
+  const tobacco = { packs: st.items.filter((x) => x.cat === 'tobacco').reduce((s, x) => s + x.qty, 0) };
+  const perfume = { ml: st.items.filter((x) => x.cat === 'perfume').reduce((s, x) => s + x.qty * x.vol, 0) };
+  const L = RULES;
+  const liquorOver = liquor.bottles > 0 && (!st.adult || liquor.bottles > L.liquor.bottles || liquor.liters > L.liquor.liters || liquor.usd > L.liquor.usd);
+  const tobaccoOver = tobacco.packs > 0 && (!st.adult || tobacco.packs > L.tobacco.packs);
+  const perfumeOver = perfume.ml > L.perfume.ml;
+  return { g, liquor, tobacco, perfume, liquorOver, tobaccoOver, perfumeOver, over: g > L.general, anyOver: g > L.general || liquorOver || tobaccoOver || perfumeOver };
+}
+
+// ---------- 화면 ----------
+function render() {
+  const v = st.view === 'main' ? mainView() : st.view === 'camera' ? cameraView() : reviewView();
+  $('screen').innerHTML = v + (st.sheet ? sheetHtml() : '') + (st.dialog ? `<div class="dlg-scrim"></div><div class="dlg" role="alertdialog"><h4>${st.dialog.title}</h4><ul>${st.dialog.lines.map((l) => `<li>${l}</li>`).join('')}</ul><div class="acts"><button class="btn" data-act="dlgNo">취소</button><button class="btn danger" data-act="dlgYes">${st.dialog.ok}</button></div></div>` : '') + '<div class="toast" id="toast"></div>';
+}
+
+function mainView() {
+  const c = calc(), L = RULES;
+  let h = '<div class="bar"><span class="ttl">면세</span></div><div class="content">';
+  h += `<div class="basis"><span class="t"><b>${L.country} 입국 기준</b> · ${st.adult ? '만 19세 이상' : '만 19세 미만'}</span><button class="btn" data-act="adult">변경</button></div>`;
+  if (st.nobasis) {
+    h += '<div class="notice err">면세 기준과 환율을 불러오지 못했어요. 저장된 기준도 없어 한도를 계산할 수 없어요. <button class="btn" data-act="retry">다시 시도</button></div>';
+  } else {
+    if (st.stale) h += '<div class="notice warn">저장된 환율로 계산했어요 · 11월 27일 오전 9:00 기준. 인터넷에 연결되면 다시 계산해요.</div>';
+    const left = L.general - c.g, pct = Math.min(100, (c.g / L.general) * 100), cls = c.over ? 'over' : pct >= 90 ? 'near' : '';
+    h += `<div class="sec"><h3><span>일반 물품 한도</span><span>예시 기준</span></h3>
+      <div class="big${c.over ? ' over' : ''}">${c.over ? `한도 초과 ${usd(-left)}` : `남은 한도 ${usd(left)}`}</div>
+      <div class="sub">${c.over ? '초과한 금액에 세금이 붙을 수 있어요' : `현지 통화로 약 ¥${Math.round(left / RATES.JPY).toLocaleString('en-US')}`}${!c.over && pct >= 90 ? ' · 한도의 90%를 넘었어요' : ''}</div>
+      <div class="meter ${cls}" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100" aria-label="일반 물품 한도 사용률"><i style="width:${pct}%"></i></div>
+      <div class="mrow"><span>지금까지 ${usd(c.g)}</span><span>한도 ${usd(L.general)}</span></div></div>`;
+    const lim = (n, val, over, has) => `<div class="lim"><span class="n">${n}</span><span class="v">${val}</span><span class="st ${!has ? 'none' : over ? 'over' : 'ok'}">${!has ? '없음' : over ? '초과' : '이내'}</span></div>`;
+    h += `<div class="sec"><h3><span>별도 기준 (일반 한도와 따로 계산)</span></h3>
+      ${lim('주류', st.adult ? `<b>${c.liquor.bottles}병</b> / ${L.liquor.bottles}병 · ${c.liquor.liters.toFixed(1)}L / ${L.liquor.liters}L · ${usd(c.liquor.usd)} / ${usd(L.liquor.usd)}` : '만 19세 미만은 면세 안 됨', c.liquorOver, c.liquor.bottles > 0)}
+      ${lim('담배', st.adult ? `<b>${c.tobacco.packs}갑</b> / ${L.tobacco.packs}갑` : '만 19세 미만은 면세 안 됨', c.tobaccoOver, c.tobacco.packs > 0)}
+      ${lim('향수', `<b>${c.perfume.ml}mL</b> / ${L.perfume.ml}mL`, c.perfumeOver, c.perfume.ml > 0)}</div>`;
+    h += `<div class="basis" style="font-size:12.5px"><span class="t">기준일 ${L.basisDate} · 환율은 참고용(세관 환율과 다를 수 있음) · 확인 ${st.stale ? '11/27 09:00' : '방금'}</span><button class="btn" data-act="link">관세청</button></div>`;
+    if (c.anyOver) {
+      const overUsd = Math.max(0, c.g - L.general), krw = overUsd * L.krwPerUsd, tax = krw * L.taxRate, cut = tax * L.selfReportCut;
+      h += `<div class="declare" role="status"><b>입국할 때 세관 신고가 필요할 수 있어요</b>${[c.over ? '일반 물품 한도 초과' : '', c.liquorOver ? '주류 기준 초과' : '', c.tobaccoOver ? '담배 기준 초과' : '', c.perfumeOver ? '향수 기준 초과' : ''].filter(Boolean).join(' · ')}. 정확한 판단은 세관에서 해요.
+        <div class="links"><button class="btn" data-act="tax">${st.showTax ? '예상 세금 접기' : '예상 세금 보기(예시)'}</button><button class="btn" data-act="link">관세청 여행자 안내</button></div>
+        ${st.showTax ? `<div class="tax">${c.over ? `<div><span>초과 금액</span><span>${usd(overUsd)} ≈ ₩${Math.round(krw).toLocaleString('ko-KR')}</span></div><div><span>예시 세율 ${L.taxRate * 100}%</span><span>₩${Math.round(tax).toLocaleString('ko-KR')}</span></div><div><span>자진신고 감면 ${L.selfReportCut * 100}%(예시, 한도 있음)</span><span>−₩${Math.round(cut).toLocaleString('ko-KR')}</span></div><div><b>예상 세금</b><b>₩${Math.round(tax - cut).toLocaleString('ko-KR')}</b></div>` : ''}${c.liquorOver || c.tobaccoOver || c.perfumeOver ? '<div><span>별도 기준 초과분은 분류별 세율이 달라 여기서 계산하지 않아요</span></div>' : ''}<div><span>세율·환율은 예시예요. 실제 세금은 품목과 세관 환율로 정해져요.</span></div></div>` : ''}</div>`;
+    }
+  }
+  h += `<div class="lh"><span>산 물건 ${st.items.length}개</span>${st.items.length ? '<button class="btn" data-act="newTrip">새 여행 시작</button>' : ''}</div>`;
+  if (!st.items.length) h += '<div class="empty">산 물건을 추가해 보세요<br><small>출국 면세점·기내에서 산 것도 넣어 주세요.</small></div>';
+  for (const x of [...st.items].sort((a, b) => b.date - a.date)) {
+    const q = x.cat === 'liquor' ? ` · ${x.qty}병 × ${x.vol}L` : x.cat === 'perfume' ? ` · ${x.qty}개 × ${x.vol}mL` : x.cat === 'tobacco' ? ` · ${x.qty}갑` : x.qty > 1 ? ` · ${x.qty}개` : '';
+    h += `<button class="btn item" data-act="edit" data-id="${x.id}"><span class="l"><span class="nm">${esc(x.name)}<span class="cat">${CATS[x.cat]}</span>${x.check ? '<span class="cat chk">확인 필요</span>' : ''}</span><span class="mt">${WHERE[x.where]} · ${md(x.date)} (${W[x.date.getDay()]})${q}</span></span><span class="r"><span class="amt">${money(x)}</span><br><span class="usd">${st.nobasis ? '환산 불가' : '≈ ' + usd(toUsd(x))}</span></span></button>`;
+  }
+  return h + '</div><div class="foot"><button class="btn" data-act="add">직접 입력</button><button class="btn fill" data-act="camera">영수증 찍기</button></div>';
+}
+
+// ---------- 입력·수정 카드 ----------
+function sheetHtml() {
+  const s = st.sheet;
+  if (s.type === 'adult') return `<div class="scrim" data-act="close"></div><div class="sheet"><div class="sh-h plain">면세 기준 정보</div><div class="sh-b"><div class="fr"><span class="lb">입국 국가</span>한국 (지금은 한국 입국 기준만)</div><div class="fr"><span class="lb">나이</span><div class="seg"><button class="btn${st.adult ? ' on' : ''}" data-act="setAdult" data-v="1">만 19세 이상</button><button class="btn${st.adult ? '' : ' on'}" data-act="setAdult" data-v="0">만 19세 미만</button></div><div class="hint">주류·담배 기준에만 써요. 생년월일은 받지 않아요.</div></div></div><div class="sh-f"><button class="btn fill" data-act="close">닫기</button></div></div>`;
+  const d = s.d, ed = !!s.id;
+  const qtyLabel = { general: '수량', liquor: '병 수', tobacco: '갑 수', perfume: '개수' }[d.cat];
+  return `<div class="scrim" data-act="${ed ? 'close' : 'close'}"></div><div class="sheet" role="dialog" aria-label="${ed ? '물건 수정' : '물건 추가'}">
+    ${ed ? `<div class="sh-h"><button class="btn back" data-act="close" aria-label="뒤로 가기">${ic('back')}</button>물건 수정</div>` : '<div class="sh-h plain">물건 추가</div>'}
+    <div class="sh-b">
+      <div class="fr"><span class="lb">분류</span><div class="seg">${Object.entries(CATS).map(([k, v]) => `<button class="btn${d.cat === k ? ' on' : ''}" data-act="cat" data-c="${k}">${v}</button>`).join('')}</div>${d.cat !== 'general' ? '<div class="hint">일반 물품 한도와 따로, 수량·용량 기준으로 계산해요.</div>' : ''}</div>
+      <div class="fr"><label for="fName">상품명</label><input id="fName" maxlength="40" value="${esc(d.name)}" placeholder="예: 가죽 가방">${s.err ? '<div class="err">상품명을 입력해 주세요</div>' : ''}</div>
+      <div class="fr"><div class="two"><div><label for="fQty">${qtyLabel}</label><input id="fQty" type="number" min="1" value="${d.qty}"></div>${d.cat === 'liquor' || d.cat === 'perfume' ? `<div><label for="fVol">${d.cat === 'liquor' ? '병당 용량(L)' : '개당 용량(mL)'}</label><input id="fVol" type="number" min="0" step="${d.cat === 'liquor' ? '0.1' : '1'}" value="${d.vol}"></div>` : ''}</div></div>
+      <div class="fr"><div class="two"><div><label for="fAmt">금액(합계)</label><input id="fAmt" type="number" min="0" value="${d.amount}"></div><div><label for="fCur">통화</label><select id="fCur">${Object.keys(RATES).map((k) => `<option${d.cur === k ? ' selected' : ''}>${k}</option>`).join('')}</select></div></div><div class="hint" id="fUsd">${st.nobasis ? '환율이 없어 달러로 바꿀 수 없어요' : '≈ ' + usd(d.amount * RATES[d.cur]) + ' (예시 환율)'}</div></div>
+      <div class="fr"><span class="lb">구매처</span><div class="seg">${Object.entries(WHERE).map(([k, v]) => `<button class="btn${d.where === k ? ' on' : ''}" data-act="where" data-w="${k}">${v}</button>`).join('')}</div><div class="hint">출국 면세점·기내에서 산 것도 한도에 들어가요(예시 기준).</div></div>
+    </div>
+    <div class="sh-f">${ed ? '<button class="btn del" data-act="del">삭제</button><button class="btn fill" data-act="save">수정</button>' : '<button class="btn" data-act="close">취소</button><button class="btn fill" data-act="save">저장</button>'}</div></div>`;
+}
+function readSheet() {
+  const d = st.sheet.d;
+  d.name = $('fName').value; d.qty = Math.max(1, +$('fQty').value || 1); d.amount = Math.max(0, +$('fAmt').value || 0); d.cur = $('fCur').value;
+  if ($('fVol')) d.vol = Math.max(0, +$('fVol').value || 0);
+}
+function bindSheet() {
+  if (!st.sheet || !st.sheet.d) return;
+  ['fName', 'fQty', 'fAmt', 'fCur', 'fVol'].forEach((id) => { const el = $(id); if (el) el.oninput = el.onchange = () => { readSheet(); const u = $('fUsd'); if (u && !st.nobasis) u.textContent = '≈ ' + usd(st.sheet.d.amount * RATES[st.sheet.d.cur]) + ' (예시 환율)'; }; });
+}
+
+// ---------- 영수증 ----------
+const RECEIPTS = {
+  dq: { key: 'dq|' + md(dayAdd(0)) + '|13780', store: '돈키호테 아사쿠사점', date: dayAdd(0), cur: 'JPY', total: 13780,
+    lines: [{ name: '과자 선물 세트', cat: 'general', amount: 1280 }, { name: '스킨케어 세트', cat: 'general', amount: 4500 }, { name: '위스키 700mL', cat: 'liquor', amount: 6800, vol: 0.7 }, { name: '보조배터리 (글자 흐림)', cat: 'general', amount: 1200, unsure: true }] },
+  dfs: { key: 'dfs|' + md(dayAdd(-5)) + '|188', store: '인천공항 출국 면세점', date: dayAdd(-5), cur: 'USD', total: 188, where: 'dfs',
+    lines: [{ name: '립스틱', cat: 'general', amount: 38 }, { name: '향수 50mL', cat: 'perfume', amount: 150, vol: 50 }] },
+};
+function cameraView() {
+  return `<div class="cam"><svg class="scene" viewBox="0 0 340 740" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect width="340" height="740" fill="#2A2622"/><rect x="70" y="150" width="200" height="360" fill="#F4F1EA" transform="rotate(-3 170 330)"/><g fill="#9A958C" transform="rotate(-3 170 330)">${Array.from({ length: 12 }, (_, i) => `<rect x="88" y="${180 + i * 26}" width="${90 + (i * 37) % 70}" height="8"/><rect x="${222 - (i % 3) * 6}" y="${180 + i * 26}" width="${30 + (i % 3) * 6}" height="8"/>`).join('')}</g></svg>
+    <div class="top"><button class="btn" data-act="toMain" aria-label="닫기">${ic('close')}</button></div>
+    <div class="hint">영수증 전체가 보이게 찍어 주세요 · 사진은 서버로 보내지 않아요</div>
+    <button class="btn shot" data-act="shoot" aria-label="촬영"></button></div>`;
+}
+function reviewView() {
+  const r = st.receipt, R = RECEIPTS[r.src], dup = st.receipts.has(R.key);
+  let h = `<div class="bar"><button class="btn ic" data-act="camera" aria-label="뒤로 가기">${ic('back')}</button><span class="ttl">영수증 확인</span></div><div class="content">`;
+  if (dup) h += `<div class="dup"><b>이미 추가한 영수증일 수 있어요</b><br>${esc(R.store)} · ${md(R.date)} · 합계 ${SYM[R.cur]}${R.total.toLocaleString('en-US')}이(가) 목록에 있어요. 같은 영수증이면 추가하지 마세요.</div>`;
+  h += `<div class="rv-head"><b>${esc(R.store)}</b><br>${md(R.date)} · 합계 ${SYM[R.cur]}${R.total.toLocaleString('en-US')} ${R.cur} · 읽은 줄 ${R.lines.length}개</div>`;
+  h += `<div class="rv-mode"><div class="seg"><button class="btn${r.mode === 'items' ? ' on' : ''}" data-act="mode" data-m="items">항목별로 넣기</button><button class="btn${r.mode === 'total' ? ' on' : ''}" data-act="mode" data-m="total">합계 한 줄로 넣기</button></div><div class="hint">${r.mode === 'items' ? '고른 항목만 따로 넣어요. 합계는 넣지 않아요.' : '합계 하나만 일반 물품으로 넣어요. 주류·향수가 섞여 있으면 별도 기준 계산이 빠져요.'}</div></div>`;
+  if (r.mode === 'items') {
+    r.lines.forEach((l, i) => {
+      h += `<div class="rl${l.on ? ' on' : ' off'}${l.unsure ? ' unsure' : ''}"><button class="btn ck" data-act="pickLine" data-i="${i}" role="checkbox" aria-checked="${l.on}" aria-label="${esc(l.name)} 고르기"><span class="box">${ic('check')}</span></button><span class="l"><span class="nm">${esc(l.name)}<span class="cat">${CATS[l.cat]}</span>${l.unsure ? '<span class="cat chk">확인 필요</span>' : ''}</span><span class="mt">${l.unsure ? '금액을 확인하고 고르세요' : R.cur}</span></span><input type="number" data-i="${i}" value="${l.amount}" aria-label="${esc(l.name)} 금액"></div>`;
+    });
+  } else {
+    h += `<div class="rl on"><span class="ck"><span class="box">${ic('check')}</span></span><span class="l"><span class="nm">${esc(R.store)} 합계<span class="cat">일반</span></span><span class="mt">${R.cur}</span></span><input type="number" value="${R.total}" disabled></div>`;
+  }
+  const n = r.mode === 'items' ? r.lines.filter((l) => l.on).length : 1;
+  return h + `</div><div class="foot"><button class="btn" data-act="camera">다시 찍기</button><button class="btn fill" data-act="addReceipt" ${n ? '' : 'disabled'}>${dup ? '그래도 추가' : '목록에 추가'} (${n})</button></div>`;
+}
+
+function toast(m) { const t = $('toast'); t.textContent = m; t.style.opacity = 1; clearTimeout(window._tt); window._tt = setTimeout(() => ($('toast').style.opacity = 0), 1800); }
+const blank = () => ({ cat: 'general', name: '', qty: 1, vol: 0, amount: 0, cur: 'JPY', where: 'local' });
+
+$('screen').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+  const a = el.dataset.act;
+  if (a === 'adult') st.sheet = { type: 'adult' };
+  if (a === 'setAdult') st.adult = el.dataset.v === '1';
+  if (a === 'close') st.sheet = null;
+  if (a === 'retry') { toast('아직 연결되지 않았어요(목업)'); return; }
+  if (a === 'link') { toast('관세청 여행자 휴대품 안내가 열려요(목업)'); return; }
+  if (a === 'tax') st.showTax = !st.showTax;
+  if (a === 'newTrip') st.dialog = { title: '새 여행을 시작할까요?', lines: [`산 물건 ${st.items.length}개가 모두 지워지고 한도 계산이 처음부터 시작돼요.`, '되돌릴 수 없어요.'], ok: '모두 지우기', fn: () => { st.items = []; st.receipts.clear(); toast('목록을 비웠어요'); } };
+  if (a === 'dlgNo') st.dialog = null;
+  if (a === 'dlgYes') { const fn = st.dialog.fn; st.dialog = null; fn(); }
+  if (a === 'add') st.sheet = { type: 'item', d: blank() };
+  if (a === 'edit') { const x = st.items.find((y) => y.id === el.dataset.id); st.sheet = { type: 'item', id: x.id, d: { ...x } }; }
+  if (a === 'cat' || a === 'where') { readSheet(); if (a === 'cat') { st.sheet.d.cat = el.dataset.c; if (el.dataset.c === 'liquor' && !st.sheet.d.vol) st.sheet.d.vol = 0.7; if (el.dataset.c === 'perfume' && !st.sheet.d.vol) st.sheet.d.vol = 50; } else st.sheet.d.where = el.dataset.w; }
+  if (a === 'save') {
+    readSheet(); const d = st.sheet.d;
+    if (!d.name.trim()) { st.sheet.err = true; render(); bindSheet(); $('fName').focus(); return; }
+    d.name = d.name.trim(); d.check = false;
+    if (st.sheet.id) Object.assign(st.items.find((y) => y.id === st.sheet.id), d); else st.items.push({ ...d, id: 'i' + ++seq, date: new Date() });
+    toast(st.sheet.id ? '수정했어요' : '추가했어요'); st.sheet = null;
+  }
+  if (a === 'del') { const x = st.items.find((y) => y.id === st.sheet.id); st.dialog = { title: `"${esc(x.name)}"을(를) 삭제할까요?`, lines: [`${money(x)}${st.nobasis ? '' : ` (≈ ${usd(toUsd(x))})`}이(가) ${x.cat === 'general' ? '일반 물품 한도' : CATS[x.cat] + ' 기준'} 계산에서 빠져요.`, '되돌릴 수 없어요.'], ok: '삭제', fn: () => { st.items = st.items.filter((y) => y !== x); st.sheet = null; toast('삭제했어요'); } }; }
+  if (a === 'camera') { st.view = 'camera'; st.receipt = null; }
+  if (a === 'toMain') st.view = 'main';
+  if (a === 'shoot') { const src = $('rcpt').value; st.receipt = { src, mode: 'items', lines: RECEIPTS[src].lines.map((l) => ({ ...l, on: !l.unsure })) }; st.view = 'review'; }
+  if (a === 'mode') st.receipt.mode = el.dataset.m;
+  if (a === 'pickLine') { const l = st.receipt.lines[+el.dataset.i]; l.on = !l.on; }
+  if (a === 'addReceipt') {
+    const R = RECEIPTS[st.receipt.src], where = R.where || 'local';
+    const add = st.receipt.mode === 'total'
+      ? [{ cat: 'general', name: R.store + ' 합계', qty: 1, vol: 0, amount: R.total, cur: R.cur, where }]
+      : st.receipt.lines.filter((l) => l.on).map((l) => ({ cat: l.cat, name: l.name, qty: 1, vol: l.vol || 0, amount: l.amount, cur: R.cur, where }));
+    add.forEach((x) => st.items.push({ ...x, id: 'i' + ++seq, date: R.date }));
+    st.receipts.add(R.key); st.view = 'main'; st.receipt = null; toast(`영수증에서 ${add.length}개를 추가했어요`);
+  }
+  render(); bindSheet();
+});
+// 영수증을 지우면 다시 같은 영수증을 넣을 수 있게 하는 처리는 앱 구현 때 정한다(목업은 추가한 영수증 키만 기억)
+// 영수증 검토의 금액 고치기(다시 그리지 않고 값만 반영)
+$('screen').addEventListener('input', (e) => { const i = e.target.dataset && e.target.dataset.i; if (st.view === 'review' && i != null) st.receipt.lines[+i].amount = Math.max(0, +e.target.value || 0); });
+$('scen').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) load(b.dataset.k); });
+$('small').onchange = () => $('phone').classList.toggle('small', $('small').checked);
+load('within');
+</script>
+</body>
+</html>

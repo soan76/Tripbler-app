@@ -9,6 +9,7 @@ import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/providers/map/map_provider.dart';
 import 'package:tripbler/providers/tab_provider.dart';
 import 'package:tripbler/screens/coming_soon_screen.dart';
+import 'package:tripbler/screens/duty_free_screen.dart';
 import 'package:tripbler/screens/main_screen.dart';
 import 'package:tripbler/screens/schedule_screen.dart';
 import 'package:tripbler/services/local_storage_service.dart';
@@ -22,7 +23,7 @@ import '../helpers/fake_camera_platform.dart';
 import '../helpers/fake_auth_notifier.dart';
 import '../helpers/fake_place_api.dart';
 
-// 확장 메뉴의 면세·일정 버튼이 메인 화면에서 각 탭(면세는 준비 중 화면, 일정은 일정 화면)으로 이동한다(bottom-nav.md 10-5·10-8절).
+// 확장 메뉴의 면세·일정 버튼이 메인 화면에서 각 탭(면세 화면, 일정 화면)으로 이동한다(bottom-nav.md 10-5·10-8절).
 
 const _exchangeTab = 0, _scheduleTab = 3, _dutyFreeTab = 4;
 final _current = find.byKey(const ValueKey('bottom-menu-current'));
@@ -125,16 +126,10 @@ void main() {
         expect(find.byType(ScheduleScreen), findsOneWidget);
         expect(find.text(ScheduleScreen.emptyMessage), findsOneWidget);
       } else {
-        final screen = find.byType(ComingSoonScreen);
-        expect(screen, findsOneWidget);
-        expect(tester.widget<ComingSoonScreen>(screen).title, title);
-        expect(
-          find.descendant(
-            of: screen,
-            matching: find.text(ComingSoonScreen.message),
-          ),
-          findsOneWidget,
-        );
+        // 면세 탭은 실제 면세 화면이다(duty-free.md). 산 물건이 없으면 한도가 그대로 남는다.
+        expect(find.byType(ComingSoonScreen), findsNothing);
+        expect(find.byType(DutyFreeScreen), findsOneWidget);
+        expect(find.text('남은 한도 \$800'), findsOneWidget);
       }
       expect(tester.widget<AppTopBar>(find.byType(AppTopBar)).title, title);
       expect(tester.getSize(bottomMenuBackground).width, 10);
