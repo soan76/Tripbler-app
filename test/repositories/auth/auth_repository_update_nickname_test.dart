@@ -98,100 +98,96 @@ class FakeNicknameTokenStorageService extends TokenStorageService {
   }
 }
 
-  void main() {
-    late FakeNicknameAuthApiService apiService;
-    late FakeNicknameTokenStorageService tokenStorageService;
-    late AuthRepository repository;
+void main() {
+  late FakeNicknameAuthApiService apiService;
+  late FakeNicknameTokenStorageService tokenStorageService;
+  late AuthRepository repository;
 
-    setUp(() {
-      apiService = FakeNicknameAuthApiService();
+  setUp(() {
+    apiService = FakeNicknameAuthApiService();
 
-      tokenStorageService = FakeNicknameTokenStorageService();
+    tokenStorageService = FakeNicknameTokenStorageService();
 
-      repository = AuthRepository(
-        authApiService: apiService,
-        tokenStorageService: tokenStorageService,
+    repository = AuthRepository(
+      authApiService: apiService,
+      tokenStorageService: tokenStorageService,
+    );
+  });
+
+  tearDown(() {
+    repository.dispose();
+  });
+
+  group('AuthRepository updateNickname', () {
+    test('현재 Access Token으로 닉네임 변경 API를 호출하고 UserResponse를 반환한다', () async {
+      final response = await repository.updateNickname(nickname: '새닉네임');
+
+      expect(apiService.updateNicknameCallCount, 1);
+      expect(apiService.authorizationHeaders, <String>[
+        'Bearer old-access-token',
+      ]);
+      expect(apiService.nicknames, <String>['새닉네임']);
+
+      expect(response.loginId, 'testuser01');
+      expect(response.nickname, '새닉네임');
+      expect(response.profileImageUrl, 'https://example.com/profile.png');
+
+      expect(apiService.refreshCallCount, 0);
+    });
+
+    test('Access Token이 만료되면 재발급 후 닉네임 변경 요청을 한 번 재시도한다', () async {
+      apiService.failFirstUpdateWith401 = true;
+
+      final response = await repository.updateNickname(nickname: '변경닉네임');
+
+      expect(apiService.updateNicknameCallCount, 2);
+      expect(apiService.refreshCallCount, 1);
+      expect(tokenStorageService.saveAccessTokenCallCount, 1);
+
+      expect(apiService.authorizationHeaders, <String>[
+        'Bearer old-access-token',
+        'Bearer new-access-token',
+      ]);
+
+      expect(response.nickname, '변경닉네임');
+      expect(response.profileImageUrl, 'https://example.com/profile.png');
+    });
+
+    test('저장된 Access Token이 없으면 닉네임 변경 API를 호출하지 않는다', () async {
+      tokenStorageService.authorizationHeader = null;
+
+      await expectLater(
+        repository.updateNickname(nickname: '새닉네임'),
+        throwsA(
+          isA<AuthSessionException>().having(
+            (error) => error.message,
+            'message',
+            '저장된 Access Token이 없습니다.',
+          ),
+        ),
       );
+
+      expect(apiService.updateNicknameCallCount, 0);
+      expect(apiService.refreshCallCount, 0);
     });
 
-    tearDown(() {
-      repository.dispose();
+    test('401이 아닌 API 오류는 재발급 없이 그대로 전달한다', () async {
+      apiService.updateNicknameError = const ApiException(
+        statusCode: 500,
+        message: '닉네임 변경에 실패했습니다.',
+      );
+
+      await expectLater(
+        repository.updateNickname(nickname: '새닉네임'),
+        throwsA(
+          isA<ApiException>()
+              .having((error) => error.statusCode, 'statusCode', 500)
+              .having((error) => error.message, 'message', '닉네임 변경에 실패했습니다.'),
+        ),
+      );
+
+      expect(apiService.updateNicknameCallCount, 1);
+      expect(apiService.refreshCallCount, 0);
     });
-
-    group('AuthRepository updateNickname', () {
-      test('현재 Access Token으로 닉네임 변경 API를 호출하고 UserResponse를 반환한다', () async {
-        final response = await repository.updateNickname(nickname: '새닉네임');
-
-        expect(apiService.updateNicknameCallCount, 1);
-        expect(apiService.authorizationHeaders, <String>[
-          'Bearer old-access-token',
-        ]);
-        expect(apiService.nicknames, <String>['새닉네임']);
-
-        expect(response.loginId, 'testuser01');
-        expect(response.nickname, '새닉네임');
-        expect(response.profileImageUrl, 'https://example.com/profile.png');
-
-        expect(apiService.refreshCallCount, 0);
-      });
-
-      test('Access Token이 만료되면 재발급 후 닉네임 변경 요청을 한 번 재시도한다', () async {
-        apiService.failFirstUpdateWith401 = true;
-
-        final response = await repository.updateNickname(nickname: '변경닉네임');
-
-        expect(apiService.updateNicknameCallCount, 2);
-        expect(apiService.refreshCallCount, 1);
-        expect(tokenStorageService.saveAccessTokenCallCount, 1);
-
-        expect(apiService.authorizationHeaders, <String>[
-          'Bearer old-access-token',
-          'Bearer new-access-token',
-        ]);
-
-        expect(response.nickname, '변경닉네임');
-        expect(response.profileImageUrl, 'https://example.com/profile.png');
-      });
-
-      test('저장된 Access Token이 없으면 닉네임 변경 API를 호출하지 않는다', () async {
-        tokenStorageService.authorizationHeader = null;
-
-        await expectLater(
-          repository.updateNickname(nickname: '새닉네임'),
-          throwsA(
-            isA<AuthSessionException>().having(
-              (error) => error.message,
-              'message',
-              '저장된 Access Token이 없습니다.',
-            ),
-          ),
-        );
-
-        expect(apiService.updateNicknameCallCount, 0);
-        expect(apiService.refreshCallCount, 0);
-      });
-
-      test('401이 아닌 API 오류는 재발급 없이 그대로 전달한다', () async {
-        apiService.updateNicknameError = const ApiException(
-          statusCode: 500,
-          message: '닉네임 변경에 실패했습니다.',
-        );
-
-        await expectLater(
-          repository.updateNickname(nickname: '새닉네임'),
-          throwsA(
-            isA<ApiException>()
-                .having((error) => error.statusCode, 'statusCode', 500)
-                .having(
-                  (error) => error.message,
-                  'message',
-                  '닉네임 변경에 실패했습니다.',
-                ),
-          ),
-        );
-
-        expect(apiService.updateNicknameCallCount, 1);
-        expect(apiService.refreshCallCount, 0);
-      });
-    });
+  });
 }

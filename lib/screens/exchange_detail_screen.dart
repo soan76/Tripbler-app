@@ -27,7 +27,6 @@ class ExchangeDetailScreen extends StatefulWidget {
 
 // 환율 상세 화면의 상태를 관리하는 State 클래스
 class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
-
   late final ExchangeRateApiService _apiService;
   late final bool _ownsApiService;
   final NumberFormat _numberFormat = NumberFormat('#,##0.####');
@@ -203,7 +202,10 @@ class _ExchangeDetailScreenState extends State<ExchangeDetailScreen> {
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 16),
-        ExchangeRateLineChart(history: historyList, period: ChartPeriod.oneMonth),
+        ExchangeRateLineChart(
+          history: historyList,
+          period: ChartPeriod.oneMonth,
+        ),
       ],
     );
   }

@@ -143,9 +143,7 @@ void main() {
     expect(find.text('다른 안내'), findsOneWidget);
   });
 
-  testWidgets('만료 안내가 대기열에 있을 때 탭을 옮기면 차례가 오는 대로 닫는다', (
-    tester,
-  ) async {
+  testWidgets('만료 안내가 대기열에 있을 때 탭을 옮기면 차례가 오는 대로 닫는다', (tester) async {
     final notice = _Notice();
 
     // 다른 SnackBar가 떠 있는 상태에서 지도 탭으로 와 만료 안내가 대기열에 들어간다.

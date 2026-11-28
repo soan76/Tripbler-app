@@ -109,7 +109,7 @@ void main() {
 
       service.dispose();
     });
-    
+
     test('409 DUPLICATE_NICKNAME 응답을 ApiException으로 변환한다', () async {
       final client = MockClient((request) async {
         return http.Response(
