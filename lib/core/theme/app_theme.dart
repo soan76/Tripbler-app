@@ -11,6 +11,25 @@ extension ChangeColors on ColorScheme {
   Color get loss => error;
 }
 
+/// 주의(한도 근접·오래된 값·확인 필요) 색. colorScheme에 주황 계열이 없어 테마에서 함께 정의한다.
+/// 오류(error)보다 한 단계 약한 상태에 쓴다. 값은 Material 3 주황 색조(라이트 40/90/10, 다크 80/30/90)다.
+extension WarningColors on ColorScheme {
+  /// 글자·막대처럼 표면색 위에 바로 놓는 주의색.
+  Color get warning => brightness == Brightness.light
+      ? const Color(0xFF8A4B00)
+      : const Color(0xFFFFB870);
+
+  /// 주의 띠·꼬리표 배경.
+  Color get warningContainer => brightness == Brightness.light
+      ? const Color(0xFFFFDDB8)
+      : const Color(0xFF693800);
+
+  /// [warningContainer] 위의 글자색.
+  Color get onWarningContainer => brightness == Brightness.light
+      ? const Color(0xFF2C1600)
+      : const Color(0xFFFFDDB8);
+}
+
 class AppTheme {
   AppTheme._();
 

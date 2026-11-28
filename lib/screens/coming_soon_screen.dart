@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// 아직 만들지 않은 화면(일정·면세)의 자리. 하단 메뉴 배치부터 확인하려고 둔다(bottom-nav.md 10-5절).
+/// 아직 만들지 않은 화면(면세)의 자리. 하단 메뉴 배치부터 확인하려고 둔다(bottom-nav.md 10-5절).
 class ComingSoonScreen extends StatelessWidget {
   const ComingSoonScreen({super.key, required this.title});
 
