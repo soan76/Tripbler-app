@@ -143,7 +143,7 @@ void main() {
       final container = await _pumpMain(tester, tab: from);
       for (final (to, home, barTitle) in [
         (_exchangeTab, false, '환율'),
-        (-1, true, 'AI 채팅'),
+        (-1, true, 'AI'),
       ]) {
         container.read(tabProvider.notifier).selectTab(from);
         await _settle(tester);

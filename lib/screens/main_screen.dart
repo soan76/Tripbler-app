@@ -10,7 +10,7 @@ import '../widgets/navigation/app_drawer.dart';
 import '../widgets/navigation/app_top_bar.dart';
 import '../widgets/navigation/navigation_capture_controller.dart';
 
-import 'ai_chat_screen.dart';
+import 'coming_soon_screen.dart';
 import 'duty_free_screen.dart';
 import 'exchange_screen.dart';
 import 'map_screen.dart';
@@ -65,7 +65,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         return '면세';
 
       default:
-        return 'AI 채팅';
+        return 'AI';
     }
   }
 
@@ -157,7 +157,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                       PhotoTranslationScreen(navigationCapture: _capture),
                       const ScheduleScreen(),
                       const DutyFreeScreen(),
-                      const AiChatScreen(),
+                      // AI 버튼(홈)은 화면을 정하기 전까지 준비 중 화면을 보여 준다.
+                      const ComingSoonScreen(title: 'AI'),
                     ],
                   ),
                 ),

@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'
 
 /// 현재 선택된 하단 탭.
 class TabState {
-  const TabState({this.selectedIndex = homeIndex});
+  /// 앱을 켜면 환율 탭부터 보인다.
+  const TabState({this.selectedIndex = firstTabIndex});
 
-  static const int homeIndex = -1; // 홈 탭의 인덱스.
-  static const int firstTabIndex = 0; // 첫 번째 탭의 인덱스.
+  static const int homeIndex = -1; // 홈(하단 메뉴 AI 버튼, 준비 중 화면)의 인덱스.
+  static const int firstTabIndex = 0; // 첫 번째 탭(환율)의 인덱스.
   /// 총 탭의 개수: 환율 0·지도 1·번역 2·일정 3·면세 4(bottom-nav.md 10-5절).
   static const int tabCount = 5;
 
@@ -45,7 +46,7 @@ class TabNotifier extends Notifier<TabState> {
     _select(index);
   }
 
-  /// AI/Home 화면으로 직접 이동한다.
+  /// 홈(AI 버튼, 준비 중 화면)으로 이동한다.
   void selectHome() => _select(TabState.homeIndex);
 
   void _select(int index) {
