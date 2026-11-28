@@ -10,11 +10,14 @@ import '../widgets/navigation/app_drawer.dart';
 import '../widgets/navigation/app_top_bar.dart';
 import '../widgets/navigation/navigation_capture_controller.dart';
 
-import 'ai_chat_screen.dart';
 import 'coming_soon_screen.dart';
+import 'duty_free_screen.dart';
 import 'exchange_screen.dart';
 import 'map_screen.dart';
 import 'photo_translation_screen.dart';
+import 'schedule_archive_screen.dart';
+import 'schedule_backup_screen.dart';
+import 'schedule_screen.dart';
 
 // 메인 화면을 구성하는 StatelessWidget
 class MainScreen extends ConsumerStatefulWidget {
@@ -27,13 +30,15 @@ class MainScreen extends ConsumerStatefulWidget {
     TabItem(label: '환율', icon: Icons.attach_money),
     TabItem(label: '지도', icon: Icons.map),
     TabItem(label: '번역', icon: Icons.translate),
-    // 확장 메뉴(bottom-nav.md 10절). 화면은 아직 준비 중이다.
+    // 확장 메뉴(bottom-nav.md 10절).
     TabItem(label: '일정', icon: Icons.event_note),
     TabItem(label: '면세', icon: Icons.shopping_bag),
   ];
 }
 
 class _MainScreenState extends ConsumerState<MainScreen> {
+  static const int _scheduleTabIndex = 3;
+
   final _capture = NavigationCaptureController();
   @override
   void dispose() {
@@ -60,7 +65,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
         return '면세';
 
       default:
-        return 'AI 채팅';
+        return 'AI';
     }
   }
 
@@ -108,7 +113,28 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                       selectedIndex == 2 && cameraScreen
                       ? const SizedBox.shrink()
                       : child!,
-                  child: AppTopBar(title: screenTitle),
+                  child: AppTopBar(
+                    title: screenTitle,
+                    // 일정 탭: 보관함·백업(docs/mockups/schedule.md 4절).
+                    actions: selectedIndex == _scheduleTabIndex
+                        ? [
+                            IconButton(
+                              key: const ValueKey('schedule-open-archive'),
+                              tooltip: ScheduleArchiveScreen.title,
+                              onPressed: () =>
+                                  ScheduleArchiveScreen.open(context),
+                              icon: const Icon(Icons.inventory_2_outlined),
+                            ),
+                            IconButton(
+                              key: const ValueKey('schedule-open-backup'),
+                              tooltip: ScheduleBackupScreen.title,
+                              onPressed: () =>
+                                  ScheduleBackupScreen.open(context),
+                              icon: const Icon(Icons.history),
+                            ),
+                          ]
+                        : const [],
+                  ),
                 ),
 
                 // 세션 만료가 확인되지 않은 오류로 세션 복구에 실패하면 상단 바 아래에서 다시 시도를 안내한다.
@@ -129,9 +155,10 @@ class _MainScreenState extends ConsumerState<MainScreen> {
                       // 번역 탭은 늘 사진 번역 화면(찍은 사진 위 흰 상자 결과)이다. 번역 방식(기기 읽기 + 글자 번역,
                       // 사진 AI 번역, 개발용 가짜)은 photoAiTranslationProvider·photoFakeTranslationProvider가 정한다.
                       PhotoTranslationScreen(navigationCapture: _capture),
-                      const ComingSoonScreen(title: '일정'),
-                      const ComingSoonScreen(title: '면세'),
-                      const AiChatScreen(),
+                      const ScheduleScreen(),
+                      const DutyFreeScreen(),
+                      // AI 버튼(홈)은 화면을 정하기 전까지 준비 중 화면을 보여 준다.
+                      const ComingSoonScreen(title: 'AI'),
                     ],
                   ),
                 ),

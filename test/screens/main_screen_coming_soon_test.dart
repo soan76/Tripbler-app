@@ -9,7 +9,9 @@ import 'package:tripbler/providers/auth/auth_provider.dart';
 import 'package:tripbler/providers/map/map_provider.dart';
 import 'package:tripbler/providers/tab_provider.dart';
 import 'package:tripbler/screens/coming_soon_screen.dart';
+import 'package:tripbler/screens/duty_free_screen.dart';
 import 'package:tripbler/screens/main_screen.dart';
+import 'package:tripbler/screens/schedule_screen.dart';
 import 'package:tripbler/services/local_storage_service.dart';
 import 'package:tripbler/widgets/bottom_tab_bar.dart';
 import 'package:tripbler/widgets/navigation/app_top_bar.dart';
@@ -21,7 +23,7 @@ import '../helpers/fake_camera_platform.dart';
 import '../helpers/fake_auth_notifier.dart';
 import '../helpers/fake_place_api.dart';
 
-// 확장 메뉴의 면세·일정 버튼이 메인 화면에서 각 탭(준비 중 화면)으로 이동한다(bottom-nav.md 10-5·10-8절).
+// 확장 메뉴의 면세·일정 버튼이 메인 화면에서 각 탭(면세 화면, 일정 화면)으로 이동한다(bottom-nav.md 10-5·10-8절).
 
 const _exchangeTab = 0, _scheduleTab = 3, _dutyFreeTab = 4;
 final _current = find.byKey(const ValueKey('bottom-menu-current'));
@@ -104,9 +106,7 @@ Future<void> _settle(WidgetTester tester) async {
 
 void main() {
   for (final (index, title) in [(4, '면세'), (3, '일정')]) {
-    testWidgets('$title 버튼을 고르면 탭 $index의 준비 중 화면으로 가고 메뉴는 점으로 접힌다', (
-      tester,
-    ) async {
+    testWidgets('$title 버튼을 고르면 탭 $index의 화면으로 가고 메뉴는 점으로 접힌다', (tester) async {
       final container = await _pumpMain(tester, tab: _exchangeTab);
       expect(find.byType(ComingSoonScreen), findsNothing);
 
@@ -120,16 +120,17 @@ void main() {
       await _settle(tester);
 
       expect(container.read(tabProvider).selectedIndex, index);
-      final screen = find.byType(ComingSoonScreen);
-      expect(screen, findsOneWidget);
-      expect(tester.widget<ComingSoonScreen>(screen).title, title);
-      expect(
-        find.descendant(
-          of: screen,
-          matching: find.text(ComingSoonScreen.message),
-        ),
-        findsOneWidget,
-      );
+      if (index == _scheduleTab) {
+        // 일정 탭은 실제 일정 화면이다(schedule.md). 저장된 일정이 없으면 빈 상태.
+        expect(find.byType(ComingSoonScreen), findsNothing);
+        expect(find.byType(ScheduleScreen), findsOneWidget);
+        expect(find.text(ScheduleScreen.emptyMessage), findsOneWidget);
+      } else {
+        // 면세 탭은 실제 면세 화면이다(duty-free.md). 산 물건이 없으면 한도가 그대로 남는다.
+        expect(find.byType(ComingSoonScreen), findsNothing);
+        expect(find.byType(DutyFreeScreen), findsOneWidget);
+        expect(find.text('남은 한도 \$800'), findsOneWidget);
+      }
       expect(tester.widget<AppTopBar>(find.byType(AppTopBar)).title, title);
       expect(tester.getSize(bottomMenuBackground).width, 10);
       expect(tester.takeException(), isNull);
@@ -142,7 +143,7 @@ void main() {
       final container = await _pumpMain(tester, tab: from);
       for (final (to, home, barTitle) in [
         (_exchangeTab, false, '환율'),
-        (-1, true, 'AI 채팅'),
+        (-1, true, 'AI'),
       ]) {
         container.read(tabProvider.notifier).selectTab(from);
         await _settle(tester);

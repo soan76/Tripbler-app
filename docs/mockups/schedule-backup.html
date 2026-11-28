@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tripbler — 일정 보관함·백업 목업</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root { --p:#0061A4; --pc:#D1E4FF; --onpc:#001D36; --s:#F8F9FF; --on:#191C20; --sv:#43474E; --sc:#ECEEF4; --o:#73777F; --ov:#C3C7CF; --err:#BA1A1A; --errc:#FFDAD6; --paper:#F3F0E9; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--paper); font-family:"Noto Sans KR",system-ui,sans-serif; color:#1C1F23; }
+  .wrap { max-width:1100px; margin:0 auto; padding:28px 24px; display:flex; gap:40px; flex-wrap:wrap; justify-content:center; }
+  svg.i { width:24px; height:24px; fill:currentColor; flex:none; }
+  .phone { width:360px; background:#111; border-radius:44px; padding:10px; flex:none; }
+  .phone.small { width:340px; }
+  .screen { position:relative; height:740px; border-radius:34px; overflow:hidden; background:var(--s); color:var(--on); }
+  .phone.small .screen { height:640px; }
+  .btn { font:inherit; border:0; cursor:pointer; background:none; color:inherit; padding:0; }
+  .btn[disabled] { cursor:default; opacity:.45; }
+  .bar { height:56px; display:flex; align-items:center; gap:4px; padding:0 4px; border-bottom:1px solid var(--sc); }
+  .bar .ic { width:48px; height:48px; display:grid; place-items:center; border-radius:4px; flex:none; }
+  .bar .ic:hover { background:var(--sc); }
+  .bar .ttl { flex:1; min-width:0; padding-left:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:18px; font-weight:700; }
+  .bar .ic + .ttl { padding-left:0; }
+  .content { position:absolute; top:56px; left:0; right:0; bottom:0; overflow-y:auto; }
+  .content.with-foot { bottom:80px; }
+
+  .notice { display:flex; align-items:center; gap:10px; padding:4px 4px 4px 16px; min-height:56px; background:var(--pc); color:var(--onpc); font-size:14px; }
+  .notice .t { flex:1; min-width:0; }
+  .notice .go { height:48px; padding:0 8px; color:var(--p); font-weight:700; border-radius:4px; }
+  .notice .x { width:48px; height:48px; display:grid; place-items:center; border-radius:4px; }
+
+  /* 타임라인 */
+  .tl { padding:16px 0 32px; }
+  .tl-row { display:grid; grid-template-columns:1fr 56px; min-height:76px; }
+  .tl-text { text-align:left; padding:10px 4px 10px 20px; align-self:center; min-width:0; border-radius:4px; }
+  .tl-text:hover { background:var(--sc); }
+  .when { display:block; font-size:12.5px; color:var(--p); font-weight:500; }
+  .ti { display:block; font-size:16px; font-weight:700; margin:2px 0; overflow-wrap:anywhere; }
+  .wh { display:block; font-size:12.5px; color:var(--sv); }
+  .tl-node { position:relative; }
+  .tl-node::before, .tl-node::after { content:''; position:absolute; left:50%; width:2px; margin-left:-1px; background:var(--p); }
+  .tl-node::before { top:0; height:50%; } .tl-node::after { top:50%; bottom:0; }
+  .first .tl-node::before, .last .tl-node::after { display:none; }
+  .tl-node i { position:absolute; left:50%; top:50%; width:18px; height:18px; margin:-9px 0 0 -9px; border-radius:50%; background:var(--p); box-shadow:0 0 0 4px var(--s); }
+  .hl .tl-text, .row.hl { animation:hl 1.6s ease-out; }
+  @keyframes hl { from { background:var(--pc); } to { background:transparent; } }
+  .empty { position:absolute; left:0; right:0; bottom:0; top:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; color:var(--sv); padding:0 32px 60px; text-align:center; }
+  .empty .big { width:72px; height:72px; border-radius:50%; display:grid; place-items:center; background:var(--sc); }
+  .empty p { margin:0; font-size:15px; line-height:1.5; }
+  .empty small { color:var(--o); }
+
+  /* 목록 공통 */
+  .lead { padding:12px 20px; font-size:13px; color:var(--sv); line-height:1.5; }
+  .row { display:flex; align-items:center; gap:4px; border-bottom:1px solid var(--sc); }
+  .row .open { flex:1; min-width:0; text-align:left; padding:12px 8px 12px 20px; min-height:72px; }
+  .row .open:hover { background:var(--sc); }
+  .row .main { font-size:16px; font-weight:700; display:block; overflow-wrap:anywhere; }
+  .row .sub { font-size:13px; color:var(--sv); display:block; margin-top:2px; }
+  .row .sub b { color:var(--on); }
+  .bad { color:var(--err); }
+  .tag { display:inline-block; font-size:11.5px; padding:1px 6px; border-radius:4px; background:var(--sc); color:var(--sv); margin-left:6px; vertical-align:2px; font-weight:500; }
+  .tag.auto { background:var(--errc); color:#410002; }
+  .del { height:48px; padding:0 14px; margin-right:8px; border-radius:4px; color:var(--err); font-size:14px; font-weight:500; flex:none; }
+  .del:hover { background:var(--errc); }
+
+  /* 백업: 기기/서버 나누기, 동작 줄 */
+  .seg { display:flex; margin:12px 16px 0; border:1px solid var(--o); border-radius:4px; overflow:hidden; }
+  .seg .btn { flex:1; height:48px; display:flex; align-items:center; justify-content:center; gap:6px; font-size:14px; font-weight:500; }
+  .seg .btn + .btn { border-left:1px solid var(--o); }
+  .seg .btn.on { background:var(--pc); color:var(--onpc); font-weight:700; }
+  .seg svg.i { width:18px; height:18px; }
+  .acts-row { display:flex; gap:8px; padding:0 16px 12px; }
+  .acts-row .btn { flex:1; height:48px; border-radius:4px; font-size:14px; font-weight:500; }
+  .b-fill { background:var(--p); color:#fff; }
+  .b-err { border:1px solid var(--err) !important; color:var(--err); }
+
+  /* 백업 상세 */
+  .sum { padding:14px 20px; font-size:14px; color:var(--sv); line-height:1.6; border-bottom:1px solid var(--sc); }
+  .pick { display:flex; align-items:center; gap:12px; width:100%; min-height:68px; padding:8px 20px; text-align:left; border-bottom:1px solid var(--sc); }
+  .pick:hover { background:var(--sc); }
+  .box { width:22px; height:22px; border-radius:4px; border:2px solid var(--o); display:grid; place-items:center; flex:none; color:#fff; }
+  .box svg.i { width:18px; height:18px; visibility:hidden; }
+  .pick[aria-checked="true"] .box { background:var(--p); border-color:var(--p); }
+  .pick[aria-checked="true"] .box svg.i { visibility:visible; }
+  .pick .txt { flex:1; min-width:0; }
+  .pick .ti { font-size:15px; }
+  .chip { flex:none; font-size:12px; padding:2px 8px; border-radius:4px; background:var(--sc); color:var(--sv); }
+  .note { padding:0 20px 12px; font-size:13px; color:var(--sv); line-height:1.5; }
+  .note.warn { color:var(--err); }
+  .next { display:inline-block; font-size:11px; padding:0 5px; border-radius:4px; border:1px solid currentColor; margin-left:4px; font-weight:500; vertical-align:1px; }
+  .flatrow { display:flex; align-items:center; gap:10px; width:calc(100% - 40px); margin:4px 20px 10px; min-height:48px; padding:0 12px; border:1px solid var(--ov); border-radius:4px; text-align:left; font-size:15px; }
+  .flatrow:hover { background:var(--sc); }
+  .outline { height:48px; padding:0 20px; margin-top:12px; border:1px solid var(--o) !important; border-radius:4px; color:var(--p); font-weight:500; }
+  .msg { padding:40px 32px; text-align:center; color:var(--sv); font-size:15px; line-height:1.6; }
+  .foot { position:absolute; left:0; right:0; bottom:0; padding:16px; border-top:1px solid var(--ov); background:var(--s); }
+  .foot .btn { width:100%; height:48px; border-radius:4px; background:var(--p); color:#fff; font-size:15px; font-weight:500; }
+  .foot .btn[disabled] { background:var(--sc); color:var(--o); opacity:1; }
+
+  /* 아래에서 올라오는 판, 확인창 */
+  .scrim { position:absolute; inset:0; background:rgba(0,0,0,.32); z-index:10; }
+  .sheet { position:absolute; left:0; right:0; bottom:0; background:var(--s); border-radius:4px 4px 0 0; z-index:11; padding:8px 0 16px; animation:up .2s ease-out; }
+  @keyframes up { from { transform:translateY(30px); opacity:.5; } to { transform:none; opacity:1; } }
+  .sheet .sh-t { padding:10px 20px 2px; font-size:18px; font-weight:700; overflow-wrap:anywhere; }
+  .sheet .sh-s { padding:0 20px 10px; font-size:13px; color:var(--sv); line-height:1.6; white-space:pre-wrap; }
+  .sheet .sh-f { display:flex; gap:8px; padding:10px 16px 0; border-top:1px solid var(--ov); }
+  .sheet .sh-f .btn { flex:1; height:48px; border-radius:4px; font-size:15px; font-weight:500; border:1px solid var(--o); color:var(--p); }
+  .sheet .sh-f .btn.b-fill { border-color:var(--p); color:#fff; }
+  .sheet .sh-f .btn.b-err { color:var(--err); }
+  .dlg-scrim { position:absolute; inset:0; background:rgba(0,0,0,.4); z-index:20; }
+  .dlg { position:absolute; left:24px; right:24px; top:28%; background:var(--s); border-radius:4px; padding:20px; z-index:21; }
+  .dlg h4 { margin:0 0 10px; font-size:17px; overflow-wrap:anywhere; }
+  .dlg ul { margin:0 0 16px; padding-left:18px; font-size:14px; color:var(--sv); line-height:1.6; }
+  .dlg .acts { display:flex; justify-content:flex-end; gap:8px; }
+  .dlg .acts .btn { height:48px; padding:0 14px; border-radius:4px; color:var(--p); font-weight:500; }
+  .dlg .acts .btn.danger { color:var(--err); }
+  .toast { position:absolute; left:50%; bottom:96px; transform:translateX(-50%); background:#2E3135; color:#fff; font-size:13px; padding:10px 14px; border-radius:4px; z-index:30; white-space:nowrap; opacity:0; transition:opacity .2s; pointer-events:none; }
+
+  .panel { width:380px; font-size:14px; line-height:1.6; }
+  .panel h1 { font-size:24px; margin:0 0 6px; }
+  .panel p { color:#4A4F57; margin:0 0 12px; }
+  .scen { display:flex; flex-direction:column; gap:6px; margin:12px 0; }
+  .scen button { font:inherit; font-size:13px; text-align:left; padding:8px 10px; border:1px solid #9aa; border-radius:4px; background:#fff; cursor:pointer; }
+  .scen button.on { border-color:var(--p); background:var(--pc); }
+  .scen small { display:block; color:#5A5F66; }
+  .panel label { font-size:13px; }
+  .panel ul { padding-left:18px; color:#4A4F57; }
+  code { font-size:12.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="phone" id="phone"><div class="screen" id="screen"></div></div>
+
+  <div class="panel">
+    <h1>일정 보관함·백업 목업</h1>
+    <p>샘플 데이터로만 움직입니다. 보관·복원·삭제는 이 페이지 안에서만 바뀌고 실제로 저장하지 않습니다. 일정 추가·수정은 <code>schedule.html</code>에 있습니다.</p>
+    <div class="scen" id="scen"></div>
+    <label><input type="checkbox" id="small"> 작은 화면(폭 320 · 높이 640)</label><br>
+    <label><input type="checkbox" id="signedOut"> 로그인 안 한 상태(서버 백업)</label><br>
+    <button id="relaunch" style="margin-top:8px;font:inherit;font-size:13px;padding:6px 10px;border:1px solid #9aa;border-radius:4px;background:#fff;cursor:pointer">앱 다시 켜기(알림 기억 확인)</button>
+    <ul>
+      <li><b>보관함</b>(다음 단계): 일정을 누르면 앱과 같이 수정 화면이 열리고, 그 안의 "보관함으로 이동"으로 옮깁니다. 위 오른쪽 상자 아이콘으로 열고, 항목을 눌러 다시 꺼내거나 삭제합니다. 자동으로 지우지 않습니다.</li>
+      <li><b>백업</b>: 위 오른쪽 시계 아이콘. <b>기기</b>와 <b>서버</b>(다음 단계)를 나눠 보고, "지금 백업"으로 현재 일정의 복사본을 만듭니다. <b>직접 백업</b>은 위치마다 최근 3개만 남고, <b>읽지 못해 보관</b>한 백업은 개수에 세지 않으며 직접 지우기 전에는 지우지 않습니다.</li>
+      <li>지금 일정이 마지막 직접 백업과 같으면 "지금 백업"이 꺼집니다.</li>
+      <li>읽지 못한 일정이 있으면 일정 화면 위 알림의 <b>확인</b>으로 기기 백업 목록에 갑니다. 확인하거나 닫은 백업은 기억해서 앱을 다시 켜도 다시 띄우지 않습니다(아래 "앱 다시 켜기"로 확인).</li>
+      <li>일정을 불러오지 못한 상태(시나리오 "불러오기 실패")에서는 백업 만들기와 되살리기를 막습니다. 기존 저장값을 덮어쓰지 않기 위해서입니다.</li>
+      <li>서버 백업은 로그인해야 쓸 수 있고, 처음 백업할 때 일정 제목·장소·메모가 서버로 간다는 동의를 받습니다.</li>
+      <li>복원할 때 지금 목록이나 보관함에 이미 있는 일정은 처음에 고르지 않고, 복원한 뒤에도 백업은 남습니다.</li>
+      <li>삭제는 무엇이 지워지고 지금 일정에 어떤 영향이 있는지 확인창으로 알립니다.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+const P = {
+  back: 'M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z',
+  close: 'M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z',
+  info: 'M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z',
+  check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
+  history: 'M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z',
+  archive: 'M20 2H4c-1 0-2 .9-2 2v3.01c0 .72.43 1.34 1 1.69V20c0 1.1 1.1 2 2 2h14c.9 0 2-.9 2-2V8.7c.57-.35 1-.97 1-1.69V4c0-1.1-1-2-2-2zm-5 12H9v-2h6v2zm5-7H4V4l16-.02V7z',
+  phone: 'M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm-2 20h-4v-1h4v1zm3.25-3H6.75V4h10.5v14z',
+  cloud: 'M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z',
+};
+const ic = (k) => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="${P[k]}"/></svg>`;
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const pad = (n) => String(n).padStart(2, '0');
+const W = ['일', '월', '화', '수', '목', '금', '토'];
+const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dayOf = (s) => new Date(s + 'T00:00:00');
+const dayAdd = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return ymd(d); };
+const dLabel = (d) => `${d.getMonth() + 1}월 ${d.getDate()}일 (${W[d.getDay()]})`;
+const dateLabel = (s) => dLabel(dayOf(s));
+const timeLabel = (h, m) => `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}:${pad(m)}`;
+const at = (x) => dayOf(x.date).getTime() + x.h * 3600000 + x.m * 60000;
+const stamp = (ms) => { const d = new Date(ms); return `${dLabel(d)} ${timeLabel(d.getHours(), d.getMinutes())}`; };
+const LOC = { device: '기기', server: '서버' };
+const MAX = 3;
+
+// ---------- 샘플 상태 ----------
+const I = (id, title, d, h, m, place, memo) => ({ id, title, date: dayAdd(d), h, m, place: place || '', memo: memo || '' });
+// 샘플 보관 시각. 지금보다 뒤(미래)가 되면 하루 앞으로 당긴다(이른 아침에 열어도 순서가 맞게).
+const ago = (days, h, m) => { const d = new Date(); d.setDate(d.getDate() - days); d.setHours(h, m, 0, 0); if (d.getTime() > Date.now()) d.setDate(d.getDate() - 1); return d.getTime(); };
+const B = (id, ms, kind, items, extra) => ({ id, at: ms, kind, status: 'ok', unreadable: 0, items, ...extra });
+const SCENARIOS = {
+  normal: {
+    name: '정상', desc: '일정 3개, 보관함 1개, 기기·서버 백업 모두 읽을 수 있음',
+    items: () => [I('a1', '나리타 공항 도착', 0, 10, 0), I('a2', '센소지 구경', 0, 14, 30, '센소지'), I('a3', '스카이트리 전망대', 0, 18, 0, '도쿄 스카이트리')],
+    archive: () => [{ ...I('z1', '디즈니씨 (취소)', 1, 9, 0, '도쿄 디즈니씨', '비 예보로 취소'), archivedAt: ago(1, 20, 10) }],
+    device: () => [B('d1', ago(2, 9, 3), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0), I('a2', '센소지 구경', 0, 14, 30, '센소지')]), B('d2', ago(0, 8, 0), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0), I('a2', '센소지 구경', 0, 14, 30, '센소지'), I('a3', '스카이트리 전망대', 0, 18, 0, '도쿄 스카이트리')])],
+    server: () => [B('s1', ago(1, 22, 30), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0), I('a4', '츠키지 아침 식사', 1, 7, 45, '츠키지 장외시장'), I('z1', '디즈니씨 (취소)', 1, 9, 0, '도쿄 디즈니씨')])],
+  },
+  partial: {
+    name: '일부 손상', desc: '기기 저장값 일부를 읽지 못함: 되살릴 수 있는 4개 + 읽지 못한 2개',
+    items: () => [I('a1', '나리타 공항 도착', 0, 10, 0)],
+    archive: () => [],
+    device: () => [B('d3', ago(0, 15, 12), 'auto', [I('a1', '나리타 공항 도착', 0, 10, 0), I('a3', '스카이트리 전망대', 0, 18, 0, '도쿄 스카이트리'), I('a6', '긴자 쇼핑', 1, 13, 0, '긴자 거리'), I('a7', '공항 이동', 2, 9, 0)], { unreadable: 2 })],
+    server: () => [B('s2', ago(1, 21, 0), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0), I('a6', '긴자 쇼핑', 1, 13, 0, '긴자 거리')])],
+  },
+  corrupt: {
+    name: '전체 손상', desc: '기기 저장값을 하나도 읽지 못함, 서버 백업으로 되살릴 수 있음',
+    items: () => [], archive: () => [],
+    device: () => [B('d4', ago(0, 8, 40), 'auto', [], { status: 'corrupt', unreadable: null })],
+    server: () => [B('s3', ago(1, 23, 10), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0), I('a2', '센소지 구경', 0, 14, 30, '센소지'), I('a3', '스카이트리 전망대', 0, 18, 0, '도쿄 스카이트리')])],
+  },
+  version: {
+    name: '버전 불일치', desc: '새 버전 앱 형식이라 이 버전에서 읽지 못함',
+    items: () => [I('a1', '나리타 공항 도착', 0, 10, 0)], archive: () => [],
+    device: () => [B('d5', ago(0, 11, 5), 'auto', [], { status: 'version', unreadable: null })],
+    server: () => [B('s4', ago(0, 11, 0), 'manual', [], { status: 'version', unreadable: null })],
+  },
+  manyAuto: {
+    name: '읽지 못한 보관 여러 개', desc: '읽지 못해 보관한 백업 2개 + 직접 백업 3개: 직접 백업을 새로 해도 읽지 못해 보관한 백업은 남음',
+    items: () => [I('a1', '나리타 공항 도착', 0, 10, 0), I('a2', '센소지 구경', 0, 14, 30, '센소지'), I('a8', '아키하바라', 1, 16, 0)], archive: () => [],
+    device: () => [B('d6', ago(3, 9, 0), 'auto', [I('a5', '하코네 온천', 2, 15, 0, '하코네 유모토')], { unreadable: 1 }), B('d7', ago(2, 9, 0), 'auto', [], { status: 'corrupt', unreadable: null }),
+      B('d8', ago(2, 21, 0), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0)]), B('d9', ago(1, 21, 0), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0), I('a5', '하코네 온천', 2, 15, 0, '하코네 유모토')]), B('d10', ago(0, 7, 0), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0), I('a2', '센소지 구경', 0, 14, 30, '센소지')])],
+    server: () => [],
+  },
+  loadFailed: {
+    name: '불러오기 실패', desc: '저장소를 열지 못해 일정을 불러오지 못함: 백업 만들기·되살리기를 막음',
+    items: () => [], archive: () => [], failed: true,
+    device: () => [B('d11', ago(1, 9, 0), 'manual', [I('a1', '나리타 공항 도착', 0, 10, 0)])],
+    server: () => [],
+  },
+  empty: {
+    name: '빈 화면', desc: '일정·보관함·백업 모두 없음',
+    items: () => [], archive: () => [], device: () => [], server: () => [],
+  },
+};
+
+let st;
+function load(key) {
+  const sc = SCENARIOS[key];
+  // seen: 알림을 확인하거나 닫은 "읽지 못해 보관" 백업 id. 앱은 기기에 저장해 다시 켜도 기억한다.
+  st = { key, items: sc.items(), archive: sc.archive(), backups: { device: sc.device(), server: sc.server() },
+    failed: !!sc.failed, seen: new Set(), serverConsent: false,
+    view: 'schedule', tab: 'device', open: null, sel: new Set(), sheet: null, dialog: null, hl: [] };
+  $('scen').innerHTML = Object.entries(SCENARIOS).map(([k, v]) => `<button class="${k === key ? 'on' : ''}" data-k="${k}"><b>${v.name}</b><small>${v.desc}</small></button>`).join('');
+  render();
+}
+const sameAs = (x) => (y) => y.id === x.id || (y.title === x.title && at(y) === at(x));
+const inItems = (x) => st.items.some(sameAs(x));
+const inArchive = (x) => st.archive.some(sameAs(x));
+const readable = (b) => b.status === 'ok';
+const autoBackups = () => st.backups.device.filter((b) => b.kind === 'auto');
+const hasUnread = () => autoBackups().some((b) => !st.seen.has(b.id));
+const markSeen = () => autoBackups().forEach((b) => st.seen.add(b.id));
+const manualOf = (loc) => st.backups[loc].filter((b) => b.kind === 'manual');
+const signedIn = () => !$('signedOut').checked;
+const findBackup = (loc, id) => st.backups[loc].find((b) => b.id === id);
+const byNew = (list) => [...list].sort((a, b) => b.at - a.at);
+const byTime = (list) => [...list].sort((a, b) => at(a) - at(b));
+// 일정 내용이 같은지(제목·날짜·시각·장소·메모, 순서 무시)
+const sig = (list) => JSON.stringify(byTime(list).map((x) => [x.title, x.date, x.h, x.m, x.place, x.memo]));
+const sameAsLastManual = (loc) => { const last = byNew(manualOf(loc))[0]; return !!last && sig(last.items) === sig(st.items); };
+
+// ---------- 화면 ----------
+function render() {
+  const v = { schedule: scheduleView, archive: archiveView, backup: backupView, detail: detailView }[st.view]();
+  $('screen').innerHTML = v + (st.sheet ? sheetHtml() : '') + (st.dialog ? dialogHtml() : '') + '<div class="toast" id="toast"></div>';
+}
+const bar = (title, backAct, right = '') => `<div class="bar">${backAct ? `<button class="btn ic" data-act="${backAct}" aria-label="뒤로 가기">${ic('back')}</button>` : ''}<span class="ttl">${title}</span>${right}</div>`;
+
+function scheduleView() {
+  const right = `<button class="btn ic" data-act="toArchive" aria-label="보관함">${ic('archive')}</button><button class="btn ic" data-act="toBackup" aria-label="백업">${ic('history')}</button>`;
+  let h = bar('일정', '', right) + '<div class="content">';
+  if (st.failed) return h + `<div class="msg">일정을 불러오지 못했어요<br><button class="btn outline" data-act="retryLoad">다시 시도</button></div></div>`;
+  const notice = hasUnread();
+  if (notice) h += `<div class="notice" role="status">${ic('info')}<span class="t">읽지 못한 일정이 있어요</span><button class="btn go" data-act="noticeGo">확인</button><button class="btn x" data-act="closeNotice" aria-label="알림 닫기">${ic('close')}</button></div>`;
+  const list = byTime(st.items);
+  if (!list.length) return h + `<div class="empty" style="${notice ? 'top:56px' : ''}"><p>첫 일정을 추가해 보세요</p></div></div>`;
+  h += '<div class="tl">';
+  let last = '';
+  list.forEach((x, i) => {
+    const cls = ['tl-row', i === 0 ? 'first' : '', i === list.length - 1 ? 'last' : '', st.hl.includes(x.id) ? 'hl' : ''].join(' ');
+    h += `<div class="${cls}"><button class="btn tl-text" data-act="itemSheet" data-id="${x.id}" aria-label="${esc(x.title)} 수정"><span class="when">${x.date !== last ? dateLabel(x.date) + ' · ' : ''}${timeLabel(x.h, x.m)}</span><span class="ti">${esc(x.title)}</span>${x.place ? `<span class="wh">${esc(x.place)}</span>` : ''}</button><div class="tl-node"><i></i></div></div>`;
+    last = x.date;
+  });
+  return h + '</div></div>';
+}
+
+function archiveView() {
+  let h = bar('보관함', 'toSchedule') + '<div class="content">';
+  if (!st.archive.length) return h + `<div class="empty"><span class="big">${ic('archive')}</span><p>보관한 일정이 없어요<br><small>일정을 누르고 "보관함으로 이동"을 고르면 여기에 모여요.</small></p></div></div>`;
+  h += '<div class="lead">타임라인에서 뺀 일정이에요. 직접 지우기 전까지 그대로 남아요.</div>';
+  for (const x of [...st.archive].sort((a, b) => b.archivedAt - a.archivedAt)) {
+    h += `<div class="row${st.hl.includes(x.id) ? ' hl' : ''}"><button class="btn open" data-act="archSheet" data-id="${x.id}"><span class="when">${dateLabel(x.date)} · ${timeLabel(x.h, x.m)}</span><span class="main">${esc(x.title)}</span><span class="sub">${stamp(x.archivedAt)}에 보관</span></button></div>`;
+  }
+  return h + '</div>';
+}
+
+function backupLine(b) {
+  if (b.status === 'version') return '<span class="bad">새 버전 앱에서 만든 형식이라 이 버전에서는 읽을 수 없어요</span>';
+  if (b.status === 'corrupt') return '<span class="bad">내용이 손상돼 읽을 수 없어요</span>';
+  return `되살릴 수 있는 일정 <b>${b.items.length}개</b>${b.unreadable ? ` · <span class="bad">읽지 못한 항목 ${b.unreadable}개</span>` : ''}`;
+}
+function backupView() {
+  const loc = st.tab, list = byNew(st.backups[loc]);
+  let h = bar('일정 백업', 'toSchedule') + '<div class="content">';
+  h += `<div class="seg" role="tablist">${['device', 'server'].map((k) => `<button class="btn${k === loc ? ' on' : ''}" role="tab" aria-selected="${k === loc}" data-act="tab" data-t="${k}">${ic(k === 'device' ? 'phone' : 'cloud')}${LOC[k]} 백업${k === 'server' && !signedIn() ? '' : ' ' + st.backups[k].length}${k === 'server' ? '<span class="next">다음 단계</span>' : ''}</button>`).join('')}</div>`;
+  if (loc === 'server' && !signedIn()) {
+    return h + `<div class="msg">로그인하면 일정을 서버에 백업하고<br>다른 기기에서도 되살릴 수 있어요.<br><button class="btn outline" data-act="login">로그인</button></div></div>`;
+  }
+  h += `<div class="lead">${loc === 'device' ? '이 기기에만 저장돼요. 앱을 지우면 함께 사라져요.' : '로그인한 계정의 서버에 저장돼요. 일정 제목·장소·메모가 서버로 보내져요. 기기를 바꿔도 되살릴 수 있어요.'} 직접 백업은 최근 ${MAX}개까지 남아요.${loc === 'device' ? ' 읽지 못해 보관한 백업은 개수에 세지 않고, 직접 지우기 전에는 지우지 않아요.' : ''}</div>`;
+  const same = sameAsLastManual(loc);
+  const canBackup = !st.failed && st.items.length && !same;
+  h += `<div class="acts-row"><button class="btn b-fill" data-act="askBackup" ${canBackup ? '' : 'disabled'}>지금 백업</button><button class="btn b-err" data-act="askDeleteAll" ${list.length ? '' : 'disabled'}>전체 삭제</button></div>`;
+  if (st.failed) h += '<div class="note warn">일정을 불러오지 못해 지금은 백업하거나 되살릴 수 없어요. 일정 화면에서 다시 시도해 주세요.</div>';
+  else if (!st.items.length) h += '<div class="note">백업할 일정이 없어요.</div>';
+  else if (same) h += '<div class="note">지금 일정이 마지막 직접 백업과 같아요.</div>';
+  if (!list.length) return h + `<div class="msg">${LOC[loc]} 백업이 없어요.</div></div>`;
+  for (const b of list) {
+    h += `<div class="row${st.hl.includes(b.id) ? ' hl' : ''}"><button class="btn open" data-act="openDetail" data-id="${b.id}"><span class="main">${stamp(b.at)}<span class="tag${b.kind === 'auto' ? ' auto' : ''}">${b.kind === 'auto' ? '읽지 못해 보관' : '직접 백업'}</span></span><span class="sub">${backupLine(b)}</span></button><button class="btn del" data-act="askDelete" data-id="${b.id}" aria-label="${stamp(b.at)} 백업 삭제">삭제</button></div>`;
+  }
+  return h + '</div>';
+}
+
+function detailView() {
+  const b = findBackup(st.open.loc, st.open.id), ok = readable(b);
+  let h = bar(`${LOC[st.open.loc]} 백업 · ${stamp(b.at)}`, 'toBackup') + `<div class="content${ok ? ' with-foot' : ''}">`;
+  if (!ok) return h + `<div class="msg">${b.status === 'version' ? '새 버전 앱에서 만든 형식이라 이 버전에서는 읽을 수 없어요.<br>앱을 업데이트하면 되살릴 수 있어요. 백업은 그대로 보관해요.' : '내용이 손상돼 읽을 수 있는 일정이 없어요.<br>필요 없으면 목록에서 삭제할 수 있어요.'}</div></div>`;
+  const dup = b.items.filter((x) => inItems(x) || inArchive(x)).length;
+  h += `<div class="sum">되살릴 일정을 고르세요. 고른 일정만 지금 일정에 더하고, 백업은 그대로 남아요.${dup ? `<br>이미 있는 일정 ${dup}개는 처음에 고르지 않았어요.` : ''}${b.unreadable ? `<br><span class="bad">읽지 못한 항목 ${b.unreadable}개는 되살릴 수 없어요.</span>` : ''}</div>`;
+  for (const x of byTime(b.items)) {
+    const on = st.sel.has(x.id), chip = inItems(x) ? '이미 있음' : inArchive(x) ? '보관함에 있음' : '';
+    h += `<button class="btn pick" role="checkbox" aria-checked="${on}" data-act="toggle" data-id="${x.id}"><span class="box">${ic('check')}</span><span class="txt"><span class="when">${dateLabel(x.date)} · ${timeLabel(x.h, x.m)}</span><span class="ti">${esc(x.title)}</span>${x.place ? `<span class="wh">${esc(x.place)}</span>` : ''}</span>${chip ? `<span class="chip">${chip}</span>` : ''}</button>`;
+  }
+  const n = st.sel.size;
+  if (st.failed) return h + `</div><div class="foot"><button class="btn" disabled>일정을 불러온 뒤에 되살릴 수 있어요</button></div>`;
+  return h + `</div><div class="foot"><button class="btn" data-act="restore" ${n ? '' : 'disabled'}>선택한 일정 되살리기${n ? ` (${n})` : ''}</button></div>`;
+}
+
+function sheetHtml() {
+  const s = st.sheet;
+  const x = (s.type === 'item' ? st.items : st.archive).find((y) => y.id === s.id);
+  const info = `${dateLabel(x.date)} · ${timeLabel(x.h, x.m)}${x.place ? '\n' + esc(x.place) : ''}${x.memo ? '\n' + esc(x.memo) : ''}`;
+  if (s.type === 'item') {
+    // 앱과 같이 일정을 누르면 수정 화면(schedule.md 2-4절). 입력칸은 줄여 보이고, 보관함으로 옮기는 줄만 더한다.
+    return `<div class="scrim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="일정 수정"><div class="bar" style="border:0"><button class="btn ic" data-act="closeSheet" aria-label="뒤로 가기">${ic('back')}</button><span class="ttl">일정 수정</span></div><div class="sh-t">${esc(x.title)}</div><div class="sh-s">${info}\n(제목·날짜·시간·장소·알림·메모 입력칸은 schedule.html과 같음)</div><button class="btn flatrow" data-act="toArchiveItem">${ic('archive')}보관함으로 이동<span class="next" style="margin-left:auto">다음 단계</span></button><div class="sh-f"><button class="btn b-err" data-act="askDeleteItem">삭제</button><button class="btn b-fill" data-act="editStub">수정</button></div></div>`;
+  }
+  const btns = '<button class="btn b-err" data-act="askDeleteArch">삭제</button><button class="btn b-fill" data-act="unarchive">다시 꺼내기</button>';
+  return `<div class="scrim" data-act="closeSheet"></div><div class="sheet" role="dialog" aria-label="${esc(x.title)}"><div class="sh-t">${esc(x.title)}</div><div class="sh-s">${info}</div><div class="sh-f">${btns}</div></div>`;
+}
+
+// 확인창: 무엇이 지워지는지, 지금 일정에 어떤 영향이 있는지
+function dialogHtml() {
+  const d = st.dialog;
+  return `<div class="dlg-scrim"></div><div class="dlg" role="alertdialog"><h4>${d.title}</h4><ul>${d.lines.map((l) => `<li>${l}</li>`).join('')}</ul><div class="acts"><button class="btn" data-act="dlgNo">취소</button><button class="btn${d.danger ? ' danger' : ''}" data-act="dlgYes">${d.ok}</button></div></div>`;
+}
+function confirm(title, lines, ok, fn, danger = true) { st.dialog = { title, lines, ok, fn, danger }; render(); }
+// 이 백업들을 지우면 더는 되살릴 수 없게 되는 일정(지금 일정·보관함·남는 백업 어디에도 없는 것)
+function onlyHere(loc, ids) {
+  const gone = st.backups[loc].filter((b) => ids.includes(b.id));
+  const rest = [...st.backups.device, ...st.backups.server].filter((b) => !gone.includes(b));
+  const seen = new Set();
+  return gone.flatMap((b) => b.items).filter((x) => !inItems(x) && !inArchive(x) && !rest.some((b) => b.items.some(sameAs(x))) && !seen.has(x.id) && seen.add(x.id));
+}
+function deleteLines(loc, list) {
+  const lost = onlyHere(loc, list.map((b) => b.id));
+  const lines = ['지금 일정과 보관함은 바뀌지 않아요.'];
+  if (list.every((b) => !readable(b))) lines.push('읽을 수 있는 일정이 없는 백업이라 지금 일정으로 되살릴 내용은 없어요.');
+  else lines.push(lost.length ? `<span class="bad">이 백업에만 있는 일정 ${lost.length}개(${lost.slice(0, 2).map((x) => esc(x.title)).join(', ')}${lost.length > 2 ? ' 등' : ''})는 다시 되살릴 수 없게 돼요.</span>` : '여기 있는 일정은 모두 지금 일정·보관함·다른 백업에 남아 있어 잃는 일정은 없어요.');
+  if (list.some((b) => b.kind === 'auto')) lines.push('<span class="bad">읽지 못해 보관한 원래 내용도 함께 사라져요.</span>');
+  lines.push('삭제한 백업은 되돌릴 수 없어요.');
+  return lines;
+}
+
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.style.opacity = 1; clearTimeout(window._tt); window._tt = setTimeout(() => ($('toast').style.opacity = 0), 1800); }
+function flash(ids) { st.hl = ids; setTimeout(() => { st.hl = []; }, 1700); }
+
+$('screen').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]'); if (!el || el.disabled) return;
+  const a = el.dataset.act, id = el.dataset.id;
+  if (a === 'toSchedule') { st.view = 'schedule'; render(); }
+  if (a === 'toArchive') { st.view = 'archive'; render(); }
+  if (a === 'toBackup') { st.view = 'backup'; st.open = null; render(); }
+  if (a === 'noticeGo') { markSeen(); st.view = 'backup'; st.tab = 'device'; render(); }
+  if (a === 'closeNotice') { markSeen(); render(); toast('일정 백업에서 언제든 다시 볼 수 있어요'); }
+  if (a === 'retryLoad') { st.failed = false; render(); toast('일정을 불러왔어요'); }
+  if (a === 'login') toast('로그인 화면으로 이동해요(목업)');
+  if (a === 'editStub') toast('수정은 schedule.html에서 확인해요');
+  if (a === 'askDeleteItem') {
+    const x = st.items.find((y) => y.id === st.sheet.id); st.sheet = null;
+    confirm('이 일정을 삭제할까요?', [`${dateLabel(x.date)} · ${timeLabel(x.h, x.m)} "${esc(x.title)}"`, '삭제한 일정은 되돌릴 수 없어요. 백업에 있으면 백업에서 되살릴 수 있어요.'], '삭제', () => { st.items = st.items.filter((y) => y !== x); toast('일정을 삭제했어요'); });
+  }
+  if (a === 'tab') { st.tab = el.dataset.t; render(); }
+  // 보관함
+  if (a === 'itemSheet') { st.sheet = { type: 'item', id }; render(); }
+  if (a === 'archSheet') { st.sheet = { type: 'arch', id }; render(); }
+  if (a === 'closeSheet') { st.sheet = null; render(); }
+  if (a === 'toArchiveItem') {
+    const x = st.items.find((y) => y.id === st.sheet.id);
+    st.items = st.items.filter((y) => y !== x); st.archive.push({ ...x, archivedAt: Date.now() });
+    st.sheet = null; render(); toast(`"${x.title}"을(를) 보관함으로 옮겼어요`);
+  }
+  if (a === 'unarchive') {
+    const x = st.archive.find((y) => y.id === st.sheet.id);
+    st.archive = st.archive.filter((y) => y !== x); const { archivedAt, ...item } = x; st.items.push(item);
+    st.sheet = null; st.view = 'schedule'; flash([x.id]); render(); toast('타임라인으로 다시 꺼냈어요');
+  }
+  if (a === 'askDeleteArch') {
+    const x = st.archive.find((y) => y.id === st.sheet.id);
+    st.sheet = null;
+    confirm(`보관함의 "${esc(x.title)}"을(를) 삭제할까요?`, ['보관함에서만 지워져요. 지금 타임라인의 일정은 바뀌지 않아요.', `${dateLabel(x.date)} · ${timeLabel(x.h, x.m)} 일정이에요.`, '삭제한 일정은 되돌릴 수 없어요. 백업에 있으면 백업에서 되살릴 수 있어요.'], '삭제',
+      () => { st.archive = st.archive.filter((y) => y !== x); toast('보관함에서 삭제했어요'); });
+  }
+  // 백업
+  if (a === 'askBackup') {
+    const loc = st.tab, manual = manualOf(loc);
+    const oldest = manual.length >= MAX ? byNew(manual).at(-1) : null;
+    const make = () => {
+      const b = B('n' + Date.now(), Date.now(), 'manual', st.items.map((x) => ({ ...x })));
+      // 직접 백업만 세고 가장 오래된 직접 백업만 지운다. 읽지 못해 보관한 백업은 건드리지 않는다.
+      if (oldest) st.backups[loc] = st.backups[loc].filter((y) => y !== oldest);
+      st.backups[loc].push(b); flash([b.id]); toast(`${LOC[loc]}에 일정 ${b.items.length}개를 백업했어요`);
+    };
+    const rotate = () => {
+      if (oldest) {
+        confirm(`${LOC[loc]} 직접 백업이 이미 ${MAX}개예요`, [`새로 만들면 가장 오래된 직접 백업(${stamp(oldest.at)}, ${backupLine(oldest).replace(/<[^>]+>/g, '')})이 지워져요.`, ...deleteLines(loc, [oldest]).slice(1, -1), '읽지 못해 보관한 백업과 지금 일정은 바뀌지 않아요.'], '백업하고 지우기', make);
+      } else make();
+    };
+    if (loc === 'server' && !st.serverConsent) {
+      confirm('일정을 서버에 백업할까요?', ['일정 제목·날짜·시간·장소·메모가 로그인한 계정의 서버로 보내져요.', '서버 백업은 이 화면에서 언제든 지울 수 있어요.', '동의하지 않으면 기기 백업만 쓸 수 있어요.'], '동의하고 백업', () => { st.serverConsent = true; rotate(); }, false);
+    } else { rotate(); render(); }
+  }
+  if (a === 'askDelete') {
+    const loc = st.tab, b = findBackup(loc, id);
+    confirm(`${LOC[loc]} 백업 · ${stamp(b.at)}을(를) 삭제할까요?`, deleteLines(loc, [b]), '삭제',
+      () => { st.backups[loc] = st.backups[loc].filter((y) => y !== b); toast('백업을 삭제했어요'); });
+  }
+  if (a === 'askDeleteAll') {
+    const loc = st.tab, list = st.backups[loc];
+    confirm(`${LOC[loc]} 백업 ${list.length}개를 모두 삭제할까요?`, deleteLines(loc, list), '모두 삭제',
+      () => { st.backups[loc] = []; toast(`${LOC[loc]} 백업을 모두 삭제했어요`); });
+  }
+  if (a === 'openDetail') {
+    const b = findBackup(st.tab, id); st.open = { loc: st.tab, id };
+    st.sel = new Set(b.items.filter((x) => !inItems(x) && !inArchive(x)).map((x) => x.id)); // 이미 있는 일정은 처음에 고르지 않음
+    st.view = 'detail'; render();
+  }
+  if (a === 'toggle') { st.sel.has(id) ? st.sel.delete(id) : st.sel.add(id); render(); }
+  if (a === 'restore') {
+    if (st.failed) return;
+    const b = findBackup(st.open.loc, st.open.id);
+    const add = b.items.filter((x) => st.sel.has(x.id)).map((x) => ({ ...x, id: inItems(x) || inArchive(x) ? x.id + '-r' + Date.now() : x.id }));
+    st.items.push(...add);
+    if (b.kind === 'auto') st.seen.add(b.id);
+    st.view = 'schedule'; st.open = null; flash(add.map((x) => x.id)); render();
+    toast(`일정 ${add.length}개를 되살렸어요 · 백업은 그대로 남아요`);
+  }
+  if (a === 'dlgNo') { st.dialog = null; render(); }
+  if (a === 'dlgYes') { const fn = st.dialog.fn; st.dialog = null; fn(); render(); }
+});
+$('scen').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) load(b.dataset.k); });
+$('small').onchange = () => $('phone').classList.toggle('small', $('small').checked);
+$('signedOut').onchange = () => render();
+// 앱 다시 켜기: 화면 상태만 처음으로. 일정·백업·알림 기억(seen)·서버 동의는 기기에 저장된 것처럼 남는다.
+$('relaunch').onclick = () => { Object.assign(st, { view: 'schedule', tab: 'device', open: null, sel: new Set(), sheet: null, dialog: null, hl: [] }); render(); };
+load('normal');
+</script>
+</body>
+</html>

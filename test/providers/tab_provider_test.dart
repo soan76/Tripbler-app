@@ -3,11 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:tripbler/providers/tab_provider.dart';
 
 void main() {
-  test('처음에는 홈이 선택된다', () {
+  test('처음에는 환율 탭이 선택된다', () {
     final c = ProviderContainer.test();
 
-    expect(c.read(tabProvider).selectedIndex, TabState.homeIndex);
-    expect(c.read(tabProvider).isHomeSelected, isTrue);
+    expect(c.read(tabProvider).selectedIndex, TabState.firstTabIndex);
+    expect(c.read(tabProvider).isSelected(0), isTrue);
+    expect(c.read(tabProvider).isHomeSelected, isFalse);
   });
 
   test('같은 탭을 다시 누르면 선택과 상태를 유지한다', () {
@@ -34,7 +35,7 @@ void main() {
     c.read(tabProvider.notifier).selectTab(-1);
     c.read(tabProvider.notifier).selectTab(-2);
 
-    expect(c.read(tabProvider).selectedIndex, TabState.homeIndex);
+    expect(c.read(tabProvider).selectedIndex, TabState.firstTabIndex);
     expect(count, 0);
   });
 
@@ -53,18 +54,17 @@ void main() {
     expect(c.read(tabProvider).isSelected(5), isFalse);
   });
 
-  test('홈에서 selectHome은 알리지 않고, 탭에서는 홈으로 돌아간다', () {
+  test('탭에서 selectHome은 홈으로 가고, 홈에서 다시 부르면 알리지 않는다', () {
     final c = ProviderContainer.test();
     var count = 0;
     c.listen(tabProvider, (_, _) => count++);
     final notifier = c.read(tabProvider.notifier);
 
     notifier.selectHome();
-    expect(count, 0);
-
-    notifier.selectTab(2);
-    notifier.selectHome();
     expect(c.read(tabProvider).isHomeSelected, isTrue);
-    expect(count, 2);
+    expect(count, 1);
+
+    notifier.selectHome();
+    expect(count, 1);
   });
 }

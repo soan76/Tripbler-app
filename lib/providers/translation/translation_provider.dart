@@ -7,15 +7,14 @@ import '../../domain/translation/line_request_limits.dart';
 import '../../models/translation/line_translation_result.dart';
 import '../../repositories/auth/auth_exceptions.dart';
 import '../../services/line_translation_api_service.dart';
-import '../../services/ocr_service.dart';
 import '../../services/translation_service.dart';
 import '../auth/auth_provider.dart';
+import '../ocr_provider.dart';
 import 'translation_state.dart';
 
+// 기존 사용처·테스트가 이 파일에서 가져가므로 같은 이름으로 다시 내보낸다.
+export '../ocr_provider.dart' show ocrServiceProvider;
 export 'translation_state.dart';
-
-/// 기기 안에서 글자를 인식하는 서비스.
-final ocrServiceProvider = Provider<OcrService>((ref) => OcrService());
 
 /// 서버 번역 API를 호출하는 서비스.
 final translationServiceProvider = Provider<TranslationService>((ref) {
